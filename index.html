@@ -3,18 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Cloudparty Prototype</title>
-    <link rel="stylesheet" href="styles.css" />
+    <title>Cloudparty 2.0</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <main class="viewport">
-      <canvas id="world" width="960" height="540" aria-label="World view"></canvas>
-      <section class="hud">
-        <h1>Cloudparty 2.0 Prototype</h1>
-        <p>Nutze <strong>WASD</strong> oder Pfeiltasten zum Bewegen, <strong>Leertaste</strong> zum Springen/Fallen.</p>
-        <p><strong>F</strong> toggelt Flugmodus, <strong>R</strong> setzt die Position zurück.</p>
-      </section>
-    </main>
-    <script type="module" src="src/main.js"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,13 +1,11 @@
-# cloudparty
-Cloudparty 2.0
+# Cloudparty 2.0
 
-## Quickstart
+Eine einfache React/Vite-Anwendung, um Cloudparty-Welten visuell zu erkunden und zu konfigurieren.
 
-1. Install prerequisites (Python 3 for the dev server).
-2. Starte ein lokales Static-Hosting:
+## Entwicklung
 
-```bash
-npm start
-```
+1. Abhängigkeiten installieren: `npm install`
+2. Dev-Server starten: `npm run dev`
+3. Browser öffnen: `http://localhost:5173`
 
-3. Öffne [http://localhost:4173](http://localhost:4173) und nutze WASD/Pfeiltasten zum Laufen. Drücke **F**, um in den Flugmodus zu wechseln, und **R**, um zum Spawn zurückzukehren.
+Für einen Produktionsbuild kannst du `npm run build` ausführen. Die Anwendung liegt im Ordner `src/`.
