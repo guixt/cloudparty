@@ -1,57 +1,84 @@
 /**
- * STUB des Fundaments – Paket 4 (Entity-Bibliothek) ersetzt diese Datei.
- * Liefert vorerst: Würfel/Kugel/Zylinder pro Entity, Farbe, Transform-Abgleich,
- * ctx.entityNodes, 'entity.node.*'-Ereignisse und 'entity.clicked' im Spielmodus.
+ * Paket 4: Entity-Bibliothek. Gleicht den Store mit der Szene ab: pro Entity
+ * ein Wurzelknoten (ctx.entityNodes), gebaut aus dem Prefab-Register.
  */
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
-import { Color3 } from '@babylonjs/core/Maths/math.color';
-import { Quaternion } from '@babylonjs/core/Maths/math.vector';
-import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
-import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
-import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
-import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
+import { Quaternion } from '@babylonjs/core/Maths/math.vector';
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { EntitySpec } from '../../../shared/types';
 import { entityIdOf, tagEntityNode, type GameContext, type GameModule } from '../../core/context';
+import { classifyChange } from './diff';
+import { buildPlaceholder, isBuildOnly, setBuildMarkersVisible } from './parts';
+import { getPrefab, onPrefabRegistered, updateLooks } from './prefabs';
 
-function build(ctx: GameContext, entity: EntitySpec): TransformNode {
-  const { scene } = ctx;
-  const root = new TransformNode(`entity.${entity.id}`, scene);
-  if (entity.ref !== 'EntitySpec.avatar-spawn') {
-    const mesh =
-      entity.ref === 'EntitySpec.sphere'
-        ? CreateSphere('mesh', { diameter: 1 }, scene)
-        : entity.ref === 'EntitySpec.cylinder'
-          ? CreateCylinder('mesh', { diameter: 1, height: 1 }, scene)
-          : CreateBox('mesh', { size: 1 }, scene);
-    mesh.parent = root;
-    const material = new StandardMaterial('mat', scene);
-    material.diffuseColor = Color3.FromHexString(entity.material?.color ?? '#cccccc');
-    mesh.material = material;
+export { PREFABS, createEntityFromPrefab, getPrefab, registerPrefab } from './prefabs';
+export type { PrefabDef, PrefabCategory } from './prefabs';
+export { modelUrlFromFile } from './model';
+
+function applyTransform(root: TransformNode, entity: EntitySpec): void {
+  const { pos, rot, scale } = entity.transform;
+  root.position.set(pos[0], pos[1], pos[2]);
+  if (!root.rotationQuaternion) root.rotationQuaternion = new Quaternion();
+  root.rotationQuaternion.set(rot[0], rot[1], rot[2], rot[3]);
+  root.scaling.set(scale[0], scale[1], scale[2]);
+}
+
+/** Schatten, Picking-Tags; nach dem Bauen und nach asynchronen Inhalten. */
+function finalize(ctx: GameContext, root: TransformNode, entityId: string): void {
+  tagEntityNode(root, entityId);
+  for (const mesh of root.getChildMeshes(false)) {
+    if (isBuildOnly(mesh) || mesh.getTotalVertices() === 0) continue;
     mesh.receiveShadows = true;
     ctx.shadows.add(mesh);
   }
-  applyTransform(root, entity);
-  tagEntityNode(root, entity.id);
-  return root;
 }
 
-function applyTransform(root: TransformNode, entity: EntitySpec) {
-  const { pos, rot, scale } = entity.transform;
-  root.position.set(pos[0], pos[1], pos[2]);
-  root.rotationQuaternion = new Quaternion(rot[0], rot[1], rot[2], rot[3]);
-  root.scaling.set(scale[0], scale[1], scale[2]);
+function isInteractive(entity: EntitySpec | undefined): boolean {
+  if (!entity) return false;
+  if (entity.script?.enabled && entity.script.source.trim()) return true;
+  const seats = entity.state?.seats;
+  return typeof seats === 'number' && seats > 0;
 }
 
 const entities: GameModule = {
   id: 'entities',
   init(ctx) {
     const { bus, store, scene, entityNodes } = ctx;
+    const disposers: (() => void)[] = [];
+    let hoverCursor = false;
+
+    const emitCreated = (id: string, node: TransformNode) => bus.emit('entity.node.created', { id, node });
+
     const create = (entity: EntitySpec) => {
-      const node = build(ctx, entity);
-      entityNodes.set(entity.id, node);
-      bus.emit('entity.node.created', { id: entity.id, node });
+      const root = new TransformNode(`entity.${entity.id}`, scene);
+      applyTransform(root, entity);
+      entityNodes.set(entity.id, root);
+      const def = getPrefab(entity.ref);
+      let pending: void | Promise<void> = undefined;
+      try {
+        if (def) pending = def.build(ctx, entity, root);
+        else buildPlaceholder(scene, root);
+      } catch (error) {
+        console.warn(`[entities] Prefab "${entity.ref}" konnte nicht gebaut werden`, error);
+        for (const child of root.getChildren()) child.dispose(false, true);
+        buildPlaceholder(scene, root, '#d9534f', '!');
+        pending = undefined;
+      }
+      finalize(ctx, root, entity.id);
+      emitCreated(entity.id, root);
+      if (pending) {
+        pending
+          .catch((error) => console.warn(`[entities] Prefab "${entity.ref}" fehlgeschlagen`, error))
+          .then(() => {
+            if (root.isDisposed() || entityNodes.get(entity.id) !== root) return;
+            finalize(ctx, root, entity.id);
+            // Inhalt hat sich geändert (z. B. Modell geladen): Abnehmer (Physik …) neu informieren.
+            bus.emit('entity.node.disposed', { id: entity.id });
+            emitCreated(entity.id, root);
+          });
+      }
     };
+
     const destroy = (id: string) => {
       const node = entityNodes.get(id);
       if (!node) return;
@@ -59,29 +86,66 @@ const entities: GameModule = {
       bus.emit('entity.node.disposed', { id });
       node.dispose(false, true);
     };
+
     const rebuildAll = () => {
       for (const id of [...entityNodes.keys()]) destroy(id);
       const state = store.getState();
-      for (const id of state.order) create(state.entities[id]);
+      for (const id of state.order) {
+        const entity = state.entities[id];
+        if (entity) create(entity);
+      }
     };
 
     rebuildAll();
-    bus.on('world.loaded', rebuildAll);
-    bus.on('entity.added', ({ entity }) => create(entity));
-    bus.on('entity.removed', ({ entity }) => destroy(entity.id));
-    bus.on('entity.changed', ({ entity, prev }) => {
-      const sameLook = entity.ref === prev.ref && JSON.stringify(entity.material) === JSON.stringify(prev.material);
-      const node = entityNodes.get(entity.id);
-      if (sameLook && node) {
-        applyTransform(node, entity);
-      } else {
+    disposers.push(
+      bus.on('world.loaded', rebuildAll),
+      bus.on('entity.added', ({ entity }) => {
         destroy(entity.id);
         create(entity);
-      }
-    });
+      }),
+      bus.on('entity.removed', ({ entity }) => destroy(entity.id)),
+      bus.on('entity.changed', ({ entity, prev }) => {
+        const node = entityNodes.get(entity.id);
+        const change = classifyChange(prev, entity, getPrefab(entity.ref)?.stateKeys);
+        if (!node || change.rebuild) {
+          destroy(entity.id);
+          create(entity);
+          return;
+        }
+        if (change.transform) applyTransform(node, entity);
+        if (change.material) updateLooks(node, entity.material);
+      }),
+      bus.on('mode.changed', ({ mode }) => {
+        for (const node of entityNodes.values()) setBuildMarkersVisible(node, mode === 'build');
+        if (mode === 'build') setCursor(false);
+      }),
+      onPrefabRegistered((ref) => {
+        const state = store.getState();
+        for (const id of state.order) {
+          const entity = state.entities[id];
+          if (entity?.ref === ref) {
+            destroy(id);
+            create(entity);
+          }
+        }
+      }),
+    );
 
-    scene.onPointerObservable.add((info) => {
-      if (info.type !== PointerEventTypes.POINTERTAP || store.getState().mode !== 'play') return;
+    function setCursor(pointer: boolean) {
+      if (pointer === hoverCursor) return;
+      hoverCursor = pointer;
+      ctx.canvas.style.cursor = pointer ? 'pointer' : '';
+    }
+
+    const observer = scene.onPointerObservable.add((info) => {
+      const state = store.getState();
+      if (info.type === PointerEventTypes.POINTERMOVE) {
+        if (state.mode !== 'play') return setCursor(false);
+        const id = entityIdOf(info.pickInfo?.hit ? info.pickInfo.pickedMesh : null);
+        setCursor(!!id && isInteractive(state.entities[id]));
+        return;
+      }
+      if (info.type !== PointerEventTypes.POINTERTAP || state.mode !== 'play') return;
       const pick = info.pickInfo;
       const entityId = entityIdOf(pick?.pickedMesh);
       if (!entityId || !pick?.pickedPoint) return;
@@ -92,6 +156,12 @@ const entities: GameModule = {
         point: [pick.pickedPoint.x, pick.pickedPoint.y, pick.pickedPoint.z],
       });
     });
+    disposers.push(() => {
+      scene.onPointerObservable.remove(observer);
+      for (const id of [...entityNodes.keys()]) destroy(id);
+      setCursor(false);
+    });
+    (entities as { dispose?: () => void }).dispose = () => disposers.splice(0).forEach((d) => d());
   },
 };
 export default entities;
