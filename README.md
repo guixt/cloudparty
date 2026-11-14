@@ -1,11 +1,59 @@
 # Cloudparty 2.0
 
-Eine einfache React/Vite-Anwendung, um Cloudparty-Welten visuell zu erkunden und zu konfigurieren.
+Eine virtuelle 3D-Welt im Browser im Geist von Cloud Party: schwebende Inseln, Bauen in der Welt, JavaScript-Skripte pro Objekt, Physik, Multiplayer und ein KI-Assistent.
+
+Technik: React + Vite + TypeScript, Babylon.js 9 mit Havok-Physik, zustand, vitest. Server: Node.js 22 mit `ws` und `node:sqlite`.
+
+## Starten
+
+Voraussetzung: Node.js ab Version 22.
+
+```bash
+npm install
+npm run dev          # Client auf http://localhost:5173
+npm run server       # optional: Server auf Port 8787 (Multiplayer, Konten, gespeicherte Inseln)
+```
+
+Ohne Server läuft alles im Einzelspieler-Modus mit lokaler Speicherung (IndexedDB). Mit `?server=off` hinter der Adresse startet der Client bewusst offline, mit `?server=http://host:port` nutzt er einen anderen Server. Auf `localhost` verbindet er sich automatisch mit Port 8787.
+
+## Steuerung
+
+| Aktion | Taste |
+|--------|-------|
+| Bewegen | WASD / Pfeile |
+| Rennen / Springen | Shift / Leertaste |
+| Fliegen | F (Leertaste hoch, C runter) |
+| Kamera | Maus ziehen, Mausrad |
+| Gesten | 1–4 |
+| Chat | Enter |
+| Bauen ⇄ Spielen | Tab |
+| Auswahl / Gizmos | Klick; 1 Verschieben, 2 Drehen, 3 Skalieren |
+| Duplizieren / Löschen | Strg+D / Entf |
+| Rückgängig / Wiederholen | Strg+Z / Strg+Y |
+| Skript bearbeiten | E (Objekt gewählt) |
+| KI-Assistent | K |
+| Hilfe | H |
+
+## KI-Funktionen
+
+Im Fenster „KI" (Taste K) kannst du dem Assistenten Aufträge geben, z. B. „Baue ein kleines Haus mit Garten" oder „Verschiebe die Bank nach links". Er arbeitet mit denselben Funktionen wie du (Bauen, Verschieben, Färben, Himmel, Skripte, Medien-Tafeln), und ein Auftrag lässt sich mit einem Klick auf „Rückgängig" zurücknehmen. Im Skript-Editor gibt es zusätzlich „Mit KI erzeugen" und „Fehler erklären".
+
+Du brauchst dafür einen eigenen Anthropic-API-Key (Einstellungen im KI-Fenster). Der Key wird nur in deinem Browser gespeichert und direkt an Anthropic gesendet, nie an den Cloudparty-Server oder in Weltdateien. Anfragen kosten Geld bei Anthropic. Der Assistent sieht den Inhalt der aktuellen Insel.
 
 ## Entwicklung
 
-1. Abhängigkeiten installieren: `npm install`
-2. Dev-Server starten: `npm run dev`
-3. Browser öffnen: `http://localhost:5173`
+```bash
+npm run typecheck
+npm test
+npm run build
+npm run e2e          # Smoke-Test im Browser (Playwright)
+```
 
-Für einen Produktionsbuild kannst du `npm run build` ausführen. Die Anwendung liegt im Ordner `src/`.
+Aufbau und Verträge zwischen den Modulen stehen in [`docs/architecture.md`](docs/architecture.md), die Optik-Vorgaben in [`docs/style-reference.md`](docs/style-reference.md), das Weltformat in [`docs/worldspec.md`](docs/worldspec.md).
+
+## Bekannte Grenzen
+
+- **Skript-Sandbox:** Skripte laufen in Web Workern ohne DOM- und Netzzugriff, mit Zeitlimit. Das ist Best-Effort und kein Schutz gegen gezielte Angriffe (z. B. Speicherverbrauch); eine Content-Security-Policy fehlt noch. Auf offenen Servern solltest du fremden Inseln nur vertrauen, wenn du dem Besitzer vertraust.
+- **Web-Tafeln:** Viele Webseiten verbieten das Einbetten. Eine Web-Tafel kann außerdem nicht von 3D-Objekten davor verdeckt werden.
+- **Avatare:** Der Avatar ist prozedural gebaut (keine fertigen 3D-Modelle); er ist so angelegt, dass später ein glTF-Modell eingesetzt werden kann.
+- **Nicht enthalten:** Marktplatz mit Währung, Voice-Chat, Avatar-Kleidungseditor, eigenständige KI-Bewohner.
