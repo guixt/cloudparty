@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent } from 'react';
-import { AI_MODELS } from '../../../shared/aiTools';
+import { AI_MODELS, AI_TOKEN_LIMITS } from '../../../shared/aiTools';
 import type { AssistantApi } from '../api';
 
 /** Lockere Prüfung: nicht leer, keine Leerzeichen, nicht absurd kurz. Gibt eine Fehlermeldung oder null zurück. */
@@ -9,6 +9,51 @@ export function validateApiKey(raw: string): string | null {
   if (/\s/.test(key)) return 'Der Key darf keine Leerzeichen enthalten.';
   if (key.length < 12) return 'Der Key ist zu kurz – bitte vollständig einfügen.';
   return null;
+}
+
+const fmt = (n: number) => n.toLocaleString('de-DE');
+/** Grobe Umrechnung für die Anzeige: ein Token ist etwa 0,6 deutsche Wörter. */
+const words = (tokens: number) => fmt(Math.round((tokens * 0.6) / 100) * 100);
+
+function LimitSlider({
+  id,
+  label,
+  hint,
+  range,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  range: { min: number; max: number; step: number; default: number };
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="ai-limit">
+      <label className="cp-label" htmlFor={id}>
+        {label}: <strong data-testid={`${id}-value`}>{fmt(value)} Tokens</strong> <span className="cp-muted">(ca. {words(value)} Wörter)</span>
+      </label>
+      <div className="cp-row">
+        <input
+          id={id}
+          type="range"
+          className="ai-range"
+          data-testid={id}
+          min={range.min}
+          max={range.max}
+          step={range.step}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+        />
+        <button type="button" className="cp-button ai-icon-btn" title="Standardwert" aria-label="Standardwert" data-testid={`${id}-reset`} onClick={() => onChange(range.default)}>
+          ↺
+        </button>
+      </div>
+      <div className="ai-limit-hint cp-muted">{hint}</div>
+    </div>
+  );
 }
 
 export function SettingsDialog({ api, explain, onClose }: { api: AssistantApi; explain: boolean; onClose: () => void }) {
@@ -108,6 +153,29 @@ export function SettingsDialog({ api, explain, onClose }: { api: AssistantApi; e
           ))}
           {!known && <option value={settings.model}>{settings.model}</option>}
         </select>
+        <div className="cp-label">Längenlimits pro Anfrage</div>
+        <LimitSlider
+          id="ai-max-output"
+          label="Maximale Antwortlänge"
+          hint="Wird eine Antwort abgeschnitten (z. B. bei großen Bauaufträgen oder langen Skripten), erhöhe diesen Wert. Längere Antworten kosten mehr."
+          range={AI_TOKEN_LIMITS.output}
+          value={settings.maxOutputTokens}
+          onChange={(value) => {
+            api.setTokenLimits({ maxOutputTokens: value });
+            force((n) => n + 1);
+          }}
+        />
+        <LimitSlider
+          id="ai-max-input"
+          label="Maximale Eingabelänge"
+          hint="So viel Weltdaten und Gesprächsverlauf sieht die KI pro Anfrage. Wird es mehr, lässt sie zuerst ältere Gesprächsteile weg und kürzt große Ergebnisse. Mehr Eingabe kostet mehr."
+          range={AI_TOKEN_LIMITS.input}
+          value={settings.maxInputTokens}
+          onChange={(value) => {
+            api.setTokenLimits({ maxInputTokens: value });
+            force((n) => n + 1);
+          }}
+        />
         <div className="cp-label">Freigaben</div>
         <label className="ai-radio">
           <input

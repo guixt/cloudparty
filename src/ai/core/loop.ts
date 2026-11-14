@@ -5,6 +5,7 @@ import type { AssistantApi, AssistantEvent, RunOptions } from '../api';
 import type { EventBus } from '../../core/events';
 import type { WorldStore } from '../../core/store';
 import { AiError, streamMessage, type ApiMessage, type ApiTool, type ContentBlock } from './client';
+import { fitToBudget } from './budget';
 import { buildSystemPrompt } from './prompt';
 import * as settings from './settings';
 import { executeTool, type RunCounters } from './tools';
@@ -67,6 +68,9 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
     const signal = options.signal;
     const counters: RunCounters = { toolCalls: 0, newEntities: 0, removals: 0 };
     const messages: ApiMessage[] = [...conversation, { role: 'user', content: text }];
+    // Längengrenzen einmal pro Auftrag lesen (wie der Freigabe-Modus).
+    const limits = settings.getTokenLimits();
+    const currentFrom = conversation.length;
     let answer = '';
     let changed = false;
     let stopped = false;
@@ -91,11 +95,12 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
           stopped = true;
           break;
         }
+        const system = buildSystemPrompt(store.getState());
         const result = await streamMessage({
-          system: buildSystemPrompt(store.getState()),
-          messages,
+          system,
+          messages: fitToBudget({ system, tools: TOOLS, messages, currentFrom, budget: limits.maxInputTokens }),
           tools: TOOLS,
-          maxTokens: AI_LIMITS.maxOutputTokens,
+          maxTokens: limits.maxOutputTokens,
           signal,
           onText: (delta) => {
             answer += delta;
@@ -107,7 +112,7 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
         if (result.content.length > 0) messages.push({ role: 'assistant', content: result.content });
         if (toolUses.length === 0 || result.stopReason !== 'tool_use') {
           // Bei max_tokens mit unvollständigen Werkzeugaufrufen führen wir nichts aus.
-          if (result.stopReason === 'max_tokens') emit({ type: 'error', message: 'Die Antwort der KI wurde abgeschnitten. Versuche einen kleineren Auftrag.' });
+          if (result.stopReason === 'max_tokens') emit({ type: 'error', message: 'Die Antwort der KI wurde abgeschnitten, weil die maximale Ausgabelänge erreicht ist. Erhöhe sie in den KI-Einstellungen oder gib einen kleineren Auftrag.' });
           finished = true;
           break;
         }
@@ -156,7 +161,8 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
   }
 
   return {
-    getSettings: () => ({ hasKey: settings.hasApiKey(), model: settings.getModel(), approval: settings.getApproval() }),
+    getSettings: () => ({ hasKey: settings.hasApiKey(), model: settings.getModel(), approval: settings.getApproval(), ...settings.getTokenLimits() }),
+    setTokenLimits: (limits) => settings.setTokenLimits(limits),
     setApproval: (mode) => settings.setApproval(mode),
     setApiKey: (key) => settings.setApiKey(key),
     setModel: (model) => {

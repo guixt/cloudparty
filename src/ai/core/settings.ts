@@ -3,7 +3,7 @@
  * `cloudparty.ai.baseUrl` (optional) überschreibt die API-Basis
  * (Standard https://api.anthropic.com) – gedacht für Tests und eigene Proxys.
  */
-import { AI_MODELS, AI_STORAGE_KEYS, DEFAULT_AI_APPROVAL, DEFAULT_AI_MODEL, type AiApprovalMode } from '../../../shared/aiTools';
+import { AI_MODELS, AI_STORAGE_KEYS, AI_TOKEN_LIMITS, DEFAULT_AI_APPROVAL, DEFAULT_AI_MODEL, type AiApprovalMode } from '../../../shared/aiTools';
 
 export const BASE_URL_KEY = 'cloudparty.ai.baseUrl';
 export const DEFAULT_BASE_URL = 'https://api.anthropic.com';
@@ -64,6 +64,30 @@ export function getApproval(): AiApprovalMode {
 export function setApproval(mode: AiApprovalMode): void {
   try {
     storage()?.setItem(AI_STORAGE_KEYS.approval, mode === 'auto' ? 'auto' : 'ask');
+  } catch {
+    /* ignorieren */
+  }
+}
+
+type LimitRange = { min: number; max: number; step: number; default: number };
+function clampLimit(raw: string, range: LimitRange): number {
+  const n = Number(raw);
+  if (!raw || !Number.isFinite(n)) return range.default;
+  return Math.min(range.max, Math.max(range.min, Math.round(n)));
+}
+/** Aktuelle Längengrenzen in Tokens (ungültige oder fehlende Werte ergeben den Standard, alles wird auf den erlaubten Bereich begrenzt). */
+export function getTokenLimits(): { maxInputTokens: number; maxOutputTokens: number } {
+  return {
+    maxInputTokens: clampLimit(read(AI_STORAGE_KEYS.maxInput), AI_TOKEN_LIMITS.input),
+    maxOutputTokens: clampLimit(read(AI_STORAGE_KEYS.maxOutput), AI_TOKEN_LIMITS.output),
+  };
+}
+export function setTokenLimits(limits: { maxInputTokens?: number; maxOutputTokens?: number }): void {
+  try {
+    const s = storage();
+    if (!s) return;
+    if (limits.maxInputTokens !== undefined) s.setItem(AI_STORAGE_KEYS.maxInput, String(clampLimit(String(limits.maxInputTokens), AI_TOKEN_LIMITS.input)));
+    if (limits.maxOutputTokens !== undefined) s.setItem(AI_STORAGE_KEYS.maxOutput, String(clampLimit(String(limits.maxOutputTokens), AI_TOKEN_LIMITS.output)));
   } catch {
     /* ignorieren */
   }

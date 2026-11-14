@@ -35,6 +35,19 @@ export const AI_STORAGE_KEYS = {
   apiKey: 'cloudparty.ai.key',
   model: 'cloudparty.ai.model',
   approval: 'cloudparty.ai.approval',
+  maxInput: 'cloudparty.ai.maxInputTokens',
+  maxOutput: 'cloudparty.ai.maxOutputTokens',
+} as const;
+
+/**
+ * Einstellbare Längengrenzen pro Anfrage (in Tokens; ein Token sind etwa 3-4 Zeichen).
+ * - output: maximale Länge einer Antwort (max_tokens). Zu klein: lange Aufträge oder Skripte werden abgeschnitten.
+ * - input: Obergrenze für alles, was pro Anfrage an die KI geht (Systemanweisung, Weltdaten, Gesprächsverlauf).
+ *   Wird sie überschritten, lässt der Assistent zuerst ältere Gesprächsteile weg und kürzt große Werkzeugergebnisse.
+ */
+export const AI_TOKEN_LIMITS = {
+  output: { min: 1024, max: 16000, step: 256, default: 4096 },
+  input: { min: 8000, max: 150000, step: 1000, default: 40000 },
 } as const;
 
 /**
