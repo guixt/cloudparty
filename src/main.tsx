@@ -1,16 +1,8 @@
-import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './styles.css';
 
 const rootElement = document.getElementById('root');
+if (!rootElement) throw new Error('Root container missing');
 
-if (!rootElement) {
-  throw new Error('Root container missing');
-}
-
-ReactDOM.createRoot(rootElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+// Kein StrictMode: die Engine darf im Dev-Modus nicht doppelt starten.
+ReactDOM.createRoot(rootElement).render(<App />);
