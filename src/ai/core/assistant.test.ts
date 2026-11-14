@@ -387,3 +387,59 @@ describe('Freigabe-Modus', () => {
     expect(s.confirms).toHaveLength(1);
   });
 });
+
+describe('Abgeschnittene Antworten', () => {
+  const cut = (events: unknown[]) => ({ events: [{ type: 'message_start', message: { usage: { input_tokens: 10, output_tokens: 1 } } }, ...events, { type: 'message_delta', delta: { stop_reason: 'max_tokens' }, usage: { output_tokens: 4096 } }, { type: 'message_stop' }] });
+  const cutCall = () =>
+    cut([
+      { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'x1', name: 'add_entity', input: {} } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"ref":"EntitySpec.bo' } },
+    ]);
+  const cutText = (t: string) =>
+    cut([
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: t } },
+      { type: 'content_block_stop', index: 0 },
+    ]);
+
+  it('abgeschnittener Werkzeugaufruf wird nicht ausgeführt und die KI macht weiter', async () => {
+    const s = setup();
+    const before = count(s);
+    const requests = mockFetch([cutCall(), toolResponse([{ id: 'ok', name: 'add_entity', input: { ref: 'EntitySpec.box', position: [1, 0.5, 1] } }]), textResponse('fertig')]);
+    await s.assistant.run('baue', s.makeOptions());
+    const result = (requests[1].body.messages.at(-1).content as { is_error?: boolean; content: string }[])[0];
+    expect(result.is_error).toBe(true);
+    expect(result.content).toContain('abgeschnitten');
+    expect(count(s)).toBe(before + 1);
+    expect(s.events.some((e) => e.type === 'error')).toBe(false);
+    expect(s.events.some((e) => e.type === 'tool' && e.name === 'weiter')).toBe(true);
+  });
+
+  it('abgeschnittener Text: die KI wird zum Weitermachen aufgefordert', async () => {
+    const s = setup();
+    const requests = mockFetch([cutText('Ich baue zuerst'), textResponse(' das Dach.')]);
+    await s.assistant.run('baue', s.makeOptions());
+    const last = requests[1].body.messages.at(-1);
+    expect(last.role).toBe('user');
+    expect(String(last.content)).toContain('abgeschnitten');
+    expect(s.events.some((e) => e.type === 'error')).toBe(false);
+  });
+
+  it('nach zu vielen Abbrüchen gibt der Assistent mit Hinweis auf die Einstellung auf', async () => {
+    const s = setup();
+    mockFetch(Array.from({ length: 8 }, () => cutText('lang …')));
+    await s.assistant.run('baue', s.makeOptions());
+    const err = s.events.find((e) => e.type === 'error') as { message: string } | undefined;
+    expect(err?.message).toContain('Ausgabelänge');
+  });
+
+  it('der Systemprompt nennt die eingestellte Antwortlänge und passt die Etappen an', () => {
+    const s = setup();
+    const small = buildSystemPrompt(s.store.getState(), { maxOutputTokens: 1024 });
+    const large = buildSystemPrompt(s.store.getState(), { maxOutputTokens: 16000 });
+    expect(small).toContain('höchstens 1.024 Tokens');
+    expect(large).toContain('höchstens 16.000 Tokens');
+    const calls = (p: string) => Number(/höchstens etwa (\d+) Werkzeuge/.exec(p)![1]);
+    expect(calls(large)).toBeGreaterThan(calls(small));
+  });
+});

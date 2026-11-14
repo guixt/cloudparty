@@ -11,8 +11,29 @@ export function scriptApiReference(): string {
   return `Ereignisfunktionen (auf oberster Ebene definieren):\n${events}\n\nObjekt \`self\` (das eigene Objekt):\n${self}\n\nObjekt \`world\` und globale Funktionen:\n${world}`;
 }
 
-export function buildSystemPrompt(state: Pick<WorldState, 'world'>): string {
+/**
+ * Was pro Antwort ungefähr in die eingestellte Ausgabegrenze passt (grobe Faustwerte:
+ * ein Werkzeugaufruf mit Argumenten ≈ 150 Tokens, eine Skriptzeile ≈ 14 Tokens, 40 % bleiben als Reserve).
+ */
+export function outputBudget(maxOutputTokens: number): { tokens: number; words: number; toolCalls: number; scriptLines: number } {
+  const usable = Math.max(256, Math.floor(maxOutputTokens * 0.6));
+  return {
+    tokens: maxOutputTokens,
+    words: Math.round((maxOutputTokens * 0.6) / 50) * 50,
+    toolCalls: Math.min(30, Math.max(3, Math.floor(usable / 150))),
+    scriptLines: Math.min(300, Math.max(15, Math.floor(usable / 14))),
+  };
+}
+
+/** Hinweis auf die Antwortlänge für alle Prompts (auch die Editor-KI). */
+export function outputLimitNote(maxOutputTokens: number): string {
+  const b = outputBudget(maxOutputTokens);
+  return `Längengrenze: Deine Antwort darf höchstens ${b.tokens.toLocaleString('de-DE')} Tokens lang sein (etwa ${b.words.toLocaleString('de-DE')} Wörter, einschließlich Werkzeugaufrufen und Code). Plane so, dass du darunter bleibst; was darüber hinausgeht, wird abgeschnitten und nicht ausgeführt.`;
+}
+
+export function buildSystemPrompt(state: Pick<WorldState, 'world'>, opts: { maxOutputTokens?: number } = {}): string {
   const island = state.world.island ?? DEFAULT_ISLAND;
+  const budget = outputBudget(opts.maxOutputTokens ?? AI_LIMITS.maxOutputTokens);
   return `Du bist der Bau-Assistent in Cloudparty, einer Browser-Welt aus schwebenden Inseln, in der Nutzer gemeinsam bauen und Objekte per JavaScript zum Leben erwecken. Du hilfst dem Nutzer, indem du mit den bereitgestellten Werkzeugen Objekte platzierst, änderst, entfernst, die Umgebung gestaltest, Skripte schreibst und Medien-Tafeln einrichtest.
 
 # Haltung
@@ -48,5 +69,12 @@ ${scriptApiReference()}
 - Bei fehlendem Baurecht oder abgelehnten Aktionen: erkläre es kurz und versuche nicht, es zu umgehen.
 
 # Antwortstil
-Antworte kurz und auf Deutsch (ein bis drei Sätze), ohne Aufzählungen aller Einzelschritte. Du hast höchstens ${AI_LIMITS.maxRounds} Runden und ${AI_LIMITS.maxToolCalls} Werkzeugaufrufe, höchstens ${AI_LIMITS.maxNewEntities} neue Objekte pro Auftrag: plane großzügig, aber effizient, und rufe mehrere Werkzeuge pro Runde gemeinsam auf.`;
+Antworte kurz und auf Deutsch (ein bis drei Sätze), ohne Aufzählungen aller Einzelschritte. Du hast höchstens ${AI_LIMITS.maxRounds} Runden und ${AI_LIMITS.maxToolCalls} Werkzeugaufrufe, höchstens ${AI_LIMITS.maxNewEntities} neue Objekte pro Auftrag: plane großzügig, aber effizient.
+
+# Arbeitsweise in Etappen (wichtig gegen abgeschnittene Antworten)
+${outputLimitNote(budget.tokens)} Ein abgeschnittener Werkzeugaufruf wird nicht ausgeführt.
+- Arbeite in Etappen: rufe pro Runde höchstens etwa ${budget.toolCalls} Werkzeuge auf (z. B. eine Hauswand-Gruppe, dann das Dach, dann die Einrichtung) und mache in der nächsten Runde weiter, bis alles fertig ist.
+- Schreibe vor Werkzeugaufrufen höchstens einen kurzen Satz, keine langen Erklärungen oder Pläne.
+- Halte Skripte kurz (unter etwa ${budget.scriptLines} Zeilen); lieber ein einfaches Skript als ein langes.
+- Wird dir gemeldet, dass ein Aufruf abgeschnitten wurde, wiederhole genau diesen Schritt in kleineren Teilen und fahre dann fort.`;
 }

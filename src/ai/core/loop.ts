@@ -13,6 +13,11 @@ import { executeTool, type RunCounters } from './tools';
 /** Höchstens so viele Nachrichten (≈ 20 Gesprächsrunden) bleiben zwischen Aufträgen erhalten. */
 export const MAX_HISTORY_MESSAGES = 40;
 
+/** So oft darf die Antwort in einem Auftrag abgeschnitten werden, bevor der Assistent aufgibt. */
+export const MAX_TRUNCATIONS = 4;
+const CONTINUE_TEXT = 'Deine letzte Antwort wurde wegen der Ausgabegrenze abgeschnitten. Mache genau dort weiter, wo du aufgehört hast, und fasse dich kürzer.';
+const TRUNCATED_CALL_TEXT = 'Dein Werkzeugaufruf wurde wegen der Ausgabegrenze abgeschnitten und NICHT ausgeführt. Wiederhole genau diesen Schritt in kleineren Teilen (weniger Objekte pro Antwort bzw. ein kürzeres Skript) und fahre dann fort.';
+
 export interface HistoryLike {
   undo(): boolean;
   readonly undoCount: number;
@@ -75,6 +80,7 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
     let changed = false;
     let stopped = false;
     let grouped = false;
+    let truncations = 0;
 
     const confirm = async (question: string, detail?: string): Promise<boolean> => {
       confirmCounter += 1;
@@ -95,7 +101,7 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
           stopped = true;
           break;
         }
-        const system = buildSystemPrompt(store.getState());
+        const system = buildSystemPrompt(store.getState(), { maxOutputTokens: limits.maxOutputTokens });
         const result = await streamMessage({
           system,
           messages: fitToBudget({ system, tools: TOOLS, messages, currentFrom, budget: limits.maxInputTokens }),
@@ -110,9 +116,27 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
         emit({ type: 'usage', inputTokens: result.inputTokens, outputTokens: result.outputTokens });
         const toolUses = result.content.filter((b): b is Extract<ContentBlock, { type: 'tool_use' }> => b.type === 'tool_use');
         if (result.content.length > 0) messages.push({ role: 'assistant', content: result.content });
-        if (toolUses.length === 0 || result.stopReason !== 'tool_use') {
-          // Bei max_tokens mit unvollständigen Werkzeugaufrufen führen wir nichts aus.
-          if (result.stopReason === 'max_tokens') emit({ type: 'error', message: 'Die Antwort der KI wurde abgeschnitten, weil die maximale Ausgabelänge erreicht ist. Erhöhe sie in den KI-Einstellungen oder gib einen kleineren Auftrag.' });
+        // Abgeschnittene Antwort (Ausgabegrenze): wie ein Agent in kleineren Schritten weitermachen, statt abzubrechen.
+        const truncated = result.stopReason === 'max_tokens';
+        if (truncated) {
+          truncations += 1;
+          if (truncations > MAX_TRUNCATIONS) {
+            emit({ type: 'error', message: 'Die Antwort der KI wurde mehrfach abgeschnitten, weil die maximale Ausgabelänge erreicht ist. Erhöhe sie in den KI-Einstellungen oder gib einen kleineren Auftrag.' });
+            finished = true;
+            break;
+          }
+          emit({ type: 'tool', name: 'weiter', summary: 'Antwort war zu lang – die KI macht in kleineren Schritten weiter', ok: true });
+        }
+        if (toolUses.length === 0) {
+          if (truncated && result.content.length > 0) {
+            messages.push({ role: 'user', content: CONTINUE_TEXT });
+            continue;
+          }
+          if (truncated) emit({ type: 'error', message: 'Die Antwort der KI wurde abgeschnitten, weil die maximale Ausgabelänge erreicht ist. Erhöhe sie in den KI-Einstellungen oder gib einen kleineren Auftrag.' });
+          finished = true;
+          break;
+        }
+        if (result.stopReason !== 'tool_use' && !truncated) {
           finished = true;
           break;
         }
@@ -123,7 +147,9 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
             break;
           }
           let outcome;
-          if (counters.toolCalls >= AI_LIMITS.maxToolCalls) {
+          if (truncated && (use.input as { __invalidJson?: boolean } | null)?.__invalidJson) {
+            outcome = { ok: false, content: TRUNCATED_CALL_TEXT, summary: 'Aufruf abgeschnitten – wird in kleineren Teilen wiederholt', mutated: false };
+          } else if (counters.toolCalls >= AI_LIMITS.maxToolCalls) {
             outcome = { ok: false, content: `Limit erreicht: höchstens ${AI_LIMITS.maxToolCalls} Werkzeugaufrufe pro Auftrag. Beende den Auftrag jetzt.`, summary: 'Werkzeuglimit erreicht', mutated: false };
           } else {
             counters.toolCalls += 1;

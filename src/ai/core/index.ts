@@ -8,6 +8,7 @@ import type { AskClaude, AssistantApi } from '../api';
 import { streamMessage } from './client';
 import { createAssistant } from './loop';
 import { estimateTokens, tooLongError } from './budget';
+import { outputLimitNote } from './prompt';
 import { getTokenLimits, hasApiKey } from './settings';
 
 let assistant: AssistantApi | null = null;
@@ -19,10 +20,11 @@ export function getAssistant(): AssistantApi | null {
 export const askClaude: AskClaude = async (options) => {
   // Die Längengrenzen aus den KI-Einstellungen gelten auch für die Editor-KI (options.maxTokens ist nur ein Vorschlag).
   const limits = getTokenLimits();
-  const needed = estimateTokens(options.system) + estimateTokens(options.prompt);
+  const system = `${options.system}\n\n${outputLimitNote(limits.maxOutputTokens)}`;
+  const needed = estimateTokens(system) + estimateTokens(options.prompt);
   if (needed > limits.maxInputTokens) throw tooLongError(limits.maxInputTokens, needed);
   const result = await streamMessage({
-    system: options.system,
+    system,
     messages: [{ role: 'user', content: options.prompt }],
     maxTokens: limits.maxOutputTokens,
     signal: options.signal,
