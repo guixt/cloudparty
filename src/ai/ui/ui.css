@@ -52,5 +52,7 @@
 .ai-badge { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 999px; background: #e0a030; color: #1b1405; }
 
 .ai-limit { margin: 4px 0 10px; }
-.ai-range { flex: 1; min-width: 0; accent-color: var(--cp-accent); }
+.ai-number { max-width: 140px; text-align: right; font-variant-numeric: tabular-nums; }
+.ai-number-invalid { outline: 2px solid var(--cp-danger); }
+.ai-unit { flex: 1; }
 .ai-limit-hint { font-size: 12px; margin-top: 2px; }

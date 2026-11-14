@@ -15,7 +15,7 @@ const fmt = (n: number) => n.toLocaleString('de-DE');
 /** Grobe Umrechnung für die Anzeige: ein Token ist etwa 0,6 deutsche Wörter. */
 const words = (tokens: number) => fmt(Math.round((tokens * 0.6) / 100) * 100);
 
-function LimitSlider({
+function LimitField({
   id,
   label,
   hint,
@@ -30,28 +30,51 @@ function LimitSlider({
   value: number;
   onChange: (value: number) => void;
 }) {
+  // Eingabe als Text: so lässt sich das Feld beim Tippen auch kurz leeren; übernommen wird beim Verlassen bzw. mit Enter.
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? String(value);
+  const parsed = Number(draft?.replace(/[.\s]/g, '').replace(',', '.'));
+  const invalid = draft !== null && (draft.trim() === '' || !Number.isFinite(parsed));
+  const commit = () => {
+    if (draft === null) return;
+    if (invalid) {
+      setDraft(null);
+      return;
+    }
+    const clamped = Math.min(range.max, Math.max(range.min, Math.round(parsed)));
+    setDraft(null);
+    if (clamped !== value) onChange(clamped);
+  };
   return (
     <div className="ai-limit">
       <label className="cp-label" htmlFor={id}>
-        {label}: <strong data-testid={`${id}-value`}>{fmt(value)} Tokens</strong> <span className="cp-muted">(ca. {words(value)} Wörter)</span>
+        {label} <span className="cp-muted">(ca. {words(value)} Wörter)</span>
       </label>
       <div className="cp-row">
         <input
           id={id}
-          type="range"
-          className="ai-range"
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          className={`cp-input ai-number${invalid ? ' ai-number-invalid' : ''}`}
           data-testid={id}
-          min={range.min}
-          max={range.max}
-          step={range.step}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
+          value={shown}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') setDraft(null);
+          }}
         />
-        <button type="button" className="cp-button ai-icon-btn" title="Standardwert" aria-label="Standardwert" data-testid={`${id}-reset`} onClick={() => onChange(range.default)}>
+        <span className="cp-muted ai-unit">Tokens</span>
+        <button type="button" className="cp-button ai-icon-btn" title="Standardwert" aria-label="Standardwert" data-testid={`${id}-reset`} onClick={() => { setDraft(null); onChange(range.default); }}>
           ↺
         </button>
       </div>
-      <div className="ai-limit-hint cp-muted">{hint}</div>
+      <div className="ai-limit-hint cp-muted">
+        {hint} Erlaubt: {fmt(range.min)} bis {fmt(range.max)} (Standard {fmt(range.default)}).
+      </div>
     </div>
   );
 }
@@ -154,7 +177,7 @@ export function SettingsDialog({ api, explain, onClose }: { api: AssistantApi; e
           {!known && <option value={settings.model}>{settings.model}</option>}
         </select>
         <div className="cp-label">Längenlimits pro Anfrage</div>
-        <LimitSlider
+        <LimitField
           id="ai-max-output"
           label="Maximale Antwortlänge"
           hint="Wird eine Antwort abgeschnitten (z. B. bei großen Bauaufträgen oder langen Skripten), erhöhe diesen Wert. Längere Antworten kosten mehr."
@@ -165,7 +188,7 @@ export function SettingsDialog({ api, explain, onClose }: { api: AssistantApi; e
             force((n) => n + 1);
           }}
         />
-        <LimitSlider
+        <LimitField
           id="ai-max-input"
           label="Maximale Eingabelänge"
           hint="So viel Weltdaten und Gesprächsverlauf sieht die KI pro Anfrage. Wird es mehr, lässt sie zuerst ältere Gesprächsteile weg und kürzt große Ergebnisse. Mehr Eingabe kostet mehr."
