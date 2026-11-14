@@ -1,0 +1,45 @@
+.cpb-sep { width: 1px; align-self: stretch; background: var(--cp-border); margin: 2px 4px; }
+.cpb-panel { display: flex; flex-direction: column; min-height: 0; max-height: 100%; }
+.cpb-inspector { display: block; overflow-y: auto; }
+.cpb-scroll { overflow-y: auto; min-height: 0; flex: 1; margin-top: 4px; padding-right: 2px; }
+.cpb-hint { font-size: 11px; margin: 6px 0 2px; line-height: 1.35; }
+.cpb-group { margin: 10px 0 6px; font-size: 12px; color: var(--cp-muted); font-weight: 700; }
+.cpb-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.cpb-item { display: flex; align-items: center; gap: 8px; font: inherit; font-size: 13px; color: var(--cp-text); text-align: left;
+  background: rgba(255, 255, 255, 0.07); border: 1px solid var(--cp-border); border-radius: 8px; padding: 6px 8px; cursor: pointer; min-width: 0; }
+.cpb-item:hover { background: rgba(255, 255, 255, 0.16); }
+.cpb-item-armed { outline: 2px solid var(--cp-accent); }
+.cpb-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cpb-swatch { flex: none; width: 16px; height: 16px; border-radius: 5px; border: 1px solid rgba(255, 255, 255, 0.4); }
+
+.cpb-section { border-top: 1px solid var(--cp-border); margin-top: 8px; padding-top: 6px; }
+.cpb-section > summary { cursor: pointer; font-weight: 700; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--cp-muted); padding: 2px 0; }
+.cpb-section-body { padding-top: 4px; }
+.cpb-field { display: block; margin: 6px 0; min-width: 0; flex: 1; }
+.cpb-field-label { display: block; font-size: 12px; color: var(--cp-muted); margin-bottom: 3px; }
+.cpb-vec-row { display: flex; gap: 6px; }
+.cpb-vec { margin: 6px 0; }
+.cpb-vec .cpb-vec-row { gap: 3px; }
+.cpb-num { display: inline-flex; align-items: center; gap: 2px; min-width: 0; flex: 1; }
+.cpb-num-label { font-size: 11px; color: var(--cp-muted); width: 10px; }
+.cpb-num-input { padding: 4px 4px; text-align: center; font-size: 12px; min-width: 0; }
+.cpb-step { flex: none; font: inherit; width: 16px; height: 26px; padding: 0; line-height: 1; color: var(--cp-text); background: rgba(255, 255, 255, 0.1); border: 1px solid var(--cp-border);
+  border-radius: 5px; cursor: pointer; font-size: 12px; }
+.cpb-step:hover { background: rgba(255, 255, 255, 0.2); }
+.cpb-colors { display: flex; gap: 10px; }
+.cpb-color { width: 100%; min-width: 44px; height: 30px; padding: 0; border: 1px solid var(--cp-border); border-radius: 8px; background: transparent; cursor: pointer; }
+.cpb-check { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-size: 13px; }
+.cpb-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.cpb-actions .cp-button { padding: 5px 9px; font-size: 12.5px; }
+.cpb-ref { font-size: 12px; margin-top: 4px; }
+.cpb-small { padding: 3px 8px; font-size: 12px; }
+.cpb-wide { width: 100%; margin-top: 4px; }
+.cpb-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.cpb-mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+.cpb-error { color: var(--cp-danger); font-size: 12px; }
+.cpb-file { font-size: 12px; width: 100%; color: var(--cp-muted); }
+.cpb-list { display: flex; flex-direction: column; gap: 3px; max-height: 260px; overflow-y: auto; }
+.cpb-list-item { display: flex; justify-content: space-between; gap: 8px; font: inherit; font-size: 13px; color: var(--cp-text); background: rgba(255, 255, 255, 0.06);
+  border: 1px solid transparent; border-radius: 6px; padding: 4px 8px; cursor: pointer; text-align: left; }
+.cpb-list-item:hover { background: rgba(255, 255, 255, 0.15); }
+.cpb-list-item .cp-muted { font-size: 11px; }
