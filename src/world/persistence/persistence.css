@@ -1,0 +1,3 @@
+.cp-worldfile { display: flex; gap: 6px; padding: 6px; }
+.cp-worldfile .cp-button { padding: 5px 10px; font-size: 13px; }
+.cp-worldfile input[type='file'] { display: none; }
