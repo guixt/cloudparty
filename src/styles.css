@@ -32,6 +32,8 @@ body { font-family: var(--cp-font); color: var(--cp-text); background: #6fb3f2; 
 .cp-mode-build .cp-slot-bottom-left { left: 264px; }
 .cp-slot-toolbar { left: 50%; bottom: 12px; transform: translateX(-50%); height: var(--cp-toolbar-height); align-items: center;
   padding: 6px 10px; background: var(--cp-bg); border: 1px solid var(--cp-border); border-radius: 14px; backdrop-filter: blur(8px); }
+.cp-slot-toolbar { max-width: calc(100vw - 16px); overflow-x: auto; scrollbar-width: none; }
+.cp-slot-toolbar::-webkit-scrollbar { display: none; }
 .cp-slot-toolbar:empty { display: none; }
 .cp-slot-overlay { inset: 0; display: block; }
 .cp-slot-overlay > * { pointer-events: auto; }
