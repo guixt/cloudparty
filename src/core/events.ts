@@ -80,6 +80,11 @@ export interface GameEvents {
   // --- Rendering ---
   'render.shadowCaster.added': { mesh: AbstractMesh };
   'ui.toast': { text: string; kind?: 'info' | 'error' };
+
+  // --- Undo-Gruppierung (Build-Paket hört zu; z. B. für KI-Aufträge) ---
+  /** Alle folgenden lokalen Änderungen bis `history.group.end` werden ein Undo-Schritt. */
+  'history.group.begin': Record<string, never>;
+  'history.group.end': Record<string, never>;
 }
 
 type Handler<T> = (payload: T) => void;

@@ -11,7 +11,9 @@ import type { WorldStore } from '../core/store';
 export type HistoryOp =
   | { kind: 'add'; entity: EntitySpec }
   | { kind: 'remove'; entity: EntitySpec }
-  | { kind: 'change'; id: string; before: EntitySpec; after: EntitySpec };
+  | { kind: 'change'; id: string; before: EntitySpec; after: EntitySpec }
+  /** Mehrere Operationen als ein Undo-Schritt (z. B. ein KI-Auftrag). */
+  | { kind: 'group'; ops: HistoryOp[] };
 
 export interface HistoryState {
   canUndo: boolean;
@@ -44,6 +46,8 @@ export class History {
   private applying = false;
   private pinned = new Map<string, EntitySpec>();
   private lastChangeAt = 0;
+  private groupDepth = 0;
+  private groupOps: HistoryOp[] = [];
   private offs: (() => void)[] = [];
 
   constructor(
@@ -71,6 +75,8 @@ export class History {
         this.push({ kind: 'change', id: entity.id, before, after: entity });
       }),
       this.bus.on('world.loaded', () => this.clear()),
+      this.bus.on('history.group.begin', () => this.beginGroup()),
+      this.bus.on('history.group.end', () => this.endGroup()),
     );
   }
 
@@ -89,6 +95,19 @@ export class History {
     this.pinned.delete(id);
   }
 
+  /** Fasst alle Änderungen bis `endGroup` zu einem Undo-Schritt zusammen (verschachtelbar). */
+  beginGroup(): void {
+    this.groupDepth += 1;
+  }
+  endGroup(): void {
+    if (this.groupDepth === 0) return;
+    this.groupDepth -= 1;
+    if (this.groupDepth > 0 || this.groupOps.length === 0) return;
+    const ops = this.groupOps;
+    this.groupOps = [];
+    this.push(ops.length === 1 ? ops[0] : { kind: 'group', ops }, true);
+  }
+
   get isApplying(): boolean {
     return this.applying;
   }
@@ -100,6 +119,8 @@ export class History {
   }
 
   clear(): void {
+    this.groupDepth = 0;
+    this.groupOps = [];
     this.undoStack = [];
     this.redoStack = [];
     this.pinned.clear();
@@ -114,8 +135,12 @@ export class History {
     return this.step(this.redoStack, this.undoStack, false);
   }
 
-  private push(op: HistoryOp): void {
+  private push(op: HistoryOp, fromGroup = false): void {
     if (this.applying) return;
+    if (this.groupDepth > 0 && !fromGroup) {
+      this.groupOps.push(op);
+      return;
+    }
     const t = this.now();
     const top = this.undoStack[this.undoStack.length - 1];
     if (
@@ -154,6 +179,10 @@ export class History {
   private apply(op: HistoryOp, undo: boolean): void {
     const state = this.store.getState();
     const opts = { source: 'local' as const };
+    if (op.kind === 'group') {
+      for (const inner of undo ? [...op.ops].reverse() : op.ops) this.apply(inner, undo);
+      return;
+    }
     if (op.kind === 'add') {
       if (undo) state.removeEntity(op.entity.id, opts);
       else state.addEntity(op.entity, opts);

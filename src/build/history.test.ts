@@ -121,4 +121,36 @@ describe('History', () => {
     expect(history.undoCount).toBe(0);
     expect(history.state.getState().canUndo).toBe(false);
   });
+  it('fasst gruppierte Änderungen zu einem Undo-Schritt zusammen', () => {
+    const { store, history, bus } = setup();
+    store.getState().addEntity(box('x'));
+    bus.emit('history.group.begin', {});
+    store.getState().addEntity(box('a'));
+    store.getState().addEntity(box('b'));
+    store.getState().updateEntity('x', { name: 'neu' });
+    store.getState().removeEntity('a');
+    bus.emit('history.group.end', {});
+    expect(history.undoCount).toBe(2);
+    history.undo();
+    expect(Object.keys(store.getState().entities)).toEqual(['x']);
+    expect(store.getState().entities.x.name).toBeUndefined();
+    history.redo();
+    expect(Object.keys(store.getState().entities).sort()).toEqual(['b', 'x']);
+    expect(store.getState().entities.x.name).toBe('neu');
+  });
+
+  it('leere und verschachtelte Gruppen erzeugen keinen oder nur einen Schritt', () => {
+    const { store, history, bus } = setup();
+    bus.emit('history.group.begin', {});
+    bus.emit('history.group.end', {});
+    expect(history.undoCount).toBe(0);
+    bus.emit('history.group.begin', {});
+    bus.emit('history.group.begin', {});
+    store.getState().addEntity(box('a'));
+    store.getState().addEntity(box('b'));
+    bus.emit('history.group.end', {});
+    expect(history.undoCount).toBe(0);
+    bus.emit('history.group.end', {});
+    expect(history.undoCount).toBe(1);
+  });
 });
