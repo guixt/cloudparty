@@ -1,0 +1,18 @@
+/* Medien-Flächen: HTML-Overlay und Panel „Medien" */
+.cp-media-quad { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; background: #fff; overflow: hidden; will-change: transform; }
+.cp-media-frame { display: block; width: 100%; border: 0; background: #fff; pointer-events: none; }
+.cp-media-img { display: block; width: 100%; height: 100%; object-fit: contain; background: #0d1118; pointer-events: none; }
+.cp-media-caption { position: absolute; left: 0; right: 0; bottom: 0; height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 0 12px; background: rgba(13, 17, 24, 0.92); color: #e8eef8; font: 600 16px/1 system-ui, sans-serif; pointer-events: none; }
+.cp-media-caption-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.8; }
+.cp-media-caption-link { color: #7cc0ff; white-space: nowrap; text-decoration: underline; }
+.cp-media-interactive .cp-media-frame, .cp-media-interactive .cp-media-caption { pointer-events: auto; }
+.cp-media-panel { display: flex; flex-direction: column; }
+.cp-media-row { margin-top: 8px; flex-wrap: wrap; }
+.cp-media-hint { font-size: 12px; margin: 8px 0 0; }
+.cp-media-check { display: flex; gap: 6px; align-items: center; font-size: 13px; margin-top: 10px; }
+.cp-media-slides { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 190px; overflow-y: auto; }
+.cp-media-slides li { display: flex; gap: 4px; align-items: center; padding: 2px 4px; border-radius: 6px; }
+.cp-media-slides li.cp-media-current { background: rgba(77, 163, 255, 0.2); }
+.cp-media-slide-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.cp-media-mini { padding: 1px 7px; }
