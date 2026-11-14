@@ -5,7 +5,8 @@ import { applyEvent, createAiStore, createController, formatTokens, initialView,
 function fakeApi(run: (prompt: string, o: RunOptions) => Promise<void>, hasKey = true): AssistantApi & { undo: ReturnType<typeof vi.fn> } {
   const undo = vi.fn(() => true);
   return {
-    getSettings: () => ({ hasKey, model: 'm' }),
+    getSettings: () => ({ hasKey, model: 'm', approval: 'ask' as const }),
+    setApproval: vi.fn(),
     setApiKey: vi.fn(),
     setModel: vi.fn(),
     run,

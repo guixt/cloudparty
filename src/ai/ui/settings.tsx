@@ -15,6 +15,7 @@ export function SettingsDialog({ api, explain, onClose }: { api: AssistantApi; e
   const [, force] = useState(0);
   const [key, setKey] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [confirmAuto, setConfirmAuto] = useState(false);
   const settings = api.getSettings();
   const known = AI_MODELS.some((m) => m.id === settings.model);
 
@@ -107,6 +108,55 @@ export function SettingsDialog({ api, explain, onClose }: { api: AssistantApi; e
           ))}
           {!known && <option value={settings.model}>{settings.model}</option>}
         </select>
+        <div className="cp-label">Freigaben</div>
+        <label className="ai-radio">
+          <input
+            type="radio"
+            name="ai-approval"
+            data-testid="ai-approval-ask"
+            checked={settings.approval !== 'auto'}
+            onChange={() => {
+              api.setApproval('ask');
+              setConfirmAuto(false);
+              force((n) => n + 1);
+            }}
+          />
+          <span>Vor Skripten und vielen Löschungen fragen (empfohlen)</span>
+        </label>
+        <label className="ai-radio">
+          <input
+            type="radio"
+            name="ai-approval"
+            data-testid="ai-approval-auto"
+            checked={settings.approval === 'auto' || confirmAuto}
+            onChange={() => {
+              if (settings.approval !== 'auto') setConfirmAuto(true);
+            }}
+          />
+          <span>Alles erlauben – die KI arbeitet ohne Rückfragen</span>
+        </label>
+        {confirmAuto && settings.approval !== 'auto' && (
+          <div className="ai-warning" role="alert" data-testid="ai-approval-warning">
+            Skripte der KI werden ohne Prüfung gespeichert und laufen sofort. Gesperrte Befehle, Größenlimits und das Baurecht werden weiterhin geprüft, und mit „Rückgängig“ kannst du einen Auftrag zurücknehmen.
+            <div className="cp-row ai-modal-actions">
+              <button type="button" className="cp-button" data-testid="ai-approval-cancel" onClick={() => setConfirmAuto(false)}>
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                className="cp-button cp-button-primary"
+                data-testid="ai-approval-confirm"
+                onClick={() => {
+                  api.setApproval('auto');
+                  setConfirmAuto(false);
+                  force((n) => n + 1);
+                }}
+              >
+                Alles erlauben
+              </button>
+            </div>
+          </div>
+        )}
         <ul className="ai-notes cp-muted">
           <li>Der Key wird nur in diesem Browser gespeichert und direkt an Anthropic gesendet – nie an den Cloudparty-Server oder in Weltdateien.</li>
           <li>Anfragen kosten Geld (Abrechnung bei Anthropic).</li>

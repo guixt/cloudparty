@@ -3,7 +3,7 @@
  * `cloudparty.ai.baseUrl` (optional) überschreibt die API-Basis
  * (Standard https://api.anthropic.com) – gedacht für Tests und eigene Proxys.
  */
-import { AI_MODELS, AI_STORAGE_KEYS, DEFAULT_AI_MODEL } from '../../../shared/aiTools';
+import { AI_MODELS, AI_STORAGE_KEYS, DEFAULT_AI_APPROVAL, DEFAULT_AI_MODEL, type AiApprovalMode } from '../../../shared/aiTools';
 
 export const BASE_URL_KEY = 'cloudparty.ai.baseUrl';
 export const DEFAULT_BASE_URL = 'https://api.anthropic.com';
@@ -55,4 +55,16 @@ export function setModel(model: string): void {
 export function getBaseUrl(): string {
   const custom = read(BASE_URL_KEY).trim();
   return (custom || DEFAULT_BASE_URL).replace(/\/+$/, '');
+}
+
+/** Freigabe-Modus; unbekannte oder fehlende Werte ergeben immer den sicheren Standard ask. */
+export function getApproval(): AiApprovalMode {
+  return read(AI_STORAGE_KEYS.approval) === 'auto' ? 'auto' : DEFAULT_AI_APPROVAL;
+}
+export function setApproval(mode: AiApprovalMode): void {
+  try {
+    storage()?.setItem(AI_STORAGE_KEYS.approval, mode === 'auto' ? 'auto' : 'ask');
+  } catch {
+    /* ignorieren */
+  }
 }

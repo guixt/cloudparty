@@ -24,6 +24,8 @@ export interface ToolContext {
   bus: EventBus;
   getAvatar(): { position: Vec3; yaw: number } | null;
   confirm(question: string, detail?: string): Promise<boolean>;
+  /** true = Freigabe-Modus auto: Rückfragen entfallen (Prüfungen und Limits bleiben aktiv). */
+  autoApprove?: boolean;
 }
 /** Zähler pro Auftrag. */
 export interface RunCounters {
@@ -235,7 +237,7 @@ const handlers: Record<string, Handler> = {
 
   async remove_entity(input, ctx, counters) {
     const entity = getEntity(ctx, input.id);
-    if (!counters.removalsApproved && counters.removals + 1 >= AI_LIMITS.confirmRemovalsAt) {
+    if (!ctx.autoApprove && !counters.removalsApproved && counters.removals + 1 >= AI_LIMITS.confirmRemovalsAt) {
       const yes = await ctx.confirm(`Die KI möchte ein weiteres Objekt entfernen (das ${counters.removals + 1}. in diesem Auftrag). Erlauben?`, entity.name || entity.ref);
       if (!yes) fail('Nutzer hat abgelehnt');
       counters.removalsApproved = true;
@@ -287,8 +289,10 @@ const handlers: Record<string, Handler> = {
       ctx.store.getState().updateEntity(entity.id, { script: undefined }, opts);
       return ok('Skript entfernt.', `Skript von ${entity.name || 'Objekt'} entfernt`, true);
     }
-    const yes = await ctx.confirm(`Die KI möchte ein Skript an „${(entity.name || entity.ref).slice(0, 60)}“ hängen. Skripte sind Code – bitte prüfen. Erlauben?`, source);
-    if (!yes) fail('Nutzer hat abgelehnt');
+    if (!ctx.autoApprove) {
+      const yes = await ctx.confirm(`Die KI möchte ein Skript an „${(entity.name || entity.ref).slice(0, 60)}“ hängen. Skripte sind Code – bitte prüfen. Erlauben?`, source);
+      if (!yes) fail('Nutzer hat abgelehnt');
+    }
     ctx.store.getState().updateEntity(entity.id, { script: { source, enabled: (input.enabled as boolean | undefined) ?? true } }, opts);
     return ok('Skript gesetzt.', `Skript an ${entity.name || 'Objekt'} gehängt`, true);
   },

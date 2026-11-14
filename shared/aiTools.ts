@@ -34,7 +34,17 @@ export const DEFAULT_AI_MODEL = 'claude-sonnet-5-5';
 export const AI_STORAGE_KEYS = {
   apiKey: 'cloudparty.ai.key',
   model: 'cloudparty.ai.model',
+  approval: 'cloudparty.ai.approval',
 } as const;
+
+/**
+ * Freigabe-Modus des Assistenten:
+ * - ask (Standard): fragt vor dem Speichern von Skripten und bei vielen Löschungen nach.
+ * - auto: führt alles ohne Rückfragen aus (wie auto-accept bei KI-Agenten). Automatische
+ *   Prüfungen (Syntax, gesperrte Befehle, Limits, Baurecht) und Rückgängig bleiben aktiv.
+ */
+export type AiApprovalMode = 'ask' | 'auto';
+export const DEFAULT_AI_APPROVAL: AiApprovalMode = 'ask';
 
 export type AiToolName =
   | 'get_world'

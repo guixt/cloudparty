@@ -12,8 +12,8 @@ import { installLocalStorage, mockFetch, textResponse, toolResponse } from './te
 
 const KEY = 'sk-ant-SECRET-abcdef';
 
-function setup() {
-  installLocalStorage({ 'cloudparty.ai.key': KEY });
+function setup(extra: Record<string, string> = {}) {
+  installLocalStorage({ 'cloudparty.ai.key': KEY, ...extra });
   const bus = new EventBus();
   const store = createWorldStore(bus);
   const history = new History(store, bus);
@@ -294,5 +294,96 @@ describe('Werkzeuge', () => {
   it('prompt enthält Skript-API, Koordinaten und Sicherheitsregeln', () => {
     const p = buildSystemPrompt(setup().store.getState());
     for (const part of ['onClick(avatar)', 'self.setColor', 'world.broadcast', 'Radius 40', 'rotation_degrees [0, 180, 0]', 'Haus', 'API-Keys']) expect(p).toContain(part);
+  });
+});
+
+describe('Freigabe-Modus', () => {
+  const src = 'function onClick(a){ self.setColor("#ff0000"); }';
+
+  it('Standard ist ask; unbekannte Werte ergeben ask', () => {
+    expect(setup().assistant.getSettings().approval).toBe('ask');
+    expect(setup({ 'cloudparty.ai.approval': 'irgendwas' }).assistant.getSettings().approval).toBe('ask');
+    expect(setup({ 'cloudparty.ai.approval': 'auto' }).assistant.getSettings().approval).toBe('auto');
+  });
+
+  it('setApproval speichert dauerhaft und ignoriert ungültige Werte', () => {
+    const s = setup();
+    s.assistant.setApproval('auto');
+    expect(localStorage.getItem('cloudparty.ai.approval')).toBe('auto');
+    expect(s.assistant.getSettings().approval).toBe('auto');
+    s.assistant.setApproval('quatsch' as never);
+    expect(s.assistant.getSettings().approval).toBe('ask');
+  });
+
+  it('auto: Skript wird ohne Rückfrage gespeichert', async () => {
+    const s = setup({ 'cloudparty.ai.approval': 'auto' });
+    mockFetch([toolResponse([{ id: '1', name: 'set_script', input: { id: 'box.rot', source: src } }]), textResponse('ok')]);
+    await s.assistant.run('x', s.makeOptions(false));
+    expect(s.confirms).toHaveLength(0);
+    expect(s.events.some((e) => e.type === 'confirm')).toBe(false);
+    expect(s.store.getState().entities['box.rot'].script).toEqual({ source: src, enabled: true });
+  });
+
+  it('auto: viele Löschungen laufen ohne Rückfrage durch', async () => {
+    const s = setup({ 'cloudparty.ai.approval': 'auto' });
+    const ids = s.store.getState().order.slice(0, 5);
+    mockFetch([toolResponse(ids.map((id, i) => ({ id: `r${i}`, name: 'remove_entity', input: { id } }))), textResponse('ok')]);
+    await s.assistant.run('weg', s.makeOptions(false));
+    expect(s.confirms).toHaveLength(0);
+    expect(count(s)).toBe(0);
+  });
+
+  it('auto: gesperrte Konstrukte und Syntaxfehler werden trotzdem abgewiesen', async () => {
+    const s = setup({ 'cloudparty.ai.approval': 'auto' });
+    mockFetch([
+      toolResponse([
+        { id: '1', name: 'set_script', input: { id: 'box.rot', source: 'fetch("https://example.com")' } },
+        { id: '2', name: 'set_script', input: { id: 'box.rot', source: 'function onClick( {' } },
+      ]),
+      textResponse('ok'),
+    ]);
+    await s.assistant.run('x', s.makeOptions(true));
+    expect(s.store.getState().entities['box.rot'].script).toBeUndefined();
+    const tools = s.events.filter((e) => e.type === 'tool') as { ok: boolean }[];
+    expect(tools.map((t) => t.ok)).toEqual([false, false]);
+  });
+
+  it('auto: Baurecht und ein Undo-Schritt pro Auftrag bleiben bestehen', async () => {
+    const s = setup({ 'cloudparty.ai.approval': 'auto' });
+    s.store.getState().setCanBuild(false);
+    mockFetch([toolResponse([{ id: '1', name: 'set_script', input: { id: 'box.rot', source: src } }]), textResponse('ok')]);
+    await s.assistant.run('x', s.makeOptions(true));
+    expect(s.store.getState().entities['box.rot'].script).toBeUndefined();
+
+    s.store.getState().setCanBuild(true);
+    mockFetch([toolResponse([{ id: '1', name: 'set_script', input: { id: 'box.rot', source: src } }, { id: '2', name: 'remove_entity', input: { id: 'kiste.1' } }]), textResponse('ok')]);
+    await s.assistant.run('y', s.makeOptions(true));
+    expect(s.assistant.undoLast()).toBe(true);
+    expect(s.store.getState().entities['box.rot'].script).toBeUndefined();
+    expect(s.store.getState().entities['kiste.1']).toBeDefined();
+  });
+
+  it('ask: fragt weiterhin bei Skripten und der 5. Löschung', async () => {
+    const s = setup({ 'cloudparty.ai.approval': 'ask' });
+    mockFetch([toolResponse([{ id: '1', name: 'set_script', input: { id: 'box.rot', source: src } }]), textResponse('ok')]);
+    await s.assistant.run('x', s.makeOptions(true));
+    expect(s.confirms).toHaveLength(1);
+  });
+
+  it('der Modus wird pro Auftrag beim Start gelesen', async () => {
+    const s = setup({ 'cloudparty.ai.approval': 'auto' });
+    mockFetch([
+      () => {
+        s.assistant.setApproval('ask'); // Umstellung mitten im Auftrag
+        return toolResponse([{ id: '1', name: 'set_script', input: { id: 'box.rot', source: src } }]);
+      },
+      textResponse('ok'),
+    ]);
+    await s.assistant.run('x', s.makeOptions(false));
+    expect(s.confirms).toHaveLength(0);
+    expect(s.store.getState().entities['box.rot'].script).toBeDefined();
+    mockFetch([toolResponse([{ id: '1', name: 'set_script', input: { id: 'box.rot', source: src + ' ' } }]), textResponse('ok')]);
+    await s.assistant.run('y', s.makeOptions(false));
+    expect(s.confirms).toHaveLength(1);
   });
 });

@@ -3,6 +3,8 @@
  * VERTRAG: nur der Koordinator ändert diese Datei. Paket 13 implementiert alles hier Beschriebene
  * und exportiert es aus `src/ai/core/index.ts`.
  */
+import type { AiApprovalMode } from '../../shared/aiTools';
+
 
 /** Ein Schritt im Verlauf eines Auftrags, den die Oberfläche anzeigt. */
 export type AssistantEvent =
@@ -25,6 +27,8 @@ export interface RunOptions {
 export interface AiSettings {
   hasKey: boolean;
   model: string;
+  /** ask = vor Skripten und vielen Löschungen fragen, auto = alles ohne Rückfragen. */
+  approval: AiApprovalMode;
 }
 
 export interface AssistantApi {
@@ -32,6 +36,7 @@ export interface AssistantApi {
   /** Speichert den Key nur im Browser (localStorage). Leerer Text löscht ihn. */
   setApiKey(key: string): void;
   setModel(model: string): void;
+  setApproval(mode: AiApprovalMode): void;
   /** Führt einen Auftrag aus; Gesprächsverlauf bleibt zwischen Aufträgen erhalten. */
   run(prompt: string, options: RunOptions): Promise<void>;
   /** Vergisst den Gesprächsverlauf. */

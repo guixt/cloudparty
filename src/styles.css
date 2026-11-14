@@ -20,8 +20,9 @@ body { font-family: var(--cp-font); color: var(--cp-text); background: #6fb3f2; 
 
 .cp-root { position: fixed; inset: 0; }
 .cp-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
-.cp-overlay-root { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.cp-ui { position: absolute; inset: 0; pointer-events: none; font-size: 14px; }
+/* Eigene Stapelkontexte: Namensschilder und Web-Tafeln (Overlay) liegen immer unter der Oberfläche. */
+.cp-overlay-root { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.cp-ui { position: absolute; inset: 0; pointer-events: none; font-size: 14px; z-index: 1; }
 .cp-slot { position: absolute; display: flex; gap: 8px; pointer-events: none; }
 .cp-slot > * { pointer-events: auto; }
 .cp-slot-top-left { top: 12px; left: 12px; flex-direction: column; align-items: flex-start; }

@@ -168,11 +168,14 @@ export function AssistantWindow({
   title,
   onClose,
   onSettings,
+  badge,
   children,
 }: {
   title: string;
   onClose: () => void;
   onSettings: () => void;
+  /** Kleines Abzeichen neben dem Titel (z. B. Auto bei Freigabe-Modus alles erlauben). */
+  badge?: string;
   children: React.ReactNode;
 }) {
   const [pos, setPos] = useState<Pos | null>(null);
@@ -208,6 +211,11 @@ export function AssistantWindow({
     >
       <div className="ai-titlebar" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
         <span className="ai-title">{title}</span>
+        {badge && (
+          <span className="ai-badge" data-testid="ai-badge" title="Freigabe-Modus: alles erlauben – die KI fragt nicht nach">
+            {badge}
+          </span>
+        )}
         <button type="button" className="cp-button ai-icon-btn" data-testid="ai-gear" title="Einstellungen" aria-label="Einstellungen" onClick={onSettings}>
           ⚙
         </button>

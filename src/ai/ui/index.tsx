@@ -59,7 +59,7 @@ function Overlay({ ctx }: PanelProps) {
   if (!open) return null;
   return (
     <>
-      <AssistantWindow title="KI-Assistent" onClose={() => setOpen(false)} onSettings={() => setSettings({ explain: false })}>
+      <AssistantWindow title="KI-Assistent" badge={api?.getSettings().approval === 'auto' ? 'Auto' : undefined} onClose={() => setOpen(false)} onSettings={() => setSettings({ explain: false })}>
         <AssistantPanel api={api} store={aiStore} controller={controller} canBuild={canBuild} onOpenSettings={() => setSettings({ explain: true })} />
       </AssistantWindow>
       {settings && api && <SettingsDialog api={api} explain={settings.explain} onClose={() => setSettings(null)} />}

@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AssistantApi, RunOptions } from '../api';
-import { AssistantPanel } from './panel';
+import { AssistantPanel, AssistantWindow } from './panel';
 import { SettingsDialog, validateApiKey } from './settings';
 import { createAiStore, createController, SUGGESTIONS } from './state';
 
@@ -20,8 +20,12 @@ afterEach(() => {
 function makeApi(run: (p: string, o: RunOptions) => Promise<void> = async () => {}) {
   let hasKey = true;
   let model = 'claude-sonnet-5-5';
+  let approval: 'ask' | 'auto' = 'ask';
   const api = {
-    getSettings: () => ({ hasKey, model }),
+    getSettings: () => ({ hasKey, model, approval }),
+    setApproval: vi.fn((m: 'ask' | 'auto') => {
+      approval = m;
+    }),
     setApiKey: vi.fn((k: string) => {
       hasKey = k !== '';
     }),
@@ -145,6 +149,42 @@ describe('SettingsDialog', () => {
     act(() => q('ai-key-clear')!.click());
     expect(api.setApiKey).toHaveBeenLastCalledWith('');
     expect(q('ai-key-input')).not.toBeNull();
+  });
+  it('Freigabe: Standard fragen; alles erlauben erst nach Warnung und Bestätigung', () => {
+    const api = makeApi();
+    mountSettings(api);
+    expect(q<HTMLInputElement>('ai-approval-ask')!.checked).toBe(true);
+    expect(q<HTMLInputElement>('ai-approval-auto')!.checked).toBe(false);
+    act(() => q('ai-approval-auto')!.click());
+    expect(q('ai-approval-warning')!.textContent).toContain('ohne Prüfung gespeichert');
+    expect(api.setApproval).not.toHaveBeenCalled();
+    act(() => q('ai-approval-cancel')!.click());
+    expect(q('ai-approval-warning')).toBeNull();
+    expect(api.setApproval).not.toHaveBeenCalled();
+    act(() => q('ai-approval-auto')!.click());
+    act(() => q('ai-approval-confirm')!.click());
+    expect(api.setApproval).toHaveBeenLastCalledWith('auto');
+    expect(q<HTMLInputElement>('ai-approval-auto')!.checked).toBe(true);
+    expect(q('ai-approval-warning')).toBeNull();
+  });
+  it('Freigabe: zurück auf fragen braucht keine Bestätigung', () => {
+    const api = makeApi();
+    api.setApproval('auto');
+    api.setApproval.mockClear();
+    mountSettings(api);
+    expect(q<HTMLInputElement>('ai-approval-auto')!.checked).toBe(true);
+    act(() => q('ai-approval-ask')!.click());
+    expect(api.setApproval).toHaveBeenLastCalledWith('ask');
+    expect(q<HTMLInputElement>('ai-approval-ask')!.checked).toBe(true);
+  });
+  it('Abzeichen im Fensterkopf nur im Modus auto', () => {
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+    act(() => root!.render(<AssistantWindow title="KI" onClose={() => {}} onSettings={() => {}}>x</AssistantWindow>));
+    expect(q('ai-badge')).toBeNull();
+    act(() => root!.render(<AssistantWindow title="KI" badge="Auto" onClose={() => {}} onSettings={() => {}}>x</AssistantWindow>));
+    expect(q('ai-badge')!.textContent).toBe('Auto');
   });
   it('validateApiKey', () => {
     expect(validateApiKey('  ')).not.toBeNull();

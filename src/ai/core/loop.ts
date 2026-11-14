@@ -81,7 +81,8 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
         return false;
       }
     };
-    const toolCtx = { store, bus, getAvatar: deps.getAvatar, confirm };
+    // Freigabe-Modus einmal pro Auftrag lesen, damit eine Umstellung mitten im Auftrag nicht halb wirkt.
+    const toolCtx = { store, bus, getAvatar: deps.getAvatar, confirm, autoApprove: settings.getApproval() === 'auto' };
 
     try {
       let finished = false;
@@ -155,7 +156,8 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
   }
 
   return {
-    getSettings: () => ({ hasKey: settings.hasApiKey(), model: settings.getModel() }),
+    getSettings: () => ({ hasKey: settings.hasApiKey(), model: settings.getModel(), approval: settings.getApproval() }),
+    setApproval: (mode) => settings.setApproval(mode),
     setApiKey: (key) => settings.setApiKey(key),
     setModel: (model) => {
       if (AI_MODELS.some((m) => m.id === model)) settings.setModel(model);
