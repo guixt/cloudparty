@@ -1,0 +1,37 @@
+/* Shell (Paket 11): Dialoge, Menü, Hilfe. Ergänzt die cp-* Klassen. */
+.cps-title { max-width: min(60vw, 520px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cps-owner { font-weight: 400; font-size: 13px; }
+.cps-h2 { margin: 0; font-size: 20px; }
+.cps-small { font-size: 12px; }
+.cps-gap, .cp-heading.cps-gap { margin-top: 18px; }
+.cps-error { color: var(--cp-danger); }
+.cps-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.cps-welcome { text-align: left; width: min(460px, calc(100vw - 32px)); }
+.cps-welcome-icon { font-size: 40px; line-height: 1; margin-bottom: 6px; color: var(--cp-accent); }
+.cps-intro { color: var(--cp-muted); line-height: 1.5; margin: 8px 0 12px; }
+.cps-menu { width: min(620px, calc(100vw - 32px)); min-height: 380px; }
+.cps-menu-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.cps-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--cp-border); margin-bottom: 14px; }
+.cps-tab { font: inherit; font-weight: 600; color: var(--cp-muted); background: none; border: 0; border-bottom: 2px solid transparent;
+  padding: 8px 12px; cursor: pointer; }
+.cps-tab:hover { color: var(--cp-text); }
+.cps-tab-active { color: var(--cp-text); border-bottom-color: var(--cp-accent); }
+.cps-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cps-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--cp-border); border-radius: 8px; }
+.cps-item-main { display: flex; flex-direction: column; min-width: 0; }
+.cps-item-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cps-facts { display: grid; grid-template-columns: 90px 1fr; gap: 6px 12px; margin: 0 0 8px; }
+.cps-facts dt { color: var(--cp-muted); }
+.cps-facts dd { margin: 0; }
+.cps-id { font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; }
+.cps-check { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; cursor: pointer; }
+.cps-help { width: min(720px, calc(100vw - 32px)); }
+.cps-help-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 28px; }
+.cps-help-grid section:last-child { grid-column: 1 / -1; }
+.cps-keys { width: 100%; border-collapse: collapse; }
+.cps-keys td { padding: 5px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.07); vertical-align: top; }
+.cps-keys td:first-child { color: var(--cp-muted); padding-right: 12px; width: 48%; }
+.cps-keys kbd { display: inline-block; font-family: inherit; line-height: 1.35; font-weight: 600; background: rgba(255, 255, 255, 0.1); border: 1px solid var(--cp-border);
+  border-radius: 6px; padding: 2px 7px; }
+@media (max-width: 640px) { .cps-help-grid { grid-template-columns: 1fr; } }

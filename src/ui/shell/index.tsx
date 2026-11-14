@@ -1,30 +1,62 @@
 /**
- * STUB des Fundaments – Paket 11 (Konten, Inseln & Menü) ersetzt diese Datei.
- * Liefert vorerst: Inselname oben links und einen Knopf Spielen/Bauen.
+ * Paket 11 – Shell: Startdialog, Menü, Inselverzeichnis, Ortslinks, Hilfe.
  */
-import { useStore } from 'zustand';
 import type { GameModule } from '../../core/context';
 import type { PanelProps } from '../../core/ui';
+import { HelpButton, IslandTitle, MenuButton, ShellOverlay } from './components';
+import { createController, type ShellController } from './controller';
+import './shell.css';
 
-function Title({ ctx }: PanelProps) {
-  const name = useStore(ctx.store, (s) => s.world.metadata.name);
-  return <div className="cp-panel cp-title">{name}</div>;
+let controller: ShellController | null = null;
+
+function isTyping(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el || !el.tagName) return false;
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
 }
 
-function ModeButton({ ctx }: PanelProps) {
-  const mode = useStore(ctx.store, (s) => s.mode);
-  return (
-    <button className="cp-button" data-testid="mode-toggle" onClick={() => ctx.store.getState().setMode(mode === 'play' ? 'build' : 'play')}>
-      {mode === 'play' ? 'Bauen' : 'Spielen'}
-    </button>
-  );
-}
+const Title = (_: PanelProps) => <IslandTitle shell={controller!} />;
+const Menu = (_: PanelProps) => <MenuButton shell={controller!} />;
+const Help = (_: PanelProps) => <HelpButton shell={controller!} />;
+const Overlay = (_: PanelProps) => <ShellOverlay shell={controller!} />;
+
+let offKeys: (() => void) | null = null;
+let offPanels: (() => void)[] = [];
 
 const shell: GameModule = {
   id: 'shell',
   init(ctx) {
-    ctx.ui.register({ id: 'shell.title', slot: 'top-left', component: Title, order: 0 });
-    ctx.ui.register({ id: 'shell.mode', slot: 'toolbar', component: ModeButton, order: 0 });
+    controller?.dispose();
+    const c = (controller = createController(ctx));
+    offPanels = [
+      ctx.ui.register({ id: 'shell.title', slot: 'top-left', component: Title, order: 0 }),
+      ctx.ui.register({ id: 'shell.help', slot: 'toolbar', component: Help, order: 80 }),
+      ctx.ui.register({ id: 'shell.menu', slot: 'toolbar', component: Menu, order: 90 }),
+      ctx.ui.register({ id: 'shell.overlay', slot: 'overlay', component: Overlay, order: 0 }),
+    ];
+    const onKey = (e: KeyboardEvent) => {
+      const state = c.ui.getState();
+      if (e.key === 'Escape') {
+        if (state.helpOpen) c.setHelp(false);
+        else if (state.menuOpen) c.closeMenu();
+        return;
+      }
+      if (isTyping(e.target) || state.welcomeOpen || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === 'F1' || e.key === 'h' || e.key === 'H') {
+        e.preventDefault();
+        c.setHelp(!state.helpOpen);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    offKeys = () => window.removeEventListener('keydown', onKey);
+    c.start();
+  },
+  dispose() {
+    offKeys?.();
+    for (const off of offPanels) off();
+    offPanels = [];
+    controller?.dispose();
+    controller = null;
   },
 };
 export default shell;
