@@ -235,10 +235,10 @@ describe('Bauen', () => {
     const a = await joined('bau-close');
     a.send({ type: 'entity.upsert', entity: ent('c1') });
     await sleep(100);
-    const repo = server.ctx.repo;
     await server.close();
-    expect(repo.getIsland('bau-close')!.world.entities.some((e) => e.id === 'c1')).toBe(true);
+    // Neuer Server auf demselben Datenordner: die Änderung muss dauerhaft gespeichert sein.
     server = await startServer({ port: 0, dataDir: dir });
+    expect(server.ctx.repo.getIsland('bau-close')!.world.entities.some((e) => e.id === 'c1')).toBe(true);
   });
 
   it('eigene Insel: Besitzer baut, Gast nicht und bekommt Rücknahme', async () => {
