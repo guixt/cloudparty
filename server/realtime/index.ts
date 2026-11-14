@@ -1,119 +1,226 @@
 /**
- * STUB des Fundaments – Paket 9 (Echtzeit-Server) ersetzt diese Datei.
- * Vorerst: einfacher Relay pro Insel ohne Ratenbegrenzung und ohne Tests.
- * Die Signatur von registerRealtime bleibt.
+ * Echtzeit-Server (Paket 9): ein Raum pro Insel, WebSocket-Anbindung.
+ * Die eigentliche Logik steckt in room.ts; hier liegen nur Sockets, Timer und Speichern.
+ *
+ * Bekannte Einschränkung: Wird eine Insel über die REST-API gelöscht oder ersetzt,
+ * während ein Raum offen ist, erfährt der Raum davon nichts (kein Ereignis im Vertrag).
+ * Beim nächsten Beitritt wird `updatedAt` verglichen und die Welt ggf. neu geladen.
  */
 import { WebSocketServer, type WebSocket } from 'ws';
-import {
-  MAX_AVATARS_PER_ISLAND,
-  WS_PATH,
-  decodeMessage,
-  encodeMessage,
-  type ClientMessage,
-  type RemoteAvatarInfo,
-  type ServerMessage,
-} from '../../shared/protocol';
+import { AVATAR_SEND_RATE, WS_PATH, encodeMessage, type ServerMessage } from '../../shared/protocol';
 import type { ServerContext } from '../context';
+import { Room, type Outgoing } from './room';
+import { RateLimiter } from './rateLimit';
+import { validateClientMessage, isValidIslandId } from './validate';
 
-interface Client {
+const JOIN_TIMEOUT_MS = 10_000;
+const HEARTBEAT_MS = 20_000;
+const SAVE_DELAY_MS = 1500;
+const MAX_PAYLOAD = 256 * 1024;
+
+interface RoomEntry {
+  room: Room;
+  sockets: Map<string, WebSocket>;
+  saveTimer?: NodeJS.Timeout;
+  knownUpdatedAt: number | undefined;
+}
+
+interface Conn {
   socket: WebSocket;
-  island: string;
-  info: RemoteAvatarInfo;
-  canBuild: boolean;
+  alive: boolean;
+  entry?: RoomEntry;
+  id?: string;
+  joinTimer?: NodeJS.Timeout;
+  badLimit: RateLimiter;
 }
 
 export function registerRealtime(ctx: ServerContext): { close(): void } {
-  const wss = new WebSocketServer({ server: ctx.http, path: WS_PATH });
-  const rooms = new Map<string, Set<Client>>();
-  let nextId = 1;
-  ctx.presence.count = (island) => rooms.get(island)?.size ?? 0;
+  const wss = new WebSocketServer({ server: ctx.http, path: WS_PATH, maxPayload: MAX_PAYLOAD });
+  const rooms = new Map<string, RoomEntry>();
+  const conns = new Set<Conn>();
+  let guestCounter = 1;
+  ctx.presence.count = (island) => rooms.get(island)?.room.size ?? 0;
 
-  const send = (socket: WebSocket, msg: ServerMessage) => socket.readyState === socket.OPEN && socket.send(encodeMessage(msg));
-  const broadcast = (island: string, msg: ServerMessage, except?: Client) => {
-    for (const client of rooms.get(island) ?? []) if (client !== except) send(client.socket, msg);
+  const sendTo = (socket: WebSocket, msg: ServerMessage | string) => {
+    if (socket.readyState === socket.OPEN) socket.send(typeof msg === 'string' ? msg : encodeMessage(msg));
+  };
+  const deliver = (entry: RoomEntry, outgoing: Outgoing[]) => {
+    for (const { to, msg } of outgoing) {
+      const text = encodeMessage(msg);
+      for (const id of to) {
+        const socket = entry.sockets.get(id);
+        if (socket) sendTo(socket, text);
+      }
+    }
+  };
+
+  const flush = (islandId: string, entry: RoomEntry) => {
+    if (entry.saveTimer) clearTimeout(entry.saveTimer);
+    entry.saveTimer = undefined;
+    if (!entry.room.dirty) return;
+    entry.room.dirty = false;
+    try {
+      ctx.repo.saveWorld(islandId, structuredClone(entry.room.world));
+      entry.knownUpdatedAt = ctx.repo.getIsland(islandId)?.updatedAt;
+    } catch (error) {
+      entry.room.dirty = true;
+      console.error('[realtime] Speichern fehlgeschlagen', islandId, error);
+    }
+  };
+  const scheduleSave = (islandId: string, entry: RoomEntry) => {
+    if (entry.saveTimer || !entry.room.dirty) return;
+    entry.saveTimer = setTimeout(() => flush(islandId, entry), SAVE_DELAY_MS);
+    entry.saveTimer.unref?.();
+  };
+
+  const fail = (conn: Conn, code: Extract<ServerMessage, { type: 'error' }>['code'], message: string, close = false) => {
+    sendTo(conn.socket, { type: 'error', code, message });
+    if (close) conn.socket.close(1000);
+  };
+
+  const handleJoin = (conn: Conn, msg: Extract<import('../../shared/protocol').ClientMessage, { type: 'join' }>) => {
+    const islandId = msg.island;
+    let entry = rooms.get(islandId);
+    const detail = ctx.repo.ensureIsland(islandId);
+    if (entry && !entry.room.dirty && entry.knownUpdatedAt !== detail.updatedAt) {
+      entry.room.world = structuredClone(detail.world);
+      entry.knownUpdatedAt = detail.updatedAt;
+    }
+    const user = ctx.repo.resolveToken(msg.token);
+    const created = !entry;
+    if (!entry) {
+      entry = {
+        room: new Room(islandId, structuredClone(detail.world), { canBuild: (userId) => ctx.repo.canBuild(islandId, userId) }),
+        sockets: new Map(),
+        knownUpdatedAt: detail.updatedAt,
+      };
+    }
+    const result = entry.room.addMember({
+      baseId: user?.id ?? `gast_${guestCounter++}`,
+      userId: user?.id,
+      name: user ? user.name : msg.name,
+      appearance: msg.appearance,
+    });
+    if (!result.ok) {
+      sendTo(conn.socket, result.error);
+      conn.socket.close(1000);
+      return;
+    }
+    if (created) rooms.set(islandId, entry);
+    if (conn.joinTimer) clearTimeout(conn.joinTimer);
+    conn.joinTimer = undefined;
+    conn.entry = entry;
+    conn.id = result.id;
+    entry.sockets.set(result.id, conn.socket);
+    deliver(entry, result.out);
+  };
+
+  const leave = (conn: Conn) => {
+    const { entry, id } = conn;
+    if (!entry || !id) return;
+    conn.entry = undefined;
+    entry.sockets.delete(id);
+    deliver(entry, entry.room.removeMember(id));
+    if (entry.room.size === 0) {
+      flush(entry.room.islandId, entry);
+      if (rooms.get(entry.room.islandId) === entry) rooms.delete(entry.room.islandId);
+    }
   };
 
   wss.on('connection', (socket) => {
-    let self: Client | null = null;
+    const conn: Conn = { socket, alive: true, badLimit: new RateLimiter(1, 1000) };
+    conns.add(conn);
+    conn.joinTimer = setTimeout(() => {
+      fail(conn, 'bad-request', 'Beitritt nicht rechtzeitig erfolgt.', true);
+      socket.terminate();
+    }, JOIN_TIMEOUT_MS);
+    conn.joinTimer.unref?.();
+
+    socket.on('pong', () => {
+      conn.alive = true;
+    });
+    socket.on('error', (error) => console.error('[realtime] Socket-Fehler', error.message));
     socket.on('message', (raw) => {
-      const msg = decodeMessage<ClientMessage>(raw.toString());
-      if (!msg) return;
-      if (msg.type === 'join') {
-        if (self) return;
-        const room = rooms.get(msg.island) ?? new Set<Client>();
-        if (room.size >= MAX_AVATARS_PER_ISLAND) {
-          send(socket, { type: 'error', code: 'full', message: 'Diese Insel ist voll (25 Avatare).' });
+      try {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(raw.toString());
+        } catch {
+          parsed = undefined;
+        }
+        const checked = validateClientMessage(parsed);
+        if (!checked.ok) {
+          const rawType = (parsed as { type?: unknown } | null | undefined)?.type;
+          if (!conn.entry && rawType === 'join') fail(conn, 'bad-request', checked.error, true);
+          else if (conn.badLimit.allow()) fail(conn, 'bad-request', checked.error);
           return;
         }
-        const island = ctx.repo.ensureIsland(msg.island);
-        const user = ctx.repo.resolveToken(msg.token);
-        self = {
-          socket,
-          island: msg.island,
-          canBuild: ctx.repo.canBuild(msg.island, user?.id),
-          info: {
-            id: user?.id ?? `gast_${nextId++}`,
-            name: user?.name ?? msg.name,
-            appearance: msg.appearance,
-            state: { position: [0, 0, 0], yaw: 0, motion: 'idle', emotes: {} },
-          },
-        };
-        rooms.set(msg.island, room);
-        send(socket, { type: 'welcome', selfId: self.info.id, canBuild: self.canBuild, world: island.world, avatars: [...room].map((c) => c.info) });
-        room.add(self);
-        broadcast(msg.island, { type: 'avatar.joined', avatar: self.info }, self);
-        return;
-      }
-      if (!self) return;
-      const island = ctx.repo.getIsland(self.island);
-      switch (msg.type) {
-        case 'avatar':
-          self.info.state = msg.state;
-          broadcast(self.island, { type: 'avatar.update', id: self.info.id, state: msg.state }, self);
-          break;
-        case 'chat':
-          broadcast(self.island, { type: 'chat', from: self.info.id, name: self.info.name, text: msg.text.slice(0, 500), ts: Date.now() });
-          break;
-        case 'entity.upsert':
-        case 'entity.remove':
-        case 'environment': {
-          if (!self.canBuild || !island) {
-            send(socket, { type: 'error', code: 'forbidden', message: 'Kein Baurecht auf dieser Insel.' });
-            break;
+        const msg = checked.value;
+        if (!conn.entry) {
+          if (msg.type !== 'join') {
+            fail(conn, 'bad-request', 'Die erste Nachricht muss „join" sein.', true);
+            return;
           }
-          const world = island.world;
-          if (msg.type === 'entity.upsert') {
-            const index = world.entities.findIndex((e) => e.id === msg.entity.id);
-            if (index >= 0) world.entities[index] = msg.entity;
-            else world.entities.push(msg.entity);
-            broadcast(self.island, { type: 'entity.upsert', entity: msg.entity, by: self.info.id }, self);
-          } else if (msg.type === 'entity.remove') {
-            world.entities = world.entities.filter((e) => e.id !== msg.id);
-            broadcast(self.island, { type: 'entity.remove', id: msg.id, by: self.info.id }, self);
-          } else {
-            world.environment = msg.environment;
-            broadcast(self.island, { type: 'environment', environment: msg.environment, by: self.info.id }, self);
+          if (!isValidIslandId(msg.island)) {
+            fail(conn, 'bad-request', 'Ungültige Insel-ID.', true);
+            return;
           }
-          ctx.repo.saveWorld(self.island, world);
-          break;
+          handleJoin(conn, msg);
+          return;
         }
-        case 'signal':
-          broadcast(self.island, { type: 'signal', channel: msg.channel, data: msg.data, from: self.info.id }, self);
-          break;
+        deliver(conn.entry, conn.entry.room.handle(conn.id!, msg));
+        scheduleSave(conn.entry.room.islandId, conn.entry);
+      } catch (error) {
+        console.error('[realtime] Fehler bei Nachricht', error);
       }
     });
     socket.on('close', () => {
-      if (!self) return;
-      const room = rooms.get(self.island);
-      room?.delete(self);
-      if (room && room.size === 0) rooms.delete(self.island);
-      broadcast(self.island, { type: 'avatar.left', id: self.info.id });
+      conns.delete(conn);
+      if (conn.joinTimer) clearTimeout(conn.joinTimer);
+      try {
+        leave(conn);
+      } catch (error) {
+        console.error('[realtime] Fehler beim Verlassen', error);
+      }
     });
   });
 
+  const tick = setInterval(() => {
+    for (const entry of rooms.values()) {
+      try {
+        deliver(entry, entry.room.tick());
+      } catch (error) {
+        console.error('[realtime] Tick-Fehler', error);
+      }
+    }
+  }, Math.round(1000 / AVATAR_SEND_RATE));
+  const heartbeat = setInterval(() => {
+    for (const conn of conns) {
+      if (!conn.alive) {
+        conn.socket.terminate();
+        continue;
+      }
+      conn.alive = false;
+      try {
+        conn.socket.ping();
+      } catch {
+        conn.socket.terminate();
+      }
+    }
+  }, HEARTBEAT_MS);
+  tick.unref?.();
+  heartbeat.unref?.();
+
   return {
     close() {
-      for (const client of wss.clients) client.terminate();
+      clearInterval(tick);
+      clearInterval(heartbeat);
+      for (const [id, entry] of rooms) flush(id, entry);
+      for (const conn of conns) {
+        if (conn.joinTimer) clearTimeout(conn.joinTimer);
+        conn.socket.terminate();
+      }
+      rooms.clear();
       wss.close();
     },
   };
