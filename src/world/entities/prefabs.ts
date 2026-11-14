@@ -2,6 +2,7 @@
  * Prefab-Register: Grundformen, Möbel, Natur, Licht. Andere Pakete (Medien)
  * ergänzen es per `registerPrefab`.
  */
+import { Light } from '@babylonjs/core/Lights/light';
 import { PointLight } from '@babylonjs/core/Lights/pointLight';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
@@ -109,6 +110,21 @@ function mulberry32(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+/**
+ * Faktor auf state.intensity: 1 ergibt eine gut sichtbare Lichtquelle. Ohne Faktor wirken Punktlichter neben der Sonne kaum.
+ * Mit FALLOFF_STANDARD nimmt das Licht bis `range` linear ab – auf PBR-Material (Bausteine) wie auf Standard-Material (Insel) gleich;
+ * der physikalische Abfall (1/Entfernung², Standard bei PBR) macht Lichter bei Intensität 1 praktisch unsichtbar.
+ */
+const LIGHT_GAIN = 3;
+
+function setupPointLight(light: PointLight, spec: MaterialSpec | undefined, fallback: string, intensity: number, range: number): void {
+  light.diffuse = lightColor(spec, fallback);
+  light.specular = light.diffuse.scale(0.4);
+  light.falloffType = Light.FALLOFF_STANDARD;
+  light.intensity = intensity * LIGHT_GAIN;
+  light.range = range;
+}
+
 function num(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }
@@ -293,10 +309,7 @@ const BUILTIN: PrefabDef[] = [
       post(scene, root, iron, 0.0, 0.5, 0.2, 0, 2.55, 0, 4).rotation.y = Math.PI / 4;
       const light = new PointLight('lanternLight', new Vector3(0, 2.2, 0), scene);
       light.parent = root;
-      light.diffuse = lightColor(entity.material, '#ffd27a');
-      light.specular = light.diffuse.scale(0.4);
-      light.intensity = on ? num(entity.state?.intensity, 1) : 0;
-      light.range = num(entity.state?.range, 14);
+      setupPointLight(light, entity.material, '#ffd27a', on ? num(entity.state?.intensity, 1) : 0, num(entity.state?.range, 14));
       light.setEnabled(on);
       light.metadata = { cpMainLight: true, fallback: '#ffd27a' };
     },
@@ -313,10 +326,7 @@ const BUILTIN: PrefabDef[] = [
       const { scene } = ctx;
       const light = new PointLight('pointLight', new Vector3(0, 0, 0), scene);
       light.parent = root;
-      light.diffuse = lightColor(entity.material, '#fff1c4');
-      light.specular = light.diffuse.scale(0.4);
-      light.intensity = num(entity.state?.intensity, 1);
-      light.range = num(entity.state?.range, 16);
+      setupPointLight(light, entity.material, '#fff1c4', num(entity.state?.intensity, 1), num(entity.state?.range, 16));
       light.metadata = { cpMainLight: true, fallback: '#fff1c4' };
       const marker = place(
         CreateSphere('lightMarker', { diameter: 0.3, segments: 12 }, scene),

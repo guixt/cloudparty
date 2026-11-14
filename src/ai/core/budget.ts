@@ -7,6 +7,7 @@ import { AiError, type ApiMessage, type ApiTool, type ContentBlock } from './cli
 const CHARS_PER_TOKEN = 3;
 /** Große Werkzeugergebnisse werden beim Kürzen auf diese Länge gebracht. */
 const SHRUNK_RESULT_CHARS = 1500;
+const MIN_RESULT_CHARS = 300;
 const SHRUNK_NOTE = '\n…[gekürzt wegen des Eingabelimits]';
 
 export function estimateTokens(value: unknown): number {
@@ -20,15 +21,16 @@ export function tooLongError(budget: number, needed: number): AiError {
   );
 }
 
-function shrinkResults(messages: ApiMessage[], total: () => number, budget: number): ApiMessage[] {
+function shrinkResults(messages: ApiMessage[], total: () => number, budget: number, maxChars: number, includeLast: boolean): ApiMessage[] {
   const out = messages.map((m) => ({ ...m }));
-  // Älteste Werkzeugergebnisse zuerst; die letzte Nachricht (aktuelle Ergebnisse) bleibt möglichst unberührt.
-  for (let i = 0; i < out.length - 1 && total() > budget; i++) {
+  // Älteste Werkzeugergebnisse zuerst; die aktuellen Ergebnisse (letzte Nachricht) nur, wenn includeLast gesetzt ist.
+  const stop = includeLast ? out.length : out.length - 1;
+  for (let i = 0; i < stop && total() > budget; i++) {
     const msg = out[i];
     if (!Array.isArray(msg.content)) continue;
     msg.content = msg.content.map((block): ContentBlock => {
-      if (block.type === 'tool_result' && typeof block.content === 'string' && block.content.length > SHRUNK_RESULT_CHARS) {
-        return { ...block, content: block.content.slice(0, SHRUNK_RESULT_CHARS) + SHRUNK_NOTE };
+      if (block.type === 'tool_result' && typeof block.content === 'string' && block.content.length > maxChars) {
+        return { ...block, content: block.content.slice(0, maxChars) + SHRUNK_NOTE };
       }
       return block;
     });
@@ -58,8 +60,12 @@ export function fitToBudget(args: { system: string; tools: ApiTool[]; messages: 
   }
   if (total() <= budget) return messages;
 
-  // 2. große Werkzeugergebnisse kürzen
-  messages = shrinkResults(messages, total, budget);
+  // 2. große Werkzeugergebnisse kürzen: erst ältere, dann auch die aktuellen, zuletzt sehr stark
+  messages = shrinkResults(messages, total, budget, SHRUNK_RESULT_CHARS, false);
+  if (total() <= budget) return messages;
+  messages = shrinkResults(messages, total, budget, SHRUNK_RESULT_CHARS, true);
+  if (total() <= budget) return messages;
+  messages = shrinkResults(messages, total, budget, MIN_RESULT_CHARS, true);
   if (total() <= budget) return messages;
 
   throw tooLongError(budget, total());

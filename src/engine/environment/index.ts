@@ -2,6 +2,7 @@
  * Paket 1 – Umgebung & Look: schwebende Insel, Himmel, Wolken, Sonne mit Schatten, Dunst,
  * Nachbearbeitung. Liest `environment` und `island` aus der WorldSpec und reagiert live.
  */
+import { installPointLightSupport } from './pointLights';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
@@ -51,6 +52,7 @@ class EnvironmentRuntime {
     this.shadows.setDarkness(0.1);
     this.shadows.transparencyShadow = true;
 
+    this.offs.push(installPointLightSupport(ctx));
     this.post = createPostProcessing(scene);
     this.post.excludeFromGlow(this.sky.mesh);
     for (const mesh of this.clouds.meshes) this.post.excludeFromGlow(mesh);
