@@ -30,3 +30,5 @@ import '@babylonjs/core/Engines/Extensions/engine.videoTexture';
 import '@babylonjs/core/Meshes/instancedMesh';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import '@babylonjs/core/Helpers/sceneHelpers';
+import '@babylonjs/core/Shaders/particles.vertex';
+import '@babylonjs/core/Shaders/particles.fragment';

@@ -113,5 +113,7 @@ export function createFromItem(item: CatalogItem, surface: Vec3, y: number): Ent
     ...structuredClone(item.defaults),
   };
   if (!entity.name) entity.name = item.label;
+  // Medien-Tafeln zeigen mit ihrer Vorderseite nach +Z; die Standardkamera blickt von -Z, daher um 180° um Y gedreht.
+  if (item.category === 'Medien' && item.ref.startsWith('EntitySpec.media-')) entity.transform.rot = [0, 1, 0, 0];
   return entity;
 }
