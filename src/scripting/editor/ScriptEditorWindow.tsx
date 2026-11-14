@@ -10,6 +10,7 @@ import { basicSetup } from 'codemirror';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { useStore } from 'zustand';
 import type { GameContext } from '../../core/context';
+import { AiPanel } from './ai/AiPanel';
 import { closeEditor, consoleStore, editorUi } from './editorState';
 import { SCRIPT_EXAMPLES, type ScriptExample } from './examples';
 import {
@@ -24,7 +25,7 @@ import {
   type SyntaxIssue,
 } from './logic';
 
-type Tab = 'code' | 'ref' | 'examples';
+type Tab = 'code' | 'ref' | 'examples' | 'ai';
 interface Rect {
   x: number;
   y: number;
@@ -284,7 +285,7 @@ export default function ScriptEditorWindow({ ctx, entityId }: { ctx: GameContext
           <input type="checkbox" data-testid="script-enabled" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Skript aktiv
         </label>
         <div className="se-tabs" role="tablist">
-          {([['code', 'Code'], ['ref', 'Referenz'], ['examples', 'Beispiele']] as const).map(([id, label]) => (
+          {([['code', 'Code'], ['ref', 'Referenz'], ['examples', 'Beispiele'], ['ai', 'KI']] as const).map(([id, label]) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} data-testid={`tab-${id}`} className={`cp-button se-tab ${tab === id ? 'cp-button-active' : ''}`} onClick={() => setTab(id)}>
               {label}
             </button>
@@ -313,6 +314,21 @@ export default function ScriptEditorWindow({ ctx, entityId }: { ctx: GameContext
         </div>
         {tab === 'ref' && <ReferencePanel query={query} setQuery={setQuery} onInsert={insertAtCursor} />}
         {tab === 'examples' && <ExamplesPanel onInsert={insertExample} />}
+        <div style={{ display: tab === 'ai' ? 'flex' : 'none', flex: 1, minHeight: 0, flexDirection: 'column' }}>
+          <AiPanel
+            entityName={name}
+            entityRef={entity?.ref}
+            otherNames={Object.values(ctx.store.getState().entities).filter((e) => e.id !== entityId).map((e) => e.name ?? e.id)}
+            getSource={() => viewRef.current?.state.doc.toString() ?? text}
+            setSource={(source) => {
+              const view = viewRef.current;
+              if (view) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: source } });
+              setTab('code');
+            }}
+            getLogLines={() => consoleStore.getLines(entityId)}
+            getStatus={() => consoleStore.getStatus(entityId)}
+          />
+        </div>
       </div>
 
       <ConsolePanel ctx={ctx} entityId={entityId} mode={mode} open={consoleOpen} setOpen={setConsoleOpen} />
