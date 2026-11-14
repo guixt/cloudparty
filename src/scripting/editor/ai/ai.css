@@ -1,0 +1,17 @@
+.ai-panel { gap: 8px; overflow: auto; }
+.ai-label { font-weight: 600; }
+.ai-desc { width: 100%; resize: vertical; box-sizing: border-box; }
+.ai-buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ai-hint { margin: 0; padding: 6px 8px; border-radius: 6px; background: rgba(255, 200, 60, 0.15); color: #ffd666; }
+.ai-error { padding: 6px 8px; border-radius: 6px; background: rgba(255, 90, 90, 0.18); color: #ff9a9a; }
+.ai-warning { padding: 4px 8px; border-radius: 6px; background: rgba(255, 200, 60, 0.18); color: #ffd666; }
+.ai-card { display: flex; flex-direction: column; gap: 8px; padding: 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); }
+.ai-text { margin: 0; white-space: pre-wrap; }
+.ai-stream pre { margin: 4px 0 0; max-height: 140px; overflow: auto; white-space: pre-wrap; font: 12px ui-monospace, Consolas, monospace; opacity: 0.85; }
+.ai-diff { max-height: 260px; overflow: auto; border-radius: 6px; background: rgba(0, 0, 0, 0.35); font: 12px/1.45 ui-monospace, 'Cascadia Code', Consolas, monospace; }
+.ai-line { display: flex; white-space: pre; padding: 0 6px; }
+.ai-sign { width: 1.4em; flex: none; opacity: 0.7; }
+.ai-add { background: rgba(60, 200, 100, 0.22); }
+.ai-del { background: rgba(255, 80, 80, 0.22); }
+.ai-panel > * { flex-shrink: 0; }
+.ai-diff { max-height: 200px; }
