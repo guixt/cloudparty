@@ -1,0 +1,29 @@
+/* Paket 10: Multiplayer-Client – Namensschilder, Sprechblasen, Chat, Status */
+.cpn-tag { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none;
+  transform-origin: 50% 100%; will-change: transform; }
+.cpn-name { font: 600 12px/1 var(--cp-font); color: #fff; background: rgba(12, 16, 26, 0.62); border-radius: 9px; padding: 3px 8px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); white-space: nowrap; }
+.cpn-self .cpn-name { background: rgba(31, 127, 230, 0.7); }
+.cpn-bubble { max-width: 220px; font: 500 13px/1.3 var(--cp-font); color: #1a2233; background: rgba(255, 255, 255, 0.95); border-radius: 12px;
+  padding: 6px 10px; text-align: center; word-break: break-word; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+.cpn-object .cpn-bubble { background: rgba(255, 244, 200, 0.96); font-style: italic; }
+
+.cpn-chat { width: 340px; max-width: calc(100vw - 24px); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.cpn-chat-head { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+.cpn-chat-head .cp-heading { margin: 0; }
+.cpn-chat-list { height: 150px; overflow-y: auto; font-size: 13px; line-height: 1.35; display: flex; flex-direction: column; gap: 2px;
+  padding-right: 4px; pointer-events: auto; }
+.cpn-chat-empty { font-size: 12px; }
+.cpn-line { word-break: break-word; }
+.cpn-line-name { color: var(--cp-accent); font-weight: 600; }
+.cpn-line-object { color: #ffd56b; font-style: italic; }
+.cpn-line-object .cpn-line-name { color: #ffd56b; }
+.cpn-line-system { color: var(--cp-muted); font-style: italic; }
+.cpn-chat-input { padding: 5px 8px; }
+
+.cpn-status { display: flex; align-items: center; gap: 8px; padding: 5px 12px; font-size: 13px; font-weight: 600; border-radius: 999px; }
+.cpn-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--cp-muted); }
+.cpn-status-on .cpn-dot { background: var(--cp-ok); }
+.cpn-status-connecting .cpn-dot { background: #ffc857; animation: cpn-pulse 1s infinite; }
+.cpn-status-off .cpn-dot { background: var(--cp-danger); }
+@keyframes cpn-pulse { 50% { opacity: 0.3; } }
