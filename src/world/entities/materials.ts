@@ -9,6 +9,9 @@ import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { Node } from '@babylonjs/core/node';
 import type { Scene } from '@babylonjs/core/scene';
 import type { MaterialSpec } from '../../../shared/types';
+import { fallbackEnvironment, isFallbackEnvironment } from './fallbackEnv';
+import { resolveMaterial } from './materialPresets';
+import { acquirePattern, defaultPatternColor, hasBump, patternKey, releasePattern } from './patterns';
 
 export interface MaterialBase {
   color: string;
@@ -23,7 +26,11 @@ export interface MaterialBase {
 interface MainMeta {
   cpMain: true;
   base: MaterialBase;
+  /** Signatur der aktuell gesetzten Texturen (siehe textureSignature). */
+  texSig?: string;
   textureUrl?: string;
+  patternKey?: string;
+  bumpKey?: string;
 }
 
 function parseColor(hex: string | undefined, fallback: Color3): Color3 {
@@ -31,38 +38,110 @@ function parseColor(hex: string | undefined, fallback: Color3): Color3 {
   return Color3.FromHexString(hex);
 }
 
-/** Wendet Spec + Basiswerte auf ein PBR-Material an. */
+/** Höchste Leuchtstärke, die der Glow noch sinnvoll darstellt. */
+const MAX_EMISSIVE = 5;
+
+const clampUv = (v: number | undefined) => Math.min(50, Math.max(0.1, v ?? 1));
+
+/** Ein Wert, der entscheidet, ob die Texturen eines Hauptmaterials neu aufgebaut werden müssen. */
+export function textureSignature(r: MaterialSpec, fallbackColor = '#cccccc'): string {
+  const pattern = r.pattern && r.pattern !== 'none' ? r.pattern : '';
+  if (r.textureUrl) return `url|${r.textureUrl}|${clampUv(r.uvScale)}`;
+  if (!pattern) return '';
+  const c1 = r.color ?? fallbackColor;
+  return patternKey(pattern, c1, r.patternColor ?? defaultPatternColor(c1), undefined, false, clampUv(r.uvScale));
+}
+
+function clearTextures(mat: PBRMaterial, meta: MainMeta): void {
+  const scene = mat.getScene();
+  if (meta.patternKey) releasePattern(scene, meta.patternKey);
+  if (meta.bumpKey) releasePattern(scene, meta.bumpKey);
+  if (meta.textureUrl) mat.albedoTexture?.dispose();
+  meta.patternKey = meta.bumpKey = meta.textureUrl = undefined;
+  mat.albedoTexture = null;
+  mat.bumpTexture = null;
+}
+
+/** Wendet Spec (inkl. Voreinstellung) + Basiswerte auf ein PBR-Material an. */
 export function applyMaterialSpec(mat: PBRMaterial, spec: MaterialSpec | undefined, base: MaterialBase): void {
-  mat.albedoColor = parseColor(spec?.color, parseColor(base.color, Color3.White()));
-  const emissive = spec?.emissive ?? base.emissive;
-  mat.emissiveColor = emissive
-    ? parseColor(emissive, Color3.Black())
-    : base.glow
-      ? mat.albedoColor.scale(base.glow)
-      : Color3.Black();
-  mat.metallic = spec?.metallic ?? base.metallic ?? 0;
-  mat.roughness = spec?.roughness ?? base.roughness ?? 0.75;
-  const alpha = Math.min(1, Math.max(0, spec?.alpha ?? base.alpha ?? 1));
+  const r = resolveMaterial(spec);
+  const meta = mat.metadata as MainMeta | null;
+  const isMain = !!meta?.cpMain;
+  const color = parseColor(r.color, parseColor(base.color, Color3.White()));
+  mat.albedoColor = color;
+  // Leuchten: emissive (oder Anteil der Farbe) mal emissiveIntensity.
+  const emissive = r.emissive ?? base.emissive;
+  const gain = Math.min(MAX_EMISSIVE, Math.max(0, r.emissiveIntensity ?? 1));
+  const emissiveBase = emissive ? parseColor(emissive, Color3.Black()) : base.glow ? color.scale(base.glow) : Color3.Black();
+  mat.emissiveColor = emissiveBase.scale(gain);
+  let metallic = r.metallic ?? base.metallic ?? 0;
+  let roughness = r.roughness ?? base.roughness ?? 0.75;
+  const reflect = r.reflect;
+  // Echtzeit-Spiegel (oder Rückfall ohne Spiegel-Textur): sehr glatt und spiegelnd.
+  if (r.mirror) {
+    metallic = Math.max(metallic, 0.9);
+    roughness = Math.min(roughness, 0.05);
+  }
+  mat.metallic = metallic;
+  mat.roughness = roughness;
+  // Reflexionsstärke: 0.6 ist der Grundwert der Bausteine; reflect 1 verdoppelt ihn ungefähr.
+  mat.environmentIntensity = reflect === undefined ? (r.mirror ? 1.2 : 0.6) : 0.15 + reflect * 1.35;
+  // Klarlack
+  const coat = Math.min(1, Math.max(0, r.clearcoat ?? 0));
+  mat.clearCoat.isEnabled = coat > 0;
+  mat.clearCoat.intensity = coat;
+  mat.clearCoat.roughness = 0.04;
+  // Deckkraft / Glas. Rückfall statt Sub-Surface-Brechung (braucht ein Renderziel pro Glas und ist unter
+  // Software-GL unzuverlässig): Alpha + kräftige Spiegelung/Fresnel über den Brechungsindex.
+  const glass = Math.min(1, Math.max(0, r.glass ?? 0));
+  let alpha = Math.min(1, Math.max(0, r.alpha ?? base.alpha ?? 1));
+  if (glass > 0) alpha = Math.min(alpha, 1 - glass * 0.85);
   mat.alpha = alpha;
   mat.transparencyMode = alpha < 1 ? PBRMaterial.PBRMATERIAL_ALPHABLEND : PBRMaterial.PBRMATERIAL_OPAQUE;
-  const meta = mat.metadata as MainMeta | null;
-  const url = spec?.textureUrl;
-  if (meta && meta.cpMain) {
-    if (meta.textureUrl !== url) {
-      mat.albedoTexture?.dispose();
-      mat.albedoTexture = null;
-      if (url) {
-        const tex = new Texture(url, mat.getScene());
-        tex.hasAlpha = false;
-        mat.albedoTexture = tex;
-        // Texturen werden mit weißer Grundfarbe nicht eingefärbt, wenn keine Farbe gesetzt ist.
-        if (!spec?.color) mat.albedoColor = Color3.White();
+  mat.indexOfRefraction = glass > 0 ? Math.min(2.5, Math.max(1, r.ior ?? 1.5)) : 1.5;
+  mat.useRadianceOverAlpha = glass > 0;
+  mat.useSpecularOverAlpha = glass > 0;
+  mat.backFaceCulling = glass === 0;
+  mat.twoSidedLighting = glass > 0;
+  // Ohne Umgebung der Szene (Reflexionssonde) bekommen spiegelnde Materialien einen einfachen Himmelsverlauf.
+  const scene = mat.getScene();
+  const wantsEnv = metallic > 0.3 || (reflect ?? 0) > 0 || glass > 0;
+  if (wantsEnv && !scene.environmentTexture && !mat.reflectionTexture) mat.reflectionTexture = fallbackEnvironment(scene);
+  else if ((!wantsEnv || scene.environmentTexture) && isFallbackEnvironment(scene, mat.reflectionTexture)) mat.reflectionTexture = null;
+  if (!isMain || !meta) return;
+
+  // Texturen: textureUrl hat Vorrang vor dem Muster.
+  const sig = textureSignature(r, base.color);
+  if (meta.texSig !== sig) {
+    clearTextures(mat, meta);
+    meta.texSig = sig;
+    const uv = clampUv(r.uvScale);
+    if (r.textureUrl) {
+      const tex = new Texture(r.textureUrl, scene);
+      tex.hasAlpha = false;
+      tex.uScale = tex.vScale = uv;
+      mat.albedoTexture = tex;
+      meta.textureUrl = r.textureUrl;
+    } else if (r.pattern && r.pattern !== 'none') {
+      const c1 = r.color ?? base.color;
+      const c2 = r.patternColor ?? defaultPatternColor(c1);
+      const got = acquirePattern(scene, r.pattern, c1, c2, false, uv);
+      if (got) {
+        mat.albedoTexture = got.tex;
+        meta.patternKey = got.key;
+        if (hasBump(r.pattern)) {
+          const bump = acquirePattern(scene, r.pattern, c1, c2, true, uv);
+          if (bump) {
+            mat.bumpTexture = bump.tex;
+            mat.invertNormalMapX = mat.invertNormalMapY = false;
+            meta.bumpKey = bump.key;
+          }
+        }
       }
-      meta.textureUrl = url;
-    } else if (url && !spec?.color) {
-      mat.albedoColor = Color3.White();
     }
   }
+  // Texturen werden mit weißer Grundfarbe nicht eingefärbt (Muster tragen ihre Farbe selbst).
+  if (mat.albedoTexture && (meta.patternKey || !r.color)) mat.albedoColor = Color3.White();
 }
 
 /** Material für den Hauptteil eines Prefabs (folgt entity.material, auch später in place). */

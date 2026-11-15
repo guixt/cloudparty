@@ -4,6 +4,7 @@ import type { EntitySpec, EnvironmentSpec, MaterialSpec, MediaKind, ParticlePres
 import type { GameContext } from '../core/context';
 import type { PanelProps } from '../core/ui';
 import { labelForRef } from './catalog';
+import { MaterialSection, PresetGrid, withPreset } from './materialSection';
 import { Field, NumField, readFileAsDataUrl, Section, TextField, Vec3Field } from './fields';
 import { eulerDegFromQuat, quatFromEulerDeg } from './logic';
 import { alignSelected, deleteSelected, distributeSelected, dropToGround, dropSelectedToGround, duplicateSelected, groupSelected, patchSelected, ungroupSelected } from './placement';
@@ -25,48 +26,6 @@ function TransformSection({ entity, patch }: { entity: EntitySpec; patch(p: Part
       <Vec3Field label="Position (m)" value={t.pos} step={0.25} testId="insp-pos" onChange={(pos) => patch({ transform: { ...t, pos } })} />
       <Vec3Field label="Drehung (°)" value={euler} step={15} testId="insp-rot" onChange={(e) => patch({ transform: { ...t, rot: quatFromEulerDeg(e[0], e[1], e[2]) } })} />
       <Vec3Field label="Skalierung" value={t.scale} step={0.25} testId="insp-scale" onChange={(scale) => patch({ transform: { ...t, scale } })} />
-    </Section>
-  );
-}
-
-function MaterialSection({ entity, patch }: { entity: EntitySpec; patch(p: Partial<EntitySpec>): void }) {
-  const m = entity.material ?? {};
-  const set = (next: Partial<MaterialSpec>) => {
-    const merged: MaterialSpec = { ...m, ...next };
-    for (const key of Object.keys(merged) as (keyof MaterialSpec)[]) if (merged[key] === undefined || merged[key] === '') delete merged[key];
-    patch({ material: merged });
-  };
-  return (
-    <Section title="Material">
-      <div className="cpb-colors">
-        <Field label="Farbe">
-          <input type="color" className="cpb-color" data-testid="insp-color" value={m.color ?? '#cccccc'} onChange={(e) => set({ color: e.target.value })} />
-        </Field>
-        <Field label="Leuchtfarbe">
-          <span className="cp-row">
-            <input type="color" className="cpb-color" data-testid="insp-emissive" value={m.emissive ?? '#000000'} onChange={(e) => set({ emissive: e.target.value })} />
-            {m.emissive && (
-              <button className="cp-button cpb-small" onClick={() => set({ emissive: undefined })}>
-                Aus
-              </button>
-            )}
-          </span>
-        </Field>
-      </div>
-      <div className="cpb-vec-row">
-        <Field label="Metallisch">
-          <NumField value={m.metallic ?? 0} step={0.1} min={0} max={1} onChange={(v) => set({ metallic: v })} />
-        </Field>
-        <Field label="Rauheit">
-          <NumField value={m.roughness ?? 0.8} step={0.1} min={0} max={1} onChange={(v) => set({ roughness: v })} />
-        </Field>
-      </div>
-      <Field label="Deckkraft">
-        <NumField value={m.alpha ?? 1} step={0.1} min={0} max={1} testId="insp-alpha" onChange={(v) => set({ alpha: v })} />
-      </Field>
-      <Field label="Textur-URL">
-        <TextField value={m.textureUrl ?? ''} placeholder="https://… oder leer" onChange={(v) => set({ textureUrl: v })} />
-      </Field>
     </Section>
   );
 }
@@ -421,6 +380,8 @@ function MultiInspector({ ctx }: { ctx: GameContext }) {
         <Field label="Farbe">
           <input type="color" className="cpb-color" data-testid="multi-color" value={color} onChange={(e) => setColor(e.target.value)} />
         </Field>
+        <div className="cpb-field-label">Material-Voreinstellung für alle</div>
+        <PresetGrid testId="multi-preset" onPick={(p) => patchSelected(ctx, (e) => ({ material: withPreset(e.material, p) }))} />
         <Field label="Physik">
           <select className="cp-select" data-testid="multi-physics" value="" onChange={(e) => e.target.value && setPhysics(e.target.value as PhysicsMode)}>
             <option value="">(unverändert)</option>
