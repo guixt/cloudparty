@@ -18,6 +18,9 @@ import {
 import { PREFABS, createEntityFromPrefab, getPrefab } from '../../world/entities/prefabs';
 import { eulerToQuat } from '../../scripting/runtime/commands';
 import { buildWorldSummary, wrapData } from './summary';
+import { groupHandlers } from './groupTools';
+import { libraryHandlers } from './libraryTools';
+import { graphHandlers } from './graphTools';
 
 export interface ToolContext {
   store: WorldStore;
@@ -45,7 +48,7 @@ export interface ToolOutcome {
 }
 
 export class ToolError extends Error {}
-const fail = (message: string): never => {
+export const fail = (message: string): never => {
   throw new ToolError(message);
 };
 
@@ -53,18 +56,18 @@ const FORBIDDEN_SCRIPT = [/\bfetch\b/, /\bXMLHttpRequest\b/, /\bWebSocket\b/, /\
 
 // ---------------------------------------------------------------- Validierung
 
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+export const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
-function num(v: unknown, label: string, min: number, max: number): number {
+export function num(v: unknown, label: string, min: number, max: number): number {
   if (typeof v !== 'number' || !Number.isFinite(v)) return fail(`${label} muss eine endliche Zahl sein.`);
   if (v < min || v > max) return fail(`${label} muss zwischen ${min} und ${max} liegen (war ${v}).`);
   return v;
 }
-function vec(v: unknown, label: string, min: number, max: number): Vec3 {
+export function vec(v: unknown, label: string, min: number, max: number): Vec3 {
   if (!Array.isArray(v) || v.length !== 3) return fail(`${label} muss ein Array aus genau 3 Zahlen sein.`);
   return [num(v[0], `${label}[0]`, min, max), num(v[1], `${label}[1]`, min, max), num(v[2], `${label}[2]`, min, max)];
 }
-const coord = (v: unknown, label: string) => vec(v, label, -AI_LIMITS.maxCoordinate, AI_LIMITS.maxCoordinate);
+export const coord = (v: unknown, label: string) => vec(v, label, -AI_LIMITS.maxCoordinate, AI_LIMITS.maxCoordinate);
 function size(v: unknown, label: string): Vec3 {
   const s = vec(v, label, -AI_LIMITS.maxSize, AI_LIMITS.maxSize);
   for (const c of s) if (Math.abs(c) < AI_LIMITS.minSize) return fail(`${label}: Beträge müssen mindestens ${AI_LIMITS.minSize} sein.`);
@@ -74,7 +77,7 @@ function color(v: unknown, label: string): string {
   if (typeof v !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(v)) return fail(`${label} muss eine Farbe im Format #RRGGBB sein.`);
   return v.toLowerCase();
 }
-function str(v: unknown, label: string, max: number, allowEmpty = false): string {
+export function str(v: unknown, label: string, max: number, allowEmpty = false): string {
   if (typeof v !== 'string') return fail(`${label} muss Text sein.`);
   if (v.length > max) return fail(`${label} ist zu lang (max. ${max} Zeichen).`);
   if (!allowEmpty && v.trim() === '') return fail(`${label} darf nicht leer sein.`);
@@ -84,7 +87,7 @@ function oneOf<T extends string>(v: unknown, label: string, options: readonly T[
   if (typeof v !== 'string' || !options.includes(v as T)) return fail(`${label} muss eines von ${options.join(', ')} sein.`);
   return v as T;
 }
-function obj(v: unknown, label: string): Record<string, unknown> {
+export function obj(v: unknown, label: string): Record<string, unknown> {
   return isObj(v) ? v : fail(`${label} muss ein Objekt sein.`);
 }
 function checkUrl(v: unknown, label: string): string {
@@ -147,16 +150,16 @@ const fmt = (n: number) => {
   return (v < 0 ? '−' : '') + String(Math.abs(v)).replace('.', ',');
 };
 const fmtPos = (p: Vec3) => `(${fmt(p[0])}, ${fmt(p[1])}, ${fmt(p[2])})`;
-const opts = { source: 'local' as const };
+export const opts = { source: 'local' as const };
 
-function getEntity(ctx: ToolContext, id: unknown): EntitySpec {
+export function getEntity(ctx: ToolContext, id: unknown): EntitySpec {
   const sid = str(id, 'id', 200);
   const entity = ctx.store.getState().entities[sid];
   if (!entity) return fail(`Kein Objekt mit der id "${sid.slice(0, 60)}" gefunden. Rufe get_world auf, um gültige ids zu sehen.`);
   return entity;
 }
 
-function ok(content: string, summary: string, mutated: boolean): ToolOutcome {
+export function ok(content: string, summary: string, mutated: boolean): ToolOutcome {
   return { ok: true, content, summary, mutated };
 }
 
@@ -178,7 +181,7 @@ export function validateScript(source: unknown): string {
 
 // ---------------------------------------------------------------- Werkzeuge
 
-type Handler = (input: Record<string, unknown>, ctx: ToolContext, counters: RunCounters) => Promise<ToolOutcome> | ToolOutcome;
+export type Handler = (input: Record<string, unknown>, ctx: ToolContext, counters: RunCounters) => Promise<ToolOutcome> | ToolOutcome;
 
 function applyCommon(entity: EntitySpec, input: Record<string, unknown>, existing?: EntitySpec): EntitySpec {
   const next: EntitySpec = { ...entity, transform: { ...entity.transform } };
@@ -349,7 +352,7 @@ const handlers: Record<string, Handler> = {
 /** Führt ein Werkzeug aus. Wirft nie; Fehler kommen als `ok: false` zurück. */
 export async function executeTool(name: string, rawInput: unknown, ctx: ToolContext, counters: RunCounters): Promise<ToolOutcome> {
   const def = getToolDefinition(name);
-  const handler = def ? handlers[name] : undefined;
+  const handler = def ? (handlers[name] ?? groupHandlers[name] ?? libraryHandlers[name] ?? graphHandlers[name]) : undefined;
   if (!def || !handler) {
     const msg = `Unbekanntes Werkzeug "${name.slice(0, 40)}".`;
     return { ok: false, content: msg, summary: msg, mutated: false };
