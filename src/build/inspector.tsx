@@ -313,6 +313,9 @@ function ScriptSection({ ctx, entity, patch }: { ctx: GameContext; entity: Entit
       <button className="cp-button cpb-wide" data-testid="insp-edit-script" onClick={() => ctx.bus.emit('ui.openScriptEditor', { entityId: entity.id })}>
         Skript bearbeiten
       </button>
+      <button className="cp-button cpb-wide" data-testid="insp-edit-graph" onClick={() => ctx.bus.emit('ui.openGraphEditor', { entityId: entity.id })}>
+        {entity.graph ? 'Logik-Graph bearbeiten' : 'Logik-Graph erstellen'}
+      </button>
     </Section>
   );
 }

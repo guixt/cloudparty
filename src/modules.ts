@@ -14,6 +14,8 @@ import scriptRuntime from './scripting/runtime';
 import scriptEditor from './scripting/editor';
 import net from './net';
 import shell from './ui/shell';
+import library from './library';
+import graphEditor from './graph/editor';
 import aiCore from './ai/core';
 import aiUi from './ai/ui';
 
@@ -29,6 +31,8 @@ export const modules: GameModule[] = [
   scriptEditor, // 8
   net, // 10
   shell, // 11
+  library, // 17
+  graphEditor, // 19
   aiCore, // 13
   aiUi, // 14
 ];

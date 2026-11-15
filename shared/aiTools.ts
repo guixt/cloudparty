@@ -68,7 +68,13 @@ export type AiToolName =
   | 'set_script'
   | 'set_media'
   | 'move_avatar'
-  | 'say';
+  | 'say'
+  | 'group_entities'
+  | 'ungroup'
+  | 'library_list'
+  | 'library_place'
+  | 'library_save'
+  | 'set_graph';
 
 export interface AiToolDefinition {
   name: AiToolName;
@@ -223,6 +229,73 @@ export const AI_TOOLS: AiToolDefinition[] = [
     description: 'Gibt dem Nutzer eine kurze Textnachricht im KI-Fenster. Deine normale Antwort ist ohnehin sichtbar; nutze das nur für Zwischenmeldungen bei langen Aufträgen.',
     input_schema: { type: 'object', properties: { text: { type: 'string', maxLength: 500 } }, required: ['text'] },
     mutates: false,
+  },
+  {
+    name: 'group_entities',
+    description: 'Fasst Objekte zu einer Gruppe zusammen. Gruppen werden gemeinsam ausgewählt, bewegt, kopiert und als Baustein gespeichert. Ein Objekt gehört höchstens zu einer Gruppe (eine bestehende Zuordnung wird ersetzt).',
+    input_schema: {
+      type: 'object',
+      properties: { ids: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 150 }, name: { type: 'string', maxLength: 80 } },
+      required: ['ids'],
+    },
+    mutates: true,
+  },
+  {
+    name: 'ungroup',
+    description: 'Löst die Gruppe auf, zu der das genannte Objekt gehört. Die Objekte bleiben unverändert.',
+    input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    mutates: true,
+  },
+  {
+    name: 'library_list',
+    description: 'Durchsucht die Bibliothek des Nutzers nach gespeicherten Bausteinen (Name, Beschreibung, Stichworte). Ohne query werden alle aufgelistet (höchstens 50).',
+    input_schema: { type: 'object', properties: { query: { type: 'string', maxLength: 100 } } },
+    mutates: false,
+  },
+  {
+    name: 'library_place',
+    description: 'Setzt einen Baustein aus der Bibliothek in die Welt (als Gruppe). `position` ist der Fußpunkt auf dem Boden (x, y, z), y meist 0.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' }, position: vec3, yaw_degrees: { type: 'number' }, group_name: { type: 'string', maxLength: 80 } },
+      required: ['id', 'position'],
+    },
+    mutates: true,
+  },
+  {
+    name: 'library_save',
+    description: 'Speichert die genannten Objekte (Gruppen vollständig) als neuen Baustein in der Bibliothek des Nutzers. Verändert die Welt nicht.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', maxLength: 80 },
+        description: { type: 'string', maxLength: 300 },
+        tags: { type: 'array', items: { type: 'string', maxLength: 30 }, maxItems: 12 },
+        ids: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 300 },
+      },
+      required: ['name', 'ids'],
+    },
+    mutates: false,
+  },
+  {
+    name: 'set_graph',
+    description:
+      'Setzt den Logik-Graphen eines Objekts (grafische Blöcke, die zu einem Skript übersetzt werden; bevorzuge das gegenüber set_script für einfache Abläufe). Format: `nodes` = Liste {id, type, params?} mit Knotentypen aus dem Katalog im Systemprompt; `connections` = Strings der Form "knoten.ausgang -> knoten.eingang", z. B. "k.then -> f.in". Ablauf-Verbindungen (flow) laufen von einem Ausgang zu einem Eingang "in"; Daten-Verbindungen nur zwischen gleichen Typen. Ein ungültiger Graph wird mit Fehlermeldung abgelehnt.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'ID des Objekts' },
+        nodes: {
+          type: 'array',
+          maxItems: 120,
+          items: { type: 'object', properties: { id: { type: 'string' }, type: { type: 'string' }, params: { type: 'object' } }, required: ['id', 'type'] },
+        },
+        connections: { type: 'array', maxItems: 240, items: { type: 'string' } },
+        enabled: { type: 'boolean' },
+      },
+      required: ['id', 'nodes', 'connections'],
+    },
+    mutates: true,
   },
 ];
 

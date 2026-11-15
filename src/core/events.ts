@@ -28,6 +28,8 @@ export interface GameEvents {
   'entity.removed': { entity: EntitySpec; source: ChangeSource; transient: boolean };
   'environment.changed': { environment: EnvironmentSpec; source: ChangeSource };
   'selection.changed': { id: string | null };
+  /** Die Menge der gewählten Objekte hat sich geändert (Mehrfachauswahl). */
+  'selection.multi.changed': { ids: string[] };
   'mode.changed': { mode: GameMode };
 
   // --- Darstellung (Paket 4 Entities) ---
@@ -69,6 +71,10 @@ export interface GameEvents {
   'script.status': { entityId: string; status: 'running' | 'stopped' | 'error'; message?: string };
   'script.message': { from: string; to: string | '*'; message: string; data: unknown };
   'ui.openScriptEditor': { entityId: string };
+  /** Öffnet den Logik-Graph-Editor für ein Objekt (Paket 19). */
+  'ui.openGraphEditor': { entityId: string };
+  /** Öffnet das Bibliotheksfenster (Paket 17). */
+  'ui.openLibrary': Record<string, never>;
   'sound.play': { name?: string; frequency?: number; duration?: number };
 
   // --- Netz (Paket 10) ---

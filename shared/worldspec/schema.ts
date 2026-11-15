@@ -110,6 +110,17 @@ const mediaSchema = z.object({
   text: z.string().optional(),
 });
 
+const graphParam = z.union([z.string(), z.number(), z.boolean()]);
+const graphEndpoint = z.object({ node: z.string(), port: z.string() });
+export const graphSchema = z.object({
+  version: z.literal(1),
+  enabled: z.boolean().default(true),
+  nodes: z
+    .array(z.object({ id: z.string().min(1), type: z.string().min(1), x: finite, y: finite, params: z.record(z.string(), graphParam).optional() }))
+    .max(300, 'höchstens 300 Knoten'),
+  edges: z.array(z.object({ from: graphEndpoint, to: graphEndpoint })).max(600, 'höchstens 600 Verbindungen'),
+});
+
 export const entitySchema = z.object({
   id: nonEmpty,
   ref: nonEmpty,
@@ -122,6 +133,9 @@ export const entitySchema = z.object({
   script: scriptSchema.optional(),
   media: mediaSchema.optional(),
   modelUrl: z.string().optional(),
+  group: z.string().optional(),
+  groupName: z.string().optional(),
+  graph: graphSchema.optional(),
 });
 
 const ELEVATION_MSG = 'Elevation muss zwischen -90 und 90 Grad liegen';

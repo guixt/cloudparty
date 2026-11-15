@@ -17,7 +17,10 @@ export interface WorldState {
   entities: Record<string, EntitySpec>;
   /** Reihenfolge der Entities (stabil für Export). */
   order: string[];
+  /** Zuletzt gewähltes Objekt (primär); Inspector und Gizmo beziehen sich darauf. */
   selection: string | null;
+  /** Alle gewählten Objekte (Mehrfachauswahl); enthält `selection`, wenn gesetzt. */
+  selectedIds: string[];
   mode: GameMode;
   /** Darf der lokale Nutzer hier bauen? Offline immer true. */
   canBuild: boolean;
@@ -34,6 +37,10 @@ export interface WorldState {
   setEnvironment(environment: EnvironmentSpec, options?: ChangeOptions): void;
   setMetadata(patch: Partial<WorldSpec['metadata']>): void;
   select(id: string | null): void;
+  /** Wählt mehrere Objekte (nicht vorhandene IDs werden ignoriert); das letzte wird primär. */
+  selectMany(ids: string[]): void;
+  /** Fügt ein Objekt zur Auswahl hinzu oder nimmt es heraus (Umschalt/Strg-Klick). */
+  toggleSelect(id: string): void;
   setMode(mode: GameMode): void;
   setCanBuild(canBuild: boolean): void;
 }
@@ -56,13 +63,15 @@ export function createWorldStore(bus: EventBus): WorldStore {
   return createStore<WorldState>((set, get) => ({
     ...splitWorld(createDefaultWorld()),
     selection: null,
+    selectedIds: [],
     mode: 'play',
     canBuild: true,
     revision: 0,
 
     loadWorld(world) {
-      set({ ...splitWorld(world), selection: null, revision: 0 });
+      set({ ...splitWorld(world), selection: null, selectedIds: [], revision: 0 });
       bus.emit('selection.changed', { id: null });
+      bus.emit('selection.multi.changed', { ids: [] });
       bus.emit('world.loaded', { world: get().toWorldSpec() });
     },
 
@@ -109,10 +118,15 @@ export function createWorldStore(bus: EventBus): WorldStore {
       set({
         entities,
         order: state.order.filter((other) => other !== id),
-        selection: state.selection === id ? null : state.selection,
+        selection: state.selection === id ? (state.selectedIds.filter((other) => other !== id).at(-1) ?? null) : state.selection,
+        selectedIds: state.selectedIds.filter((other) => other !== id),
         revision: transient ? state.revision : state.revision + 1,
       });
-      if (state.selection === id) bus.emit('selection.changed', { id: null });
+      if (state.selectedIds.includes(id)) {
+        const now = get();
+        if (state.selection !== now.selection) bus.emit('selection.changed', { id: now.selection });
+        bus.emit('selection.multi.changed', { ids: now.selectedIds });
+      }
       bus.emit('entity.removed', { entity, source: options.source ?? 'local', transient });
     },
 
@@ -128,9 +142,23 @@ export function createWorldStore(bus: EventBus): WorldStore {
     },
 
     select(id) {
-      if (get().selection === id) return;
-      set({ selection: id });
-      bus.emit('selection.changed', { id });
+      get().selectMany(id ? [id] : []);
+    },
+
+    selectMany(ids) {
+      const state = get();
+      const next = [...new Set(ids)].filter((id) => state.entities[id]);
+      const primary = next.at(-1) ?? null;
+      const sameIds = next.length === state.selectedIds.length && next.every((id, i) => id === state.selectedIds[i]);
+      if (sameIds && primary === state.selection) return;
+      set({ selection: primary, selectedIds: next });
+      if (primary !== state.selection) bus.emit('selection.changed', { id: primary });
+      if (!sameIds) bus.emit('selection.multi.changed', { ids: next });
+    },
+
+    toggleSelect(id) {
+      const { selectedIds } = get();
+      get().selectMany(selectedIds.includes(id) ? selectedIds.filter((other) => other !== id) : [...selectedIds, id]);
     },
 
     setMode(mode) {
@@ -139,8 +167,12 @@ export function createWorldStore(bus: EventBus): WorldStore {
         bus.emit('ui.toast', { text: 'Du hast auf dieser Insel kein Baurecht.', kind: 'error' });
         return;
       }
-      set({ mode, selection: mode === 'play' ? null : get().selection });
-      if (mode === 'play') bus.emit('selection.changed', { id: null });
+      const hadSelection = get().selectedIds.length > 0 || get().selection !== null;
+      set({ mode, ...(mode === 'play' ? { selection: null, selectedIds: [] } : {}) });
+      if (mode === 'play' && hadSelection) {
+        bus.emit('selection.changed', { id: null });
+        bus.emit('selection.multi.changed', { ids: [] });
+      }
       bus.emit('mode.changed', { mode });
     },
 

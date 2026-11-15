@@ -3,6 +3,8 @@
  * erweitert um Material, Physik, Partikel, Skript und Medien pro Entity.
  * VERTRAG: Diese Datei wird nur vom Koordinator geändert.
  */
+import type { GraphSpec } from './graph';
+
 export type Vec3 = [number, number, number];
 /** Quaternion als [x, y, z, w]. */
 export type Quat = [number, number, number, number];
@@ -78,6 +80,12 @@ export interface EntitySpec {
   media?: MediaSpec;
   /** glTF/GLB-URL für ref = "EntitySpec.model". */
   modelUrl?: string;
+  /** Gruppen-ID: Objekte mit gleicher ID werden gemeinsam ausgewählt, bewegt, kopiert und gespeichert. */
+  group?: string;
+  /** Anzeigename der Gruppe (bei allen Mitgliedern gleich). */
+  groupName?: string;
+  /** Logik-Graph (siehe shared/graph.ts); hat Vorrang vor `script`, wenn aktiviert und fehlerfrei. */
+  graph?: GraphSpec;
 }
 
 export type SkyPreset = 'clear' | 'dusk' | 'night' | 'custom';

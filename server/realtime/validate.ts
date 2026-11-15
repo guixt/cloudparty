@@ -78,10 +78,14 @@ export function validateEntity(value: unknown): Validated<EntitySpec> {
   if (value.name !== undefined && (typeof value.name !== 'string' || value.name.length > 200)) return fail('Ungültiger Objektname.');
   const t = value.transform;
   if (!isObj(t) || !isNumArray(t.pos, 3) || !isNumArray(t.rot, 4) || !isNumArray(t.scale, 3)) return fail('Ungültige Transformation.');
-  for (const key of ['state', 'material', 'physics', 'particles', 'script', 'media'] as const) {
+  for (const key of ['state', 'material', 'physics', 'particles', 'script', 'media', 'graph'] as const) {
     if (value[key] !== undefined && !isObj(value[key])) return fail(`Ungültiger Abschnitt „${key}".`);
   }
   if (value.modelUrl !== undefined && typeof value.modelUrl !== 'string') return fail('Ungültige Modell-URL.');
+  for (const key of ['group', 'groupName'] as const) {
+    if (value[key] !== undefined && (typeof value[key] !== 'string' || (value[key] as string).length > 200)) return fail(`Ungültiges Feld „${key}".`);
+  }
+  if (isObj(value.graph) && (!Array.isArray(value.graph.nodes) || !Array.isArray(value.graph.edges) || value.graph.nodes.length > 300 || value.graph.edges.length > 600)) return fail('Ungültiger Logik-Graph.');
   let size: number;
   try {
     size = JSON.stringify(value).length;

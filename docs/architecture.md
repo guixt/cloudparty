@@ -46,3 +46,11 @@ Cloudparty 2.0 besteht aus einem Kern (Fundament) und zwölf Modulen (Arbeitspak
 ## Server
 
 `npm run server` startet HTTP + WebSocket (Standard-Port 8787, `PORT`/`DATA_DIR` per Umgebung). Der Client nimmt auf `localhost` automatisch `http://localhost:8787`; mit `?server=http://localhost:PORT` lässt sich ein anderer Server wählen, mit `?server=off` keiner.
+
+## Gruppen, Bibliothek und Logik-Graph (Stufe 2)
+
+- **Gruppen** sind flach: `entity.group` (ID) und `entity.groupName`. Objekte mit gleicher Gruppen-ID werden gemeinsam gewählt, bewegt (um den Gruppenmittelpunkt), kopiert und als Baustein gespeichert. Die Objekte bleiben eigenständige Entities in Weltkoordinaten (keine Eltern-Kind-Transformation), damit Physik, Netzwerk und Skripte unverändert funktionieren.
+- **Mehrfachauswahl:** `store.selectedIds` (alle) und `store.selection` (primär = zuletzt gewählt). `select(id)`, `selectMany(ids)`, `toggleSelect(id)`. Ereignisse: `selection.changed` (primär) und `selection.multi.changed` (Menge).
+- **Bibliothek:** Vertrag in `shared/library.ts` und `src/library/api.ts` (`getLibrary()`). Bausteine liegen im Browser (IndexedDB `cloudparty-library`), Export/Import als Datei.
+- **Logik-Graph:** Typen und Konventionen in `shared/graph.ts`, Katalog in `shared/graphNodes.ts`, Übersetzer in `shared/graphCompile.ts` (`compileGraph`, `validateGraph`, `entityScriptSource`), Kompaktform für die KI in `shared/graphCompact.ts`. Der Graph hängt an `entity.graph`; die Skript-Laufzeit führt `entityScriptSource(entity)` aus. Editor: `ui.openGraphEditor` → `src/graph/editor/`.
+- **KI-Werkzeuge** dazu: `group_entities`, `ungroup`, `library_list`, `library_place`, `library_save`, `set_graph` (Vertrag in `shared/aiTools.ts`).
