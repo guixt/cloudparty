@@ -12,12 +12,16 @@ import { GizmoController } from './gizmos';
 import { History } from './history';
 import { Inspector } from './inspector';
 import { Palette } from './palette';
-import { deleteSelected, duplicateSelected, placeItem } from './placement';
+import { copySelected, deleteSelected, duplicateSelected, groupSelected, pasteClipboard, placeItem, ungroupSelected } from './placement';
+import { expandToGroups, marqueeHit } from './multi';
+import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { runtime } from './runtime';
 import { SelectionHighlight } from './selection';
 import { buildState, isTyping, resetBuildState } from './state';
 import { BuildToolbar } from './toolbar';
 import './build.css';
+
+import { createMarquee } from './marquee';
 
 let cleanups: (() => void)[] = [];
 
@@ -41,11 +45,13 @@ const build: GameModule = {
     );
 
     const refreshSelection = () => {
-      const id = store.getState().selection;
-      const node = id ? ctx.entityNodes.get(id) : null;
-      if (store.getState().mode === 'build') highlight.set(node);
-      gizmos.attach(store.getState().mode === 'build' ? id : null);
+      const build = store.getState().mode === 'build';
+      const ids = store.getState().selectedIds;
+      highlight.set(build ? ids.map((id) => ctx.entityNodes.get(id)) : null);
+      gizmos.attachSelection(build ? ids : []);
     };
+
+    const refreshHighlight = () => highlight.set(store.getState().selectedIds.map((id) => ctx.entityNodes.get(id)));
 
     const enter = () => {
       cam.enter();
@@ -64,13 +70,18 @@ const build: GameModule = {
     cleanups.push(
       bus.on('mode.changed', ({ mode }) => (mode === 'build' ? enter() : leave())),
       bus.on('selection.changed', refreshSelection),
+      bus.on('selection.multi.changed', refreshSelection),
+      bus.on('world.loaded', refreshSelection),
+      bus.on('entity.changed', ({ entity, transient }) => {
+        if (!transient && store.getState().selectedIds.length > 1 && store.getState().selectedIds.includes(entity.id)) gizmos.refresh();
+      }),
       bus.on('entity.node.created', ({ id, node }) => {
         if (store.getState().mode !== 'build') return;
-        if (id === store.getState().selection) highlight.set(node);
+        if (store.getState().selectedIds.includes(id)) refreshHighlight();
         gizmos.onNodeCreated(id, node);
       }),
       bus.on('entity.node.disposed', ({ id }) => {
-        if (id === store.getState().selection) highlight.clear();
+        if (store.getState().selectedIds.includes(id)) highlight.clear();
         gizmos.onNodeDisposed(id);
       }),
       buildState.subscribe((state, prev) => {
@@ -92,9 +103,70 @@ const build: GameModule = {
         if (pick?.hit && pick.pickedPoint) placeItem(ctx, item, [pick.pickedPoint.x, pick.pickedPoint.y, pick.pickedPoint.z]);
         return;
       }
-      store.getState().select(entityIdOf(pick?.pickedMesh));
+      if (marquee.justFinished()) return;
+      const id = entityIdOf(pick?.pickedMesh);
+      const additive = event.shiftKey || event.ctrlKey || event.metaKey;
+      const s = store.getState();
+      if (!id) {
+        if (!additive) s.select(null);
+        return;
+      }
+      if (event.detail >= 2 && !additive) {
+        s.selectMany([id]); // Doppelklick: nur dieses Mitglied („in Gruppe hineingehen")
+        return;
+      }
+      const members = expandToGroups([id], s.entities, s.order);
+      if (additive) {
+        const allIn = members.every((m) => s.selectedIds.includes(m));
+        s.selectMany(allIn ? s.selectedIds.filter((x) => !members.includes(x)) : [...s.selectedIds.filter((x) => !members.includes(x)), ...members.filter((m) => m !== id), id]);
+      } else s.selectMany([...members.filter((m) => m !== id), id]);
     });
     cleanups.push(() => scene.onPointerObservable.remove(tapObserver));
+
+    // Marquee: Linksziehen auf freier Fläche zieht ein Auswahlrechteck.
+    const marquee = createMarquee();
+    const canvasEl = ctx.canvas;
+    const onPointerDown = (e: PointerEvent) => {
+      if (store.getState().mode !== 'build' || e.button !== 0 || e.altKey || buildState.getState().armed) return;
+      if (gizmos.dragging || gizmos.hovering()) return;
+      const r = canvasEl.getBoundingClientRect();
+      const pick = scene.pick(e.clientX - r.left, e.clientY - r.top);
+      if (pick?.hit && entityIdOf(pick.pickedMesh)) return; // Klick auf Objekt: normale Auswahl
+      marquee.begin(e);
+    };
+    const onPointerMove = (e: PointerEvent) => marquee.move(e);
+    const onPointerUp = (e: PointerEvent) => {
+      const rect = marquee.end(e);
+      if (!rect) return;
+      const s = store.getState();
+      const cam2 = scene.activeCamera;
+      if (!cam2) return;
+      const bounds = canvasEl.getBoundingClientRect();
+      const sx = ctx.engine.getRenderWidth() / bounds.width;
+      const sy = ctx.engine.getRenderHeight() / bounds.height;
+      const matrix = scene.getTransformMatrix();
+      const viewport = cam2.viewport.toGlobal(ctx.engine.getRenderWidth(), ctx.engine.getRenderHeight());
+      const points = s.order.map((id) => {
+        const node = ctx.entityNodes.get(id);
+        if (!node) return null;
+        node.computeWorldMatrix(true);
+        const { min, max } = node.getHierarchyBoundingVectors(true);
+        const c = Vector3.Project(min.add(max).scale(0.5), Matrix.IdentityReadOnly, matrix, viewport);
+        return { id, x: c.x / sx + bounds.left, y: c.y / sy + bounds.top, z: c.z };
+      }).filter((p): p is { id: string; x: number; y: number; z: number } => !!p && p.z >= 0 && p.z <= 1);
+      const hit = expandToGroups(marqueeHit(rect, points), s.entities, s.order);
+      const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+      s.selectMany(additive ? [...s.selectedIds.filter((x) => !hit.includes(x)), ...hit] : hit);
+    };
+    canvasEl.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    cleanups.push(() => {
+      canvasEl.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      marquee.dispose();
+    });
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTyping() || e.repeat && e.key === 'Tab') return;
@@ -117,18 +189,33 @@ const build: GameModule = {
         } else if (key === 'd') {
           e.preventDefault();
           duplicateSelected(ctx);
+        } else if (key === 'a') {
+          e.preventDefault();
+          state.selectMany(state.order);
+        } else if (key === 'g') {
+          e.preventDefault();
+          if (e.shiftKey) ungroupSelected(ctx);
+          else groupSelected(ctx);
+        } else if (key === 'c') {
+          if (state.selectedIds.length > 0) {
+            e.preventDefault();
+            copySelected(ctx);
+          }
+        } else if (key === 'v') {
+          e.preventDefault();
+          pasteClipboard(ctx);
         }
         return;
       }
       if (e.altKey) return;
       if (key === 'delete' || key === 'backspace') {
-        if (state.selection) {
+        if (state.selectedIds.length > 0) {
           e.preventDefault();
           deleteSelected(ctx);
         }
       } else if (key === 'escape') {
         if (buildState.getState().armed) buildState.setState({ armed: null });
-        else state.select(null);
+        else state.selectMany([]);
       } else if (key === '1' || key === 'g') buildState.setState({ tool: 'move' });
       else if (key === '2' || key === 'r') buildState.setState({ tool: 'rotate' });
       else if (key === '3') buildState.setState({ tool: 'scale' });

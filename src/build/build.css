@@ -43,3 +43,8 @@
   border: 1px solid transparent; border-radius: 6px; padding: 4px 8px; cursor: pointer; text-align: left; }
 .cpb-list-item:hover { background: rgba(255, 255, 255, 0.15); }
 .cpb-list-item .cp-muted { font-size: 11px; }
+
+.cpb-marquee { position: fixed; z-index: 30; pointer-events: none; border: 1px solid #4da3ff; background: rgba(77, 163, 255, 0.15); }
+.cpb-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 4px 0; }
+.cpb-grid .cp-button { padding: 4px 6px; font-size: 12px; }
+.cpb-group-line { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 12.5px; }
