@@ -1,6 +1,6 @@
 /**
- * Grafik-Qualitätsstufen. VERTRAG: nur der Koordinator ändert die Tabelle und die Schnittstelle.
- * Paket 26 ergänzt Automatik (Messung der Bildrate) und die Oberfläche; alle anderen Pakete LESEN nur
+ * Grafik-Qualitätsstufen. Tabelle und Schnittstelle gehören dem Koordinator; Paket 26 ergänzt Überschreibungen (Overrides),
+ * Automatik (qualityAuto.ts) und die Oberfläche (src/ui/graphics). Alle anderen Pakete LESEN nur
  * (`ctx.quality.features()` und `ctx.quality.onChange`) und schalten ihre Effekte danach um.
  */
 
@@ -69,8 +69,52 @@ export const QUALITY_STORAGE_KEY = 'cloudparty.quality';
 /** true, wenn der Nutzer die Stufe selbst gewählt hat (Automatik dann aus). */
 export const QUALITY_MANUAL_KEY = 'cloudparty.quality.manual';
 
+export const QUALITY_OVERRIDES_KEY = 'cloudparty.quality.overrides';
+
+type NumberRange = { min: number; max: number; int?: boolean };
+/** Zulässige Überschreibungen: true = Wahrheitswert, sonst Zahl im Bereich. */
+export const OVERRIDE_RULES: { [K in keyof QualityFeatures]: QualityFeatures[K] extends boolean ? 'boolean' : NumberRange } = {
+  shadowMapSize: { min: 256, max: 8192, int: true },
+  softShadows: 'boolean',
+  probeSize: { min: 0, max: 1024, int: true },
+  probeUpdateSeconds: { min: 0, max: 60 },
+  ssao: 'boolean',
+  godRays: 'boolean',
+  depthOfField: 'boolean',
+  bloom: 'boolean',
+  glow: 'boolean',
+  fxaa: 'boolean',
+  mirrorSize: { min: 0, max: 2048, int: true },
+  waterReflectionSize: { min: 0, max: 2048, int: true },
+  waterRefraction: 'boolean',
+  grassDensity: { min: 0, max: 1 },
+  particleScale: { min: 0, max: 1 },
+  maxPointLights: { min: 0, max: 16, int: true },
+  hardwareScaling: { min: 1, max: 4 },
+};
+
+/** Prüft ein Roh-Objekt gegen die Regeln. `clamp`: Zahlen begrenzen statt verwerfen. Unbekannte/ungültige Einträge entfallen. */
+export function sanitizeOverrides(raw: unknown, clamp = false): Partial<QualityFeatures> {
+  const out: Record<string, boolean | number> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!Object.prototype.hasOwnProperty.call(OVERRIDE_RULES, key)) continue;
+    const rule = OVERRIDE_RULES[key as keyof QualityFeatures];
+    if (rule === 'boolean') {
+      if (typeof value === 'boolean') out[key] = value;
+    } else if (typeof value === 'number' && Number.isFinite(value)) {
+      let n = rule.int ? Math.round(value) : value;
+      if (clamp) n = Math.min(rule.max, Math.max(rule.min, n));
+      else if (n < rule.min || n > rule.max) continue;
+      out[key] = n;
+    }
+  }
+  return out as Partial<QualityFeatures>;
+}
+
 export interface QualityApi {
   get(): QualityLevel;
+  /** Stufe, gemischt mit den Überschreibungen. */
   features(): QualityFeatures;
   /** Setzt die Stufe (manual = vom Nutzer gewählt, schaltet die Automatik aus). */
   set(level: QualityLevel, options?: { manual?: boolean }): void;
@@ -78,7 +122,11 @@ export interface QualityApi {
   isAuto(): boolean;
   /** Automatik wieder einschalten (löscht die manuelle Wahl). */
   setAuto(): void;
-  /** Meldet jede Änderung der Stufe; Rückgabe meldet ab. */
+  /** Einzelne Merkmale, die der Nutzer abweichend von der Stufe gesetzt hat. */
+  getOverrides(): Partial<QualityFeatures>;
+  /** Mischt `patch` in die Überschreibungen (Wert `undefined` entfernt den Eintrag); `null` löscht alle. */
+  setOverrides(patch: Partial<QualityFeatures> | null): void;
+  /** Meldet jede Änderung der Stufe oder der Überschreibungen; Rückgabe meldet ab. */
   onChange(listener: (level: QualityLevel, features: QualityFeatures) => void): () => void;
 }
 
@@ -103,15 +151,31 @@ export function isQualityLevel(value: unknown): value is QualityLevel {
   return typeof value === 'string' && (QUALITY_LEVELS as readonly string[]).includes(value);
 }
 
-/** Einfache Umsetzung des Vertrags (Standard „high"). Paket 26 ergänzt Automatik und Oberfläche und darf diese Funktion erweitern. */
+function loadOverrides(): Partial<QualityFeatures> {
+  const raw = readStorage(QUALITY_OVERRIDES_KEY);
+  if (!raw) return {};
+  try {
+    return sanitizeOverrides(JSON.parse(raw));
+  } catch {
+    return {};
+  }
+}
+
+/** Umsetzung des Vertrags (Standard „high"). */
 export function createQualityController(initial?: QualityLevel): QualityApi {
   const stored = readStorage(QUALITY_STORAGE_KEY);
   let level: QualityLevel = initial ?? (isQualityLevel(stored) ? stored : 'high');
   let manual = readStorage(QUALITY_MANUAL_KEY) === '1';
+  let overrides = loadOverrides();
+  let merged: QualityFeatures = { ...QUALITY_PRESETS[level], ...overrides };
   const listeners = new Set<(level: QualityLevel, features: QualityFeatures) => void>();
+  const emit = () => {
+    merged = { ...QUALITY_PRESETS[level], ...overrides };
+    for (const listener of [...listeners]) listener(level, merged);
+  };
   return {
     get: () => level,
-    features: () => QUALITY_PRESETS[level],
+    features: () => merged,
     set(next, options) {
       if (options?.manual) {
         manual = true;
@@ -120,12 +184,30 @@ export function createQualityController(initial?: QualityLevel): QualityApi {
       writeStorage(QUALITY_STORAGE_KEY, next);
       if (next === level) return;
       level = next;
-      for (const listener of [...listeners]) listener(level, QUALITY_PRESETS[level]);
+      emit();
     },
     isAuto: () => !manual,
     setAuto() {
       manual = false;
       writeStorage(QUALITY_MANUAL_KEY, null);
+    },
+    getOverrides: () => ({ ...overrides }),
+    setOverrides(patch) {
+      let next: Record<string, unknown>;
+      if (patch === null) next = {};
+      else {
+        next = { ...overrides };
+        const clean = sanitizeOverrides(patch, true) as Record<string, unknown>;
+        for (const key of Object.keys(patch)) {
+          if ((patch as Record<string, unknown>)[key] === undefined) delete next[key];
+          else if (key in clean) next[key] = clean[key];
+        }
+      }
+      const same = Object.keys(next).length === Object.keys(overrides).length && Object.keys(next).every((k) => next[k] === (overrides as Record<string, unknown>)[k]);
+      if (same) return;
+      overrides = next as Partial<QualityFeatures>;
+      writeStorage(QUALITY_OVERRIDES_KEY, Object.keys(overrides).length ? JSON.stringify(overrides) : null);
+      emit();
     },
     onChange(listener) {
       listeners.add(listener);

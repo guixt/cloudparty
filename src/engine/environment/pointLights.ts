@@ -14,7 +14,8 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Scene } from '@babylonjs/core/scene';
 import type { GameContext } from '../../core/context';
 
-export const MAX_POINT_LIGHTS = 6;
+/** Obergrenze für die Materialien (größte erlaubte Einstellung in quality.ts); die Zahl eingeschalteter Lichter folgt `ctx.quality.features().maxPointLights`. */
+export const MAX_POINT_LIGHTS = 16;
 /** Sonne + Himmelslicht + Punktlichter. */
 export const MAX_LIGHTS_PER_MATERIAL = 2 + MAX_POINT_LIGHTS;
 const UPDATE_EVERY_FRAMES = 6;
@@ -41,14 +42,15 @@ export function installPointLightSupport(ctx: GameContext): () => void {
   let frame = 0;
   const cam = new Vector3();
   const update = (scene: Scene) => {
+    const maxLights = Math.max(0, Math.min(MAX_POINT_LIGHTS, ctx.quality.features().maxPointLights));
     const lights = scene.lights.filter((light): light is PointLight => light instanceof PointLight && !!(light.metadata as { cpMainLight?: boolean } | null)?.cpMainLight);
-    if (lights.length <= MAX_POINT_LIGHTS && lights.every((light) => isWanted(light))) {
+    if (lights.length <= maxLights && lights.every((light) => isWanted(light))) {
       for (const light of lights) if (!light.isEnabled(false)) light.setEnabled(true);
       return;
     }
     const origin = scene.activeCamera?.globalPosition ?? cam;
     const entries = lights.map((light) => ({ distance: Vector3.Distance(origin, light.getAbsolutePosition()), wanted: isWanted(light) }));
-    const on = pickNearest(entries, MAX_POINT_LIGHTS);
+    const on = pickNearest(entries, maxLights);
     lights.forEach((light, i) => {
       const shouldBeOn = on.has(i);
       if (light.isEnabled(false) !== shouldBeOn) light.setEnabled(shouldBeOn);
