@@ -6,7 +6,8 @@ import type { PanelProps } from '../core/ui';
 import { labelForRef } from './catalog';
 import { Field, NumField, readFileAsDataUrl, Section, TextField, Vec3Field } from './fields';
 import { eulerDegFromQuat, quatFromEulerDeg } from './logic';
-import { deleteSelected, dropToGround, duplicateSelected } from './placement';
+import { alignSelected, deleteSelected, distributeSelected, dropToGround, dropSelectedToGround, duplicateSelected, groupSelected, patchSelected, ungroupSelected } from './placement';
+import type { AlignMode } from './multi';
 
 const KNOWN_STATE = ['text', 'seats', 'intensity', 'on'] as const;
 
@@ -329,6 +330,16 @@ function EntityInspector({ ctx, id }: { ctx: GameContext; id: string }) {
       <Field label="Name">
         <TextField testId="insp-name" value={entity.name ?? ''} placeholder={labelForRef(entity.ref)} onChange={(v) => patch({ name: v || undefined })} />
       </Field>
+      {entity.group && (
+        <div className="cpb-group-line" data-testid="insp-group-line">
+          <span>
+            Gruppe: <strong>{entity.groupName || 'Gruppe'}</strong>
+          </span>
+          <button className="cp-button cpb-small" data-testid="insp-pick-single" onClick={() => ctx.store.getState().selectMany([id])}>
+            Nur dieses Objekt wählen
+          </button>
+        </div>
+      )}
       <div className="cpb-ref">
         Typ: <strong>{labelForRef(entity.ref)}</strong> <span className="cp-muted">({entity.ref})</span>
       </div>
@@ -351,6 +362,96 @@ function EntityInspector({ ctx, id }: { ctx: GameContext; id: string }) {
       <MediaSection ctx={ctx} entity={entity} patch={patch} />
       <ModelSection ctx={ctx} entity={entity} patch={patch} />
       <ScriptSection ctx={ctx} entity={entity} patch={patch} />
+    </>
+  );
+}
+
+const ALIGN: { mode: AlignMode; label: string }[] = [
+  { mode: 'x-min', label: 'Links' },
+  { mode: 'x-mid', label: 'Mitte (X)' },
+  { mode: 'x-max', label: 'Rechts' },
+  { mode: 'z-min', label: 'Vorn' },
+  { mode: 'z-mid', label: 'Mitte (Z)' },
+  { mode: 'z-max', label: 'Hinten' },
+  { mode: 'ground', label: 'Boden' },
+];
+
+function MultiInspector({ ctx }: { ctx: GameContext }) {
+  const ids = useStore(ctx.store, (s) => s.selectedIds);
+  const entities = useStore(ctx.store, (s) => s.entities);
+  const members = ids.map((id) => entities[id]).filter(Boolean);
+  const groups = new Set(members.map((e) => e.group ?? ''));
+  const oneGroup = groups.size === 1 && members[0]?.group ? members[0].group : null;
+  const groupName = oneGroup ? (members[0].groupName ?? '') : '';
+  const color = members[0]?.material?.color ?? '#cccccc';
+  const setName = (name: string) => patchSelected(ctx, () => ({ groupName: name || undefined }));
+  const setColor = (c: string) => patchSelected(ctx, (e) => ({ material: { ...(e.material ?? {}), color: c } }));
+  const setPhysics = (mode: PhysicsMode) => patchSelected(ctx, (e) => ({ physics: { ...(e.physics ?? { mode: 'none' }), mode } }));
+  const anyGrouped = members.some((e) => e.group);
+  return (
+    <>
+      <h3 className="cp-heading">{oneGroup ? 'Gruppe' : 'Auswahl'}</h3>
+      {oneGroup ? (
+        <>
+          <Field label="Gruppenname">
+            <TextField testId="multi-group-name" value={groupName} placeholder="Gruppe" onChange={setName} />
+          </Field>
+          <div className="cp-muted" data-testid="multi-count">{members.length} Objekte in der Gruppe</div>
+        </>
+      ) : (
+        <div className="cpb-ref" data-testid="multi-count">
+          <strong>{members.length} Objekte gewählt</strong>
+        </div>
+      )}
+      <div className="cpb-actions">
+        <button className="cp-button" data-testid="multi-group" title="Gruppieren (Strg+G)" disabled={oneGroup !== null} onClick={() => groupSelected(ctx)}>
+          Gruppieren
+        </button>
+        <button className="cp-button" data-testid="multi-ungroup" title="Auflösen (Strg+Umschalt+G)" disabled={!anyGrouped} onClick={() => ungroupSelected(ctx)}>
+          Auflösen
+        </button>
+        <button className="cp-button" data-testid="multi-duplicate" title="Duplizieren (Strg+D)" onClick={() => duplicateSelected(ctx)}>
+          Duplizieren
+        </button>
+        <button className="cp-button cp-button-danger" data-testid="multi-delete" title="Löschen (Entf)" onClick={() => deleteSelected(ctx)}>
+          Löschen
+        </button>
+      </div>
+      <Section title="Für alle setzen">
+        <Field label="Farbe">
+          <input type="color" className="cpb-color" data-testid="multi-color" value={color} onChange={(e) => setColor(e.target.value)} />
+        </Field>
+        <Field label="Physik">
+          <select className="cp-select" data-testid="multi-physics" value="" onChange={(e) => e.target.value && setPhysics(e.target.value as PhysicsMode)}>
+            <option value="">(unverändert)</option>
+            {(Object.keys(PHYSICS_LABELS) as PhysicsMode[]).map((mode) => (
+              <option key={mode} value={mode}>
+                {PHYSICS_LABELS[mode]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <button className="cp-button cpb-wide" data-testid="multi-ground" onClick={() => dropSelectedToGround(ctx)}>
+          Auf den Boden setzen
+        </button>
+      </Section>
+      <Section title="Ausrichten und Verteilen">
+        <div className="cpb-grid">
+          {ALIGN.map((a) => (
+            <button key={a.mode} className="cp-button" data-testid={`align-${a.mode}`} onClick={() => alignSelected(ctx, a.mode)}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+        <div className="cpb-grid">
+          <button className="cp-button" data-testid="distribute-x" disabled={members.length < 3} onClick={() => distributeSelected(ctx, 'x')}>
+            Verteilen X
+          </button>
+          <button className="cp-button" data-testid="distribute-z" disabled={members.length < 3} onClick={() => distributeSelected(ctx, 'z')}>
+            Verteilen Z
+          </button>
+        </div>
+      </Section>
     </>
   );
 }
@@ -428,10 +529,11 @@ function WorldSettings({ ctx }: { ctx: GameContext }) {
 export function Inspector({ ctx }: PanelProps) {
   const mode = useStore(ctx.store, (s) => s.mode);
   const selection = useStore(ctx.store, (s) => s.selection);
+  const count = useStore(ctx.store, (s) => s.selectedIds.length);
   if (mode !== 'build') return null;
   return (
     <div className="cp-panel cpb-panel cpb-inspector cp-panel-scroll" data-testid="inspector">
-      {selection ? <EntityInspector ctx={ctx} id={selection} key={selection} /> : <WorldSettings ctx={ctx} />}
+      {count > 1 ? <MultiInspector ctx={ctx} /> : selection ? <EntityInspector ctx={ctx} id={selection} key={selection} /> : <WorldSettings ctx={ctx} />}
     </div>
   );
 }

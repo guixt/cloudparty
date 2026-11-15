@@ -6,6 +6,7 @@ import { newEntityId, type EntitySpec, type Vec3 } from '../../shared/types';
 import { entityIdOf, type GameContext } from '../core/context';
 import { createFromItem, type CatalogItem } from './catalog';
 import { fallbackPoint, placementY, snapValue, SNAP_POSITION } from './logic';
+import { alignDeltas, boxFromTransform, cloneEntities, distributeDeltas, groupPatches, nextGroupName, ungroupPatches, type AlignMode, type Box, type Patches } from './multi';
 import { buildState } from './state';
 
 const isSurface = (mesh: AbstractMesh) => entityIdOf(mesh) !== null || (mesh.metadata as { isGround?: boolean } | null)?.isGround === true;
@@ -39,22 +40,120 @@ export function placeItem(ctx: GameContext, item: CatalogItem, surface?: Vec3): 
   return entity;
 }
 
+/** Fasst alle Änderungen in `fn` zu einem Undo-Schritt zusammen. */
+export function inUndoGroup<T>(ctx: GameContext, fn: () => T): T {
+  ctx.bus.emit('history.group.begin', {});
+  try {
+    return fn();
+  } finally {
+    ctx.bus.emit('history.group.end', {});
+  }
+}
+
+const selectedEntities = (ctx: GameContext): EntitySpec[] => {
+  const s = ctx.store.getState();
+  return s.order.filter((id) => s.selectedIds.includes(id)).map((id) => s.entities[id]);
+};
+
+/** Welt-Box einer Entity (aus dem Knoten, sonst aus der Transform). */
+export function boxOfEntity(ctx: GameContext, id: string): Box {
+  const node = ctx.entityNodes.get(id);
+  if (node) {
+    node.computeWorldMatrix(true);
+    const { min, max } = node.getHierarchyBoundingVectors(true);
+    if (Number.isFinite(min.x) && Number.isFinite(max.x)) return { min: [min.x, min.y, min.z], max: [max.x, max.y, max.z] };
+  }
+  return boxFromTransform(ctx.store.getState().entities[id].transform);
+}
+
+function addClones(ctx: GameContext, source: EntitySpec[], offset: Vec3): string[] {
+  const clones = cloneEntities(source, offset);
+  inUndoGroup(ctx, () => {
+    for (const c of clones) ctx.store.getState().addEntity(c, { source: 'local' });
+  });
+  ctx.store.getState().selectMany(clones.map((c) => c.id));
+  return clones.map((c) => c.id);
+}
+
 export function duplicateSelected(ctx: GameContext): string | null {
-  const state = ctx.store.getState();
-  const id = state.selection;
-  const source = id ? state.entities[id] : undefined;
-  if (!source) return null;
-  const copy = structuredClone(source);
-  copy.id = newEntityId();
-  copy.transform.pos = [source.transform.pos[0] + 1, source.transform.pos[1], source.transform.pos[2]];
-  state.addEntity(copy, { source: 'local' });
-  state.select(copy.id);
-  return copy.id;
+  const source = selectedEntities(ctx);
+  if (source.length === 0) return null;
+  return addClones(ctx, source, [1, 0, 0]).at(-1) ?? null;
 }
 
 export function deleteSelected(ctx: GameContext): void {
-  const state = ctx.store.getState();
-  if (state.selection) state.removeEntity(state.selection, { source: 'local' });
+  const ids = [...ctx.store.getState().selectedIds];
+  inUndoGroup(ctx, () => {
+    for (const id of ids) ctx.store.getState().removeEntity(id, { source: 'local' });
+  });
+}
+
+let clipboard: EntitySpec[] = [];
+let pasteCount = 0;
+export function copySelected(ctx: GameContext): number {
+  clipboard = selectedEntities(ctx).map((e) => structuredClone(e));
+  pasteCount = 0;
+  return clipboard.length;
+}
+export function pasteClipboard(ctx: GameContext): string[] {
+  if (clipboard.length === 0) return [];
+  pasteCount += 1;
+  return addClones(ctx, clipboard, [0.5 * pasteCount, 0, 0.5 * pasteCount]);
+}
+
+/** Wendet Patches je Entity als ein Undo-Schritt an. */
+export function applyPatches(ctx: GameContext, patches: Patches): void {
+  inUndoGroup(ctx, () => {
+    for (const [id, patch] of Object.entries(patches)) ctx.store.getState().updateEntity(id, patch, { source: 'local' });
+  });
+}
+
+export function groupSelected(ctx: GameContext, name?: string): void {
+  const s = ctx.store.getState();
+  if (s.selectedIds.length < 2) return;
+  const names = s.order.map((id) => s.entities[id]?.groupName);
+  applyPatches(ctx, groupPatches(s.selectedIds, s.entities, s.order, newEntityId('grp'), name?.trim() || nextGroupName(names)));
+}
+
+export function ungroupSelected(ctx: GameContext): void {
+  const s = ctx.store.getState();
+  applyPatches(ctx, ungroupPatches(s.selectedIds, s.entities, s.order));
+}
+
+/** Verschiebt die gewählten Objekte je um deltas[i] (Reihenfolge wie `ids`). */
+export function moveBy(ctx: GameContext, ids: string[], deltas: Vec3[]): void {
+  const s = ctx.store.getState();
+  const patches: Patches = {};
+  ids.forEach((id, i) => {
+    const e = s.entities[id];
+    const d = deltas[i];
+    if (!e || !d || (d[0] === 0 && d[1] === 0 && d[2] === 0)) return;
+    patches[id] = { transform: { ...e.transform, pos: [e.transform.pos[0] + d[0], e.transform.pos[1] + d[1], e.transform.pos[2] + d[2]] } };
+  });
+  applyPatches(ctx, patches);
+}
+
+export function alignSelected(ctx: GameContext, mode: AlignMode): void {
+  const ids = ctx.store.getState().selectedIds;
+  moveBy(ctx, ids, alignDeltas(ids.map((id) => boxOfEntity(ctx, id)), mode));
+}
+export function distributeSelected(ctx: GameContext, axis: 'x' | 'z'): void {
+  const ids = ctx.store.getState().selectedIds;
+  moveBy(ctx, ids, distributeDeltas(ids.map((id) => boxOfEntity(ctx, id)), axis));
+}
+
+/** Gemeinsames Patchen aller gewählten Objekte (z. B. Farbe, Physik). */
+export function patchSelected(ctx: GameContext, make: (e: EntitySpec) => Partial<EntitySpec>): void {
+  const s = ctx.store.getState();
+  const patches: Patches = {};
+  for (const id of s.selectedIds) if (s.entities[id]) patches[id] = make(s.entities[id]);
+  applyPatches(ctx, patches);
+}
+
+export function dropSelectedToGround(ctx: GameContext): void {
+  inUndoGroup(ctx, () => {
+    for (const id of ctx.store.getState().selectedIds) dropToGround(ctx, id);
+  });
 }
 
 /** Setzt die Entity so ab, dass ihre Unterkante auf der Fläche darunter liegt. */

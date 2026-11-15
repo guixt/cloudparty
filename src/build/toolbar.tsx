@@ -1,5 +1,6 @@
 import { useStore } from 'zustand';
 import type { PanelProps } from '../core/ui';
+import { groupSelected, ungroupSelected } from './placement';
 import { runtime } from './runtime';
 import { buildState, type Tool } from './state';
 
@@ -13,6 +14,8 @@ export function BuildToolbar({ ctx }: PanelProps) {
   const mode = useStore(ctx.store, (s) => s.mode);
   const tool = useStore(buildState, (s) => s.tool);
   const snap = useStore(buildState, (s) => s.snap);
+  const count = useStore(ctx.store, (s) => s.selectedIds.length);
+  const anyGrouped = useStore(ctx.store, (s) => s.selectedIds.some((id) => !!s.entities[id]?.group));
   const history = runtime.history;
   const canUndo = useStore(history!.state, (s) => s.canUndo);
   const canRedo = useStore(history!.state, (s) => s.canRedo);
@@ -48,6 +51,13 @@ export function BuildToolbar({ ctx }: PanelProps) {
             onClick={() => buildState.setState({ snap: !snap })}
           >
             Raster
+          </button>
+          <span className="cpb-sep" />
+          <button className="cp-button" data-testid="tb-group" title="Gruppieren (Strg+G)" disabled={count < 2} onClick={() => groupSelected(ctx)}>
+            Gruppieren
+          </button>
+          <button className="cp-button" data-testid="tb-ungroup" title="Auflösen (Strg+Umschalt+G)" disabled={!anyGrouped} onClick={() => ungroupSelected(ctx)}>
+            Auflösen
           </button>
           <span className="cpb-sep" />
           <button className="cp-button" data-testid="undo" title="Rückgängig (Strg+Z)" disabled={!canUndo} onClick={() => history!.undo()}>

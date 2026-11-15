@@ -12,15 +12,16 @@ export class SelectionHighlight {
 
   constructor(private scene: Scene) {}
 
-  set(node: TransformNode | null | undefined): void {
+  set(input: TransformNode | null | undefined | (TransformNode | null | undefined)[]): void {
     this.clear();
-    if (!node) return;
+    const nodes = (Array.isArray(input) ? input : [input]).filter((n): n is TransformNode => !!n);
+    if (nodes.length === 0) return;
     if (!this.layer) {
       this.layer = new HighlightLayer('build.highlight', this.scene, { blurHorizontalSize: 0.8, blurVerticalSize: 0.8 });
       this.layer.innerGlow = false;
     }
     const color = Color3.FromHexString('#4da3ff');
-    const targets = [node, ...node.getChildMeshes(false)].filter((n): n is Mesh => n instanceof Mesh && n.getTotalVertices() > 0 && n.isVisible);
+    const targets = nodes.flatMap((node) => [node, ...node.getChildMeshes(false)]).filter((n): n is Mesh => n instanceof Mesh && n.getTotalVertices() > 0 && n.isVisible);
     for (const mesh of targets) {
       this.layer.addMesh(mesh, color, true);
       this.meshes.push(mesh);

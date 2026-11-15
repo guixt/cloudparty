@@ -153,4 +153,22 @@ describe('History', () => {
     bus.emit('history.group.end', {});
     expect(history.undoCount).toBe(1);
   });
+
+  it('Mehrfach-Geste (Gruppe) ist genau ein Undo-Schritt', () => {
+    const { store, bus, history } = setup();
+    for (const id of ['a', 'b', 'c']) store.getState().addEntity(box(id));
+    history.clear();
+    for (const id of ['a', 'b', 'c']) history.pin(id);
+    bus.emit('history.group.begin', {});
+    for (const id of ['a', 'b', 'c']) {
+      const e = store.getState().entities[id];
+      store.getState().updateEntity(id, { transform: { ...e.transform, pos: [5, 0.5, 5] } }, { source: 'local' });
+    }
+    bus.emit('history.group.end', {});
+    expect(history.undoCount).toBe(1);
+    history.undo();
+    for (const id of ['a', 'b', 'c']) expect(store.getState().entities[id].transform.pos).toEqual([0, 0.5, 0]);
+    history.redo();
+    expect(store.getState().entities.b.transform.pos).toEqual([5, 0.5, 5]);
+  });
 });
