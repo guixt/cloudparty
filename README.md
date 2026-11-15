@@ -30,9 +30,22 @@ Ohne Server läuft alles im Einzelspieler-Modus mit lokaler Speicherung (Indexed
 | Auswahl / Gizmos | Klick; 1 Verschieben, 2 Drehen, 3 Skalieren |
 | Duplizieren / Löschen | Strg+D / Entf |
 | Rückgängig / Wiederholen | Strg+Z / Strg+Y |
+| Mehrfachauswahl | Shift/Strg-Klick, Rahmen ziehen, Strg+A |
+| Gruppieren / Auflösen | Strg+G / Strg+Umschalt+G |
+| Kopieren / Einfügen | Strg+C / Strg+V |
+| Bibliothek | B |
+| Logik-Graph bearbeiten | L (Objekt gewählt) |
 | Skript bearbeiten | E (Objekt gewählt) |
 | KI-Assistent | K |
 | Hilfe | H |
+
+## Gruppen, Bibliothek und Logik-Graph
+
+**Gruppen:** Mehrere Objekte lassen sich zu einer Gruppe zusammenfassen (Strg+G). Ein Klick auf ein Mitglied wählt die ganze Gruppe, ein Doppelklick nur dieses Mitglied. Gruppen werden gemeinsam bewegt, gedreht, skaliert, kopiert und gelöscht, jede Geste ist ein Undo-Schritt. Im Inspector gibt es für Mehrfachauswahlen Farbe, Physik, Ausrichten und Verteilen für alle gewählten Objekte.
+
+**Bibliothek:** „Auswahl speichern …" legt Objekte samt Material, Skripten und Graphen als Baustein ab (Vorschaubild, Name, Stichworte). Bausteine lassen sich per Knopf oder Ziehen in die Welt setzen und als Datei exportieren und importieren. Eine Reihe fertiger Bausteine (Gartenhaus, Brunnen, Pavillon …) ist enthalten. Die Bibliothek liegt im Browser (IndexedDB).
+
+**Logik-Graph:** Wie der Node-Editor in Blender verbindest du Blöcke (Ereignisse, Aktionen, Ablauf, Logik, Werte, Variablen, Medien) zu einem Ablauf. Der Graph wird in ein Skript übersetzt und im Skript-Sandbox-Worker ausgeführt; im Reiter „Code" siehst du das Ergebnis. Es gibt Vorlagen (Tür, Lichtschalter, Zähler, Aufzug …). Ein aktivierter, fehlerfreier Graph hat Vorrang vor einem Skript am selben Objekt. Die KI kann Graphen erzeugen (Reiter „KI" im Editor und Werkzeug `set_graph`).
 
 ## KI-Funktionen
 
