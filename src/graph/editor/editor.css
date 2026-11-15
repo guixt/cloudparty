@@ -1,0 +1,126 @@
+/* Graph-Editor (Paket 19) */
+.cp-panel.ge-window { position: absolute; display: flex; flex-direction: column; padding: 0; overflow: hidden; background: var(--cp-bg-solid);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45); min-width: 420px; min-height: 340px; max-width: 100vw; }
+.ge-titlebar { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; cursor: move; user-select: none; touch-action: none;
+  border-bottom: 1px solid var(--cp-border); background: rgba(255, 255, 255, 0.04); }
+.ge-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ge-dirty { font-size: 12px; color: var(--cp-muted); white-space: nowrap; }
+.ge-dirty-on { color: #ffcf5c; font-weight: 600; }
+.ge-close { padding: 4px 10px; }
+.ge-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--cp-border); }
+.ge-actions .cp-button { padding: 4px 8px; font-size: 12.5px; }
+.ge-check { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.ge-sep { width: 1px; align-self: stretch; background: var(--cp-border); margin: 0 2px; }
+.ge-tabs { margin-left: auto; display: flex; gap: 4px; }
+.ge-menu { position: relative; }
+.ge-menu-list { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 260px; max-height: 300px; overflow: auto; background: var(--cp-bg-solid);
+  border: 1px solid var(--cp-border); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; }
+.ge-menu-item { display: flex; flex-direction: column; text-align: left; gap: 2px; font: inherit; color: var(--cp-text); background: none; border: 0; border-radius: 6px; padding: 6px 8px; cursor: pointer; }
+.ge-menu-item:hover { background: rgba(77, 163, 255, 0.2); }
+.ge-menu-empty { padding: 8px; font-size: 13px; }
+.ge-note { padding: 6px 12px; font-size: 12.5px; background: rgba(77, 163, 255, 0.14); border-bottom: 1px solid var(--cp-border); }
+.ge-confirm { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(255, 207, 92, 0.14); border-bottom: 1px solid var(--cp-border); }
+.ge-confirm span { flex: 1; }
+.ge-body { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.ge-pane { flex: 1; min-height: 0; flex-direction: column; position: relative; }
+.ge-small { padding: 3px 8px !important; font-size: 12px !important; }
+.ge-spacer { flex: 1; }
+.ge-count { font-size: 12px; white-space: nowrap; }
+
+/* Arbeitsfläche */
+.ge-canvas { position: relative; flex: 1; min-height: 0; overflow: hidden; outline: none; touch-action: none; user-select: none;
+  background-color: #11151d; background-image: radial-gradient(circle, rgba(255, 255, 255, 0.16) 1px, transparent 1.2px); }
+.ge-canvas-pan { cursor: grab; }
+.ge-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.ge-wires { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.ge-wire { fill: none; stroke-linecap: round; opacity: 0.8; pointer-events: none; }
+.ge-wire-hot { opacity: 1; filter: drop-shadow(0 0 3px currentColor); stroke-width: 4; }
+.ge-wire-sel { stroke-dasharray: 8 4; }
+.ge-wire-pending { opacity: 0.9; stroke-dasharray: 6 4; }
+.ge-wire-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
+.ge-wire-x { cursor: pointer; pointer-events: all; }
+.ge-wire-x circle { fill: #2a3142; stroke: #ff6b6b; stroke-width: 1.5; }
+.ge-wire-x path { stroke: #ff6b6b; stroke-width: 1.8; fill: none; }
+.ge-marquee { position: absolute; border: 1px dashed var(--cp-accent); background: rgba(77, 163, 255, 0.14); pointer-events: none; }
+
+/* Knoten */
+.ge-node { position: absolute; box-sizing: border-box; background: rgba(32, 38, 52, 0.96); border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.1); cursor: grab; }
+.ge-node-selected { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 2px #ffffff; }
+.ge-node-error { box-shadow: 0 0 0 2px #ff5a5a, 0 0 10px rgba(255, 90, 90, 0.6); }
+.ge-node-warning { box-shadow: 0 0 0 2px #ffcf5c, 0 0 10px rgba(255, 207, 92, 0.5); }
+.ge-node-selected.ge-node-error { box-shadow: 0 0 0 2px #ff5a5a, 0 0 0 4px #ffffff; }
+.ge-node-head { height: 26px; line-height: 26px; padding: 0 10px; border-radius: 8px 8px 0 0; font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ge-node-body { padding: 6px 0; }
+.ge-row { position: relative; height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 12px; font-size: 12.5px; }
+.ge-row-param { justify-content: flex-start; }
+.ge-row-unknown { white-space: normal; height: auto; color: #ffb4b4; }
+.ge-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ge-cell-in { flex: 1; }
+.ge-cell-out { justify-content: flex-end; }
+.ge-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #d7deea; }
+.ge-param { font: inherit; font-size: 12px; color: var(--cp-text); background: rgba(0, 0, 0, 0.4); border: 1px solid var(--cp-border); border-radius: 4px; padding: 1px 4px; width: 80px; min-width: 0; height: 20px; box-sizing: border-box; }
+.ge-param:focus { outline: 1px solid var(--cp-accent); }
+.ge-param-check { width: 16px; height: 16px; padding: 0; }
+.ge-param-color { width: 34px; padding: 0; height: 20px; background: none; cursor: pointer; }
+.ge-row-param .ge-param { flex: 1; }
+.ge-port { position: absolute; left: -6px; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; background: var(--pc); border: 2px solid #11151d; box-sizing: border-box; cursor: crosshair; transition: transform 0.1s; }
+.ge-port-right { left: auto; right: -6px; }
+.ge-port::after { content: ''; position: absolute; inset: -5px; }
+.ge-port:hover { transform: scale(1.35); }
+.ge-k-flow { --pc: #f2f4f8; border-radius: 2px 6px 6px 2px; clip-path: polygon(0 0, 65% 0, 100% 50%, 65% 100%, 0 100%); width: 14px; border: 0; background: var(--pc); }
+.ge-k-number { --pc: #58c26f; }
+.ge-k-text { --pc: #5aa2ff; }
+.ge-k-boolean { --pc: #ff6b6b; }
+.ge-k-color { --pc: #ffd04d; }
+.ge-linking .ge-port-dim { opacity: 0.25; }
+.ge-linking .ge-port-ok { transform: scale(1.5); box-shadow: 0 0 8px 2px var(--pc); }
+.ge-linking .ge-port-ok.ge-k-flow { box-shadow: none; filter: drop-shadow(0 0 4px #fff); }
+.ge-linking .ge-node { cursor: crosshair; }
+
+/* Bedienelemente auf der Fläche */
+.ge-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; pointer-events: none; text-align: center; padding: 20px; }
+.ge-empty strong { font-size: 18px; }
+.ge-hint { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: #5a2230; border: 1px solid #ff6b6b; border-radius: 8px; padding: 6px 12px; font-size: 13px; pointer-events: none; max-width: 90%; }
+.ge-zoombar { position: absolute; left: 10px; bottom: 10px; display: flex; align-items: center; gap: 4px; background: rgba(20, 26, 38, 0.85); border: 1px solid var(--cp-border); border-radius: 8px; padding: 4px; }
+.ge-zoomval { min-width: 48px; text-align: center; font-size: 12px; }
+.ge-minimap { position: absolute; right: 10px; bottom: 10px; background: rgba(20, 26, 38, 0.85); border: 1px solid var(--cp-border); border-radius: 6px; cursor: pointer; }
+.ge-mm-node { fill: rgba(160, 180, 220, 0.55); }
+.ge-mm-sel { fill: #fff; }
+.ge-mm-view { fill: rgba(77, 163, 255, 0.12); stroke: var(--cp-accent); stroke-width: 1; }
+
+/* Palette */
+.ge-palette-backdrop { position: absolute; inset: 0; z-index: 20; }
+.ge-palette { position: absolute; width: 290px; max-height: min(420px, 90%); display: flex; flex-direction: column; gap: 6px; background: var(--cp-bg-solid); border: 1px solid var(--cp-border); border-radius: 10px; padding: 8px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); }
+.ge-palette-title { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--cp-muted); }
+.ge-palette-list { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; }
+.ge-palette-cat { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; color: var(--cp-muted); padding: 6px 4px 2px; text-transform: uppercase; }
+.ge-palette-cat span { width: 10px; height: 10px; border-radius: 3px; }
+.ge-palette-item { display: flex; flex-direction: column; align-items: flex-start; text-align: left; font: inherit; color: var(--cp-text); background: none; border: 0; border-radius: 6px; padding: 4px 8px; cursor: pointer; }
+.ge-palette-item.ge-active { background: rgba(77, 163, 255, 0.28); }
+.ge-palette-name { font-weight: 600; font-size: 13.5px; }
+.ge-palette-desc { font-size: 11.5px; color: var(--cp-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ge-palette-empty { padding: 10px; }
+
+/* Code, Probleme, Ausgabe */
+.ge-code-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px 10px; gap: 6px; }
+.ge-code-head { display: flex; align-items: center; justify-content: space-between; }
+.ge-code { flex: 1; min-height: 0; margin: 0; overflow: auto; padding: 10px; background: rgba(0, 0, 0, 0.4); border-radius: 6px; font-family: ui-monospace, Consolas, Menlo, monospace; font-size: 12.5px; white-space: pre; user-select: text; }
+.ge-issues, .ge-log { border-top: 1px solid var(--cp-border); background: rgba(0, 0, 0, 0.28); }
+.ge-bar { display: flex; align-items: center; gap: 8px; padding: 4px 10px; min-width: 0; }
+.ge-fold { font: inherit; font-weight: 700; color: var(--cp-text); background: none; border: 0; cursor: pointer; padding: 2px 0; }
+.ge-badge { font-size: 11.5px; font-weight: 700; border-radius: 10px; padding: 2px 9px; color: #08101c; white-space: nowrap; }
+.ge-badge-error { background: var(--cp-danger); }
+.ge-badge-warn { background: #ffcf5c; }
+.ge-badge-ok { background: var(--cp-ok); }
+.ge-badge-idle { background: #aab4c4; }
+.ge-status-msg { color: var(--cp-danger); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ge-issue-list { list-style: none; margin: 0; padding: 0 10px 6px; max-height: 110px; overflow-y: auto; }
+.ge-issue { display: flex; gap: 8px; width: 100%; text-align: left; font: inherit; font-size: 12.5px; background: none; border: 0; padding: 2px 4px; border-radius: 4px; cursor: pointer; color: var(--cp-text); }
+.ge-issue:hover { background: rgba(255, 255, 255, 0.08); }
+.ge-issue-error span { color: #ff6b6b; font-weight: 700; }
+.ge-issue-warning span { color: #ffcf5c; font-weight: 700; }
+.ge-loglines { height: 90px; overflow-y: auto; padding: 2px 10px 6px; font-family: ui-monospace, Consolas, Menlo, monospace; font-size: 12px; }
+.ge-line { line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ge-line-error { color: var(--cp-danger); }
+.ge-resize { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.45) 50%, rgba(255, 255, 255, 0.45) 58%, transparent 58%, transparent 70%, rgba(255, 255, 255, 0.45) 70%, rgba(255, 255, 255, 0.45) 78%, transparent 78%); }
