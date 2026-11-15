@@ -23,6 +23,9 @@ import './build.css';
 
 import { createMarquee } from './marquee';
 
+/** Zeitfenster für einen Doppelklick auf dasselbe Objekt. */
+const DOUBLE_TAP_MS = 450;
+
 let cleanups: (() => void)[] = [];
 
 const build: GameModule = {
@@ -90,9 +93,11 @@ const build: GameModule = {
       }),
     );
 
+    let lastTap: { id: string; at: number } | null = null;
     // Klicks im 3D-Bild: auswählen, abwählen oder „Klick zum Platzieren".
     const tapObserver = scene.onPointerObservable.add((info) => {
-      if (info.type !== PointerEventTypes.POINTERTAP || store.getState().mode !== 'build') return;
+      const isDoubleEvent = info.type === PointerEventTypes.POINTERDOUBLETAP;
+      if ((info.type !== PointerEventTypes.POINTERTAP && !isDoubleEvent) || store.getState().mode !== 'build') return;
       const event = info.event as PointerEvent;
       if (event.button !== 0 || event.altKey || cam.suppressTap) return;
       if (gizmos.dragging || performance.now() - gizmos.lastDragEnd < 300) return;
@@ -111,8 +116,14 @@ const build: GameModule = {
         if (!additive) s.select(null);
         return;
       }
-      if (event.detail >= 2 && !additive) {
-        s.selectMany([id]); // Doppelklick: nur dieses Mitglied („in Gruppe hineingehen")
+      // Doppelklick (zwei Klicks kurz nacheinander auf dasselbe Objekt): nur dieses Mitglied wählen
+      // („in Gruppe hineingehen"). `event.detail` ist bei Zeigerereignissen immer 0, darum eigene Zeitmessung.
+      const now = performance.now();
+      // Babylon meldet den zweiten Klick eines Doppelklicks als eigenes Ereignis (POINTERDOUBLETAP).
+      const isDouble = !additive && (isDoubleEvent || (lastTap !== null && lastTap.id === id && now - lastTap.at < DOUBLE_TAP_MS));
+      lastTap = isDouble ? null : { id, at: now };
+      if (isDouble) {
+        s.selectMany([id]);
         return;
       }
       const members = expandToGroups([id], s.entities, s.order);
