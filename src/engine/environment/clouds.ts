@@ -14,6 +14,8 @@ import { mix, toLinear, type Rgb, type SkyLook } from './presets';
 
 export interface Clouds {
   meshes: AbstractMesh[];
+  /** Blendet das Wolkenmeer unter der Insel ein/aus (die treibenden Wolken ringsum bleiben). */
+  setSeaVisible(visible: boolean): void;
   apply(look: SkyLook): void;
   update(dt: number): void;
   dispose(): void;
@@ -34,6 +36,7 @@ export function createClouds(scene: Scene, seed = 1, seaY = -70): Clouds {
   source.material = material;
   const meshes: AbstractMesh[] = [source];
   const instances: Mesh[] = [];
+  const seaPuffs: AbstractMesh[] = [];
   let counter = 0;
   const puff = (parent: TransformNode, x: number, y: number, z: number, sx: number, sy: number, sz: number): void => {
     const target = counter === 0 ? source : source.createInstance(`env.cloud.${counter}`);
@@ -46,6 +49,7 @@ export function createClouds(scene: Scene, seed = 1, seaY = -70): Clouds {
     target.alwaysSelectAsActiveMesh = false;
     if (target !== source) instances.push(target as unknown as Mesh);
     meshes.push(target);
+    if (parent === seaRoot) seaPuffs.push(target);
   };
 
   const seaRoot = new TransformNode('env.cloudSea', scene);
@@ -84,6 +88,13 @@ export function createClouds(scene: Scene, seed = 1, seaY = -70): Clouds {
 
   return {
     meshes,
+    setSeaVisible(visible) {
+      // Das Quellmesh trägt alle Instanzen (auch die treibenden Wolken): es bleibt aktiv, nur sein Bild verschwindet.
+      for (const mesh of seaPuffs) {
+        if (mesh === source) source.isVisible = visible;
+        else mesh.setEnabled(visible);
+      }
+    },
     apply(look) {
       const light: Rgb = look.cloudLight;
       const shade: Rgb = look.cloudShade;
