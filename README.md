@@ -36,6 +36,7 @@ Ohne Server läuft alles im Einzelspieler-Modus mit lokaler Speicherung (Indexed
 | Bibliothek | B |
 | Logik-Graph bearbeiten | L (Objekt gewählt) |
 | Skript bearbeiten | E (Objekt gewählt) |
+| Fotomodus (Tiefenschärfe) | P (nur Ultra) |
 | KI-Assistent | K |
 | Hilfe | H |
 
@@ -46,6 +47,14 @@ Ohne Server läuft alles im Einzelspieler-Modus mit lokaler Speicherung (Indexed
 **Bibliothek:** „Auswahl speichern …" legt Objekte samt Material, Skripten und Graphen als Baustein ab (Vorschaubild, Name, Stichworte). Bausteine lassen sich per Knopf oder Ziehen in die Welt setzen und als Datei exportieren und importieren. Eine Reihe fertiger Bausteine (Gartenhaus, Brunnen, Pavillon …) ist enthalten. Die Bibliothek liegt im Browser (IndexedDB).
 
 **Logik-Graph:** Wie der Node-Editor in Blender verbindest du Blöcke (Ereignisse, Aktionen, Ablauf, Logik, Werte, Variablen, Medien) zu einem Ablauf. Der Graph wird in ein Skript übersetzt und im Skript-Sandbox-Worker ausgeführt; im Reiter „Code" siehst du das Ergebnis. Es gibt Vorlagen (Tür, Lichtschalter, Zähler, Aufzug …). Ein aktivierter, fehlerfreier Graph hat Vorrang vor einem Skript am selben Objekt. Die KI kann Graphen erzeugen (Reiter „KI" im Editor und Werkzeug `set_graph`).
+
+## Grafik
+
+- **Reflexionen:** Der Himmel dient als Reflexionssonde, Metall, Chrom und Glas spiegeln Himmel, Sonne und Insel. Das Material hat Voreinstellungen (Metall, Chrom, Gold, Glas, Spiegel, Lack, Holz, Stein, Gummi, Neon, Hologramm), Klarlack, Reflexionsstärke, Leuchtstärke und Muster (Karo, Streifen, Ziegel, Holz, Wellen). Ein Echtzeit-Spiegel spiegelt die Szene wirklich (Baustein „Spiegel").
+- **Wasser:** Teich, See oder Pool als Baustein mit Spiegelung, Wellen und Wasserfall. Unter der Insel kann statt des Wolkenmeers ein Meer liegen (Einstellung der Insel unter Himmel und Licht).
+- **Looks und Effekte:** Stimmungsvorlagen (Filmisch, Warm, Kühl, Comic, Retro), SSAO, Sonnenstrahlen und ein Fotomodus mit Tiefenschärfe (Taste P, nur auf Stufe Ultra).
+- **Natur:** Gras im Wind, schwingende Bäume, Wetter (Regen, Schnee, Nebel, Glühwürmchen) und ein Tageszyklus.
+- **Qualität:** Der Knopf „Grafik" in der Leiste öffnet die Einstellungen. Beim ersten Start wählt Cloudparty anhand der Bildrate automatisch Niedrig, Mittel, Hoch oder Ultra. Du kannst die Stufe jederzeit ändern, einzelne Effekte ein- und ausschalten und eine FPS-Anzeige einblenden. Teure Effekte wie Spiegel, Wasserspiegelung und SSAO gibt es erst ab Mittel bzw. Hoch.
 
 ## KI-Funktionen
 

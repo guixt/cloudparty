@@ -8,10 +8,10 @@ export const FOOTPRINT_PADDING = 0.2;
 /** Nur Teile, die den Boden berühren (Unterkante unter dieser Höhe), zählen. */
 export const GROUND_TOUCH_HEIGHT = 0.4;
 
-/** Soll die Entity Gras verdrängen? (statische Körper und Startpunkte) */
+/** Soll die Entity Gras verdrängen? (statische Körper, Startpunkte und Wasserflächen) */
 export function blocksGrass(entity: Pick<EntitySpec, 'ref' | 'physics'> | undefined): boolean {
   if (!entity) return false;
-  return entity.physics?.mode === 'static' || entity.ref === 'EntitySpec.avatar-spawn';
+  return entity.physics?.mode === 'static' || entity.ref === 'EntitySpec.avatar-spawn' || entity.ref === 'EntitySpec.water';
 }
 
 export function padRect(r: Rect, pad = FOOTPRINT_PADDING): Rect {

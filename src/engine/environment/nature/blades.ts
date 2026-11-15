@@ -6,7 +6,7 @@ import { createOutline, mulberry32 } from '../outline';
 
 export const BLADE_STRIDE = 5;
 export const MAX_BLADES = 60000;
-export const BLADES_PER_M2 = 10;
+export const BLADES_PER_M2 = 6.0;
 /** Anteil des Inselradius, bis zu dem die Oberseite flach ist. */
 export const FLAT_FRACTION = 0.85;
 
@@ -43,7 +43,7 @@ export function generateBlades(island: { radius: number; seed: number }, density
     const theta = rnd() * Math.PI * 2;
     const r = Math.sqrt(rnd()) * maxR;
     const rotation = rnd() * Math.PI * 2;
-    const size = 0.7 + rnd() * 0.7;
+    const size = 0.42 + rnd() * 0.42;
     const variation = rnd();
     // Randlinie der Insel kann unter 0.85 liegen: etwas Abstand zur Kante halten.
     if (r > radius * outline(theta) * 0.93) continue;

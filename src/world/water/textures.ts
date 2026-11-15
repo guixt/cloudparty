@@ -23,8 +23,8 @@ export function createFoamTexture(scene: Scene, shape: WaterShape): DynamicTextu
     if (shape === 'round') {
       const g = c.createRadialGradient(64, 64, 0, 64, 64, 64);
       g.addColorStop(0, 'rgba(255,255,255,0)');
-      g.addColorStop(0.84, 'rgba(255,255,255,0)');
-      g.addColorStop(0.95, 'rgba(255,255,255,0.4)');
+      g.addColorStop(0.9, 'rgba(255,255,255,0)');
+      g.addColorStop(0.97, 'rgba(255,255,255,0.2)');
       g.addColorStop(1, 'rgba(255,255,255,0)');
       c.fillStyle = g;
       c.fillRect(0, 0, 128, 128);
