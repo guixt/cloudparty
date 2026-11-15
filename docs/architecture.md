@@ -54,3 +54,12 @@ Cloudparty 2.0 besteht aus einem Kern (Fundament) und zwölf Modulen (Arbeitspak
 - **Bibliothek:** Vertrag in `shared/library.ts` und `src/library/api.ts` (`getLibrary()`). Bausteine liegen im Browser (IndexedDB `cloudparty-library`), Export/Import als Datei.
 - **Logik-Graph:** Typen und Konventionen in `shared/graph.ts`, Katalog in `shared/graphNodes.ts`, Übersetzer in `shared/graphCompile.ts` (`compileGraph`, `validateGraph`, `entityScriptSource`), Kompaktform für die KI in `shared/graphCompact.ts`. Der Graph hängt an `entity.graph`; die Skript-Laufzeit führt `entityScriptSource(entity)` aus. Editor: `ui.openGraphEditor` → `src/graph/editor/`.
 - **KI-Werkzeuge** dazu: `group_entities`, `ungroup`, `library_list`, `library_place`, `library_save`, `set_graph` (Vertrag in `shared/aiTools.ts`).
+
+## Grafik (Stufe 3)
+
+- **Qualitätsstufen:** `src/engine/quality.ts` legt vier Stufen (`low`, `medium`, `high`, `ultra`) und ihre Merkmale fest (`ctx.quality.features()`, `ctx.quality.onChange(...)`). Effekte lesen nur daraus und schalten sich selbst um; die Automatik und die Oberfläche gehören Paket 26.
+- **Umgebungs-Effekte:** `src/engine/environment/features.ts` beschreibt die Hooks (`apply`, `islandChanged`, `update`, `onQuality`, `dispose`), `featureList.ts` listet die Effekte. Jeder Effekt liegt in einer eigenen Datei unter `features/` (`ibl`, `sea`, `looks`, `nature`, `weather`). Ein Effekt, der nicht funktioniert, schaltet sich still ab.
+- **Material:** `MaterialSpec` (`shared/types.ts`) kennt jetzt `preset`, `reflect`, `clearcoat`, `glass`, `ior`, `mirror`, `emissiveIntensity`, `pattern`, `patternColor`, `uvScale`. Weltformat (Zod) und KI-Werkzeuge nehmen sie an.
+- **Umgebung:** `EnvironmentSpec` kennt zusätzlich `sea` (Wolkenmeer oder Wasser), `look`, `dayCycle` und `weather`.
+- **Neue Bausteine:** `EntitySpec.water` und `EntitySpec.waterfall` (Paket 23, `src/world/water/`) sowie `EntitySpec.mirror` (Paket 22, `src/world/materials/`), jeweils über `registerPrefab`.
+- **Tageszyklus:** Effekte können über `handle.applyVirtual(env, look?)` eine Umgebung anwenden, ohne den Store zu ändern.

@@ -82,6 +82,16 @@ const materialSchema = z.object({
   roughness: unit().optional(),
   alpha: unit().optional(),
   textureUrl: z.string().optional(),
+  preset: z.enum(['standard', 'metall', 'chrom', 'gold', 'glas', 'spiegel', 'lack', 'holz', 'stein', 'gummi', 'neon', 'hologramm']).optional(),
+  reflect: unit().optional(),
+  clearcoat: unit().optional(),
+  glass: unit().optional(),
+  ior: finite.min(1, 'muss zwischen 1 und 2.5 liegen').max(2.5, 'muss zwischen 1 und 2.5 liegen').optional(),
+  mirror: z.boolean().optional(),
+  emissiveIntensity: finite.min(0, 'muss zwischen 0 und 5 liegen').max(5, 'muss zwischen 0 und 5 liegen').optional(),
+  pattern: z.enum(['none', 'karo', 'streifen', 'rauschen', 'ziegel', 'holz', 'wellen']).optional(),
+  patternColor: hexColor.optional(),
+  uvScale: finite.min(0.1, 'muss zwischen 0.1 und 50 liegen').max(50, 'muss zwischen 0.1 und 50 liegen').optional(),
 });
 
 const physicsSchema = z.object({
@@ -184,6 +194,10 @@ const environmentSchema = z
       soundscapeRef: nonEmpty.optional(),
       volume: unit(),
     }),
+    sea: z.object({ mode: z.enum(['clouds', 'water']), color: hexColor.optional(), waves: unit().optional() }).optional(),
+    look: z.enum(['standard', 'filmisch', 'warm', 'kuehl', 'comic', 'retro']).optional(),
+    dayCycle: z.object({ enabled: z.boolean(), minutesPerDay: finite.min(1, 'muss zwischen 1 und 240 liegen').max(240, 'muss zwischen 1 und 240 liegen') }).optional(),
+    weather: z.enum(['none', 'rain', 'snow', 'fog', 'fireflies']).optional(),
   });
 
 const rulesSchema = z.object({

@@ -21,6 +21,7 @@ import type { AvatarFactory, GameConfig, GameContext, GameModule, WorldPersisten
 import { EventBus } from '../core/events';
 import { createWorldStore } from '../core/store';
 import { createUiRegistry, type UiRegistry } from '../core/ui';
+import { createQualityController } from './quality';
 
 export interface Game {
   ctx: GameContext;
@@ -169,6 +170,7 @@ export async function startGame(
     entityNodes: new Map(),
     avatarFactory: placeholderAvatarFactory(scene),
     persistence: placeholderPersistence(),
+    quality: createQualityController(),
     shadows: {
       add(mesh) {
         if (casters.has(mesh)) return;

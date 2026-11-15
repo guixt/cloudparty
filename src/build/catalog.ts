@@ -92,6 +92,13 @@ export const CATALOG: CatalogItem[] = [
     defaults: { name: 'Folien', media: { kind: 'slides', urls: [], slide: 0 }, physics: solid } },
   { key: 'media-text', ref: 'EntitySpec.media-text', label: 'Text', category: 'Medien', anchor: 'ground', scale: [1, 1, 1],
     defaults: { name: 'Text', media: { kind: 'text', text: 'Hallo Welt' }, physics: solid } },
+  // Wasser und Spiegel (Paket 23). Größe über scale: x/z = Ausdehnung, y = Tiefe bzw. Dicke.
+  { key: 'water', ref: 'EntitySpec.water', label: 'Wasser', category: 'Natur', anchor: 'ground', scale: [8, 1, 8],
+    defaults: { name: 'Wasser', material: { color: '#2c9fd9' }, physics: { mode: 'none' } } },
+  { key: 'mirror', ref: 'EntitySpec.mirror', label: 'Spiegel', category: 'Technik', anchor: 'ground', scale: [2.4, 2.4, 1],
+    defaults: { name: 'Spiegel', material: { preset: 'spiegel', mirror: true }, physics: solid } },
+  { key: 'waterfall', ref: 'EntitySpec.waterfall', label: 'Wasserfall', category: 'Natur', anchor: 'ground', scale: [1, 1, 1],
+    defaults: { name: 'Wasserfall', material: { color: '#a8def5' }, physics: { mode: 'none' } } },
 ];
 
 export function getCatalogItem(key: string): CatalogItem | undefined {

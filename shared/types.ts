@@ -15,6 +15,13 @@ export interface Transform {
   scale: Vec3;
 }
 
+/** Materialvoreinstellungen (setzen sinnvolle Werte; einzelne Felder überschreiben sie). */
+export const MATERIAL_PRESETS = ['standard', 'metall', 'chrom', 'gold', 'glas', 'spiegel', 'lack', 'holz', 'stein', 'gummi', 'neon', 'hologramm'] as const;
+export type MaterialPreset = (typeof MATERIAL_PRESETS)[number];
+/** Prozedurale Muster auf der Oberfläche (ohne Bilddatei). */
+export const MATERIAL_PATTERNS = ['none', 'karo', 'streifen', 'rauschen', 'ziegel', 'holz', 'wellen'] as const;
+export type MaterialPattern = (typeof MATERIAL_PATTERNS)[number];
+
 export interface MaterialSpec {
   /** Grundfarbe als #RRGGBB. */
   color?: string;
@@ -25,6 +32,26 @@ export interface MaterialSpec {
   /** 0..1, 1 = undurchsichtig. */
   alpha?: number;
   textureUrl?: string;
+  /** Voreinstellung; die übrigen Felder überschreiben einzelne Werte der Voreinstellung. */
+  preset?: MaterialPreset;
+  /** 0..1: Stärke der Umgebungs-Reflexion (Spiegelung von Himmel und Umgebung). */
+  reflect?: number;
+  /** 0..1: Klarlackschicht (zusätzlicher glänzender Film wie bei Autolack). */
+  clearcoat?: number;
+  /** 0..1: Glas – durchsichtig mit Lichtbrechung (Verzerrung des Dahinterliegenden). */
+  glass?: number;
+  /** Brechungsindex für Glas (1 = keine Brechung, 1.5 = Glas, 2.4 = Diamant). */
+  ior?: number;
+  /** Echtzeit-Spiegel (spiegelt die Szene wirklich); sinnvoll für ebene Flächen, kostet Leistung. */
+  mirror?: boolean;
+  /** 0..5: Helligkeit des Leuchtens (Faktor auf `emissive`). */
+  emissiveIntensity?: number;
+  /** Prozedurales Muster. */
+  pattern?: MaterialPattern;
+  /** Zweite Farbe des Musters als #RRGGBB. */
+  patternColor?: string;
+  /** Wiederholung des Musters/der Textur (0.1..50). */
+  uvScale?: number;
 }
 
 export type PhysicsMode = 'none' | 'static' | 'dynamic' | 'trigger';
@@ -89,10 +116,38 @@ export interface EntitySpec {
 }
 
 export type SkyPreset = 'clear' | 'dusk' | 'night' | 'custom';
+export type SeaMode = 'clouds' | 'water';
+export interface SeaSpec {
+  /** Was unter der Insel liegt: Wolkenmeer (Standard) oder Wasser. */
+  mode: SeaMode;
+  /** Wasserfarbe #RRGGBB. */
+  color?: string;
+  /** Wellenhöhe 0..1. */
+  waves?: number;
+}
+export const WEATHER_KINDS = ['none', 'rain', 'snow', 'fog', 'fireflies'] as const;
+export type WeatherKind = (typeof WEATHER_KINDS)[number];
+/** Stimmungsvorlagen (Farbkorrektur und Nachbearbeitung), siehe src/engine/environment/features/looks.ts. */
+export const LOOK_IDS = ['standard', 'filmisch', 'warm', 'kuehl', 'comic', 'retro'] as const;
+export type LookId = (typeof LOOK_IDS)[number];
+export interface DayCycleSpec {
+  enabled: boolean;
+  /** Dauer eines vollen Tages in Minuten (1..240). */
+  minutesPerDay: number;
+}
+
 export interface EnvironmentSpec {
   sky: { preset: SkyPreset; color?: string };
   light: { intensity: number; temperatureK: number; direction: { azimuth: number; elevation: number } | string };
   audio: { soundscapeRef?: string; volume: number };
+  /** Meer unter der Insel (Standard: Wolkenmeer). */
+  sea?: SeaSpec;
+  /** Stimmungsvorlage (Standard: standard). */
+  look?: LookId;
+  /** Tageszyklus (Sonne und Himmel wandern). */
+  dayCycle?: DayCycleSpec;
+  /** Wetter (Standard: none). */
+  weather?: WeatherKind;
 }
 
 export type MovementMode = 'grounded' | 'flying' | 'noclip';
@@ -159,6 +214,9 @@ export const PREFAB_REFS = [
   'EntitySpec.media-video',
   'EntitySpec.media-slides',
   'EntitySpec.media-text',
+  'EntitySpec.water',
+  'EntitySpec.mirror',
+  'EntitySpec.waterfall',
 ] as const;
 export type PrefabRef = (typeof PREFAB_REFS)[number];
 

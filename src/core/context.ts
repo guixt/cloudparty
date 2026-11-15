@@ -8,6 +8,7 @@ import type { HavokPlugin } from '@babylonjs/core/Physics/v2/Plugins/havokPlugin
 import type { Scene } from '@babylonjs/core/scene';
 import type { AvatarAppearance, AvatarMotion, AvatarState, EmoteState } from '../../shared/avatar';
 import type { WorldSpec } from '../../shared/types';
+import type { QualityApi } from '../engine/quality';
 import type { EventBus } from './events';
 import type { WorldStore } from './store';
 import type { UiRegistry } from './ui';
@@ -67,6 +68,8 @@ export interface GameContext {
   /** Erzeugt Avatar-Darstellungen. Paket 2 ersetzt den Platzhalter in init(). */
   avatarFactory: AvatarFactory;
   persistence: WorldPersistence;
+  /** Grafik-Qualitätsstufe und ihre Merkmale (siehe src/engine/quality.ts). */
+  quality: QualityApi;
   shadows: {
     /** Mesh als Schattenwerfer anmelden (Paket 1 hängt es an den ShadowGenerator). */
     add(mesh: AbstractMesh): void;

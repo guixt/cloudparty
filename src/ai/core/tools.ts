@@ -6,14 +6,21 @@ import { AI_LIMITS, getToolDefinition } from '../../../shared/aiTools';
 import type { EventBus } from '../../core/events';
 import type { WorldStore } from '../../core/store';
 import {
+  LOOK_IDS,
+  MATERIAL_PATTERNS,
+  MATERIAL_PRESETS,
+  WEATHER_KINDS,
   type EntitySpec,
+  type LookId,
   type MaterialSpec,
   type MediaKind,
   type MediaSpec,
   type ParticleSpec,
   type PhysicsSpec,
+  type SeaMode,
   type SkyPreset,
   type Vec3,
+  type WeatherKind,
 } from '../../../shared/types';
 import { PREFABS, createEntityFromPrefab, getPrefab } from '../../world/entities/prefabs';
 import { eulerToQuat } from '../../scripting/runtime/commands';
@@ -110,6 +117,19 @@ function parseMaterial(v: unknown, base?: MaterialSpec): MaterialSpec {
   if (m.metallic !== undefined) out.metallic = num(m.metallic, 'material.metallic', 0, 1);
   if (m.roughness !== undefined) out.roughness = num(m.roughness, 'material.roughness', 0, 1);
   if (m.alpha !== undefined) out.alpha = num(m.alpha, 'material.alpha', 0, 1);
+  if (m.preset !== undefined) out.preset = oneOf(m.preset, 'material.preset', MATERIAL_PRESETS);
+  if (m.reflect !== undefined) out.reflect = num(m.reflect, 'material.reflect', 0, 1);
+  if (m.clearcoat !== undefined) out.clearcoat = num(m.clearcoat, 'material.clearcoat', 0, 1);
+  if (m.glass !== undefined) out.glass = num(m.glass, 'material.glass', 0, 1);
+  if (m.ior !== undefined) out.ior = num(m.ior, 'material.ior', 1, 2.5);
+  if (m.mirror !== undefined) {
+    if (typeof m.mirror !== 'boolean') fail('material.mirror muss true oder false sein.');
+    out.mirror = m.mirror as boolean;
+  }
+  if (m.emissive_intensity !== undefined) out.emissiveIntensity = num(m.emissive_intensity, 'material.emissive_intensity', 0, 5);
+  if (m.pattern !== undefined) out.pattern = oneOf(m.pattern, 'material.pattern', MATERIAL_PATTERNS);
+  if (m.pattern_color !== undefined) out.patternColor = color(m.pattern_color, 'material.pattern_color');
+  if (m.uv_scale !== undefined) out.uvScale = num(m.uv_scale, 'material.uv_scale', 0.1, 50);
   return out;
 }
 function parsePhysics(v: unknown): PhysicsSpec {
@@ -279,9 +299,35 @@ const handlers: Record<string, Handler> = {
       };
       any = true;
     }
+    if (input.sea_mode !== undefined || input.sea_color !== undefined || input.sea_waves !== undefined) {
+      const sea = { mode: 'clouds' as SeaMode, ...(next.sea ?? {}) };
+      if (input.sea_mode !== undefined) sea.mode = oneOf(input.sea_mode, 'sea_mode', ['clouds', 'water'] as const);
+      if (input.sea_color !== undefined) sea.color = color(input.sea_color, 'sea_color');
+      if (input.sea_waves !== undefined) sea.waves = num(input.sea_waves, 'sea_waves', 0, 1);
+      next.sea = sea;
+      any = true;
+    }
+    if (input.look !== undefined) {
+      next.look = oneOf(input.look, 'look', LOOK_IDS) as LookId;
+      any = true;
+    }
+    if (input.weather !== undefined) {
+      next.weather = oneOf(input.weather, 'weather', WEATHER_KINDS) as WeatherKind;
+      any = true;
+    }
+    if (input.day_cycle_enabled !== undefined || input.day_cycle_minutes !== undefined) {
+      const cycle = { enabled: false, minutesPerDay: 20, ...(next.dayCycle ?? {}) };
+      if (input.day_cycle_enabled !== undefined) {
+        if (typeof input.day_cycle_enabled !== 'boolean') fail('day_cycle_enabled muss true oder false sein.');
+        cycle.enabled = input.day_cycle_enabled as boolean;
+      }
+      if (input.day_cycle_minutes !== undefined) cycle.minutesPerDay = num(input.day_cycle_minutes, 'day_cycle_minutes', 1, 240);
+      next.dayCycle = cycle;
+      any = true;
+    }
     if (!any) fail('set_environment: keine Änderung angegeben.');
     ctx.store.getState().setEnvironment(next, opts);
-    return ok('Umgebung geändert.', 'Himmel und Licht geändert', true);
+    return ok('Umgebung geändert.', 'Umgebung geändert', true);
   },
 
   async set_script(input, ctx) {

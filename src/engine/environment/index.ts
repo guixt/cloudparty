@@ -16,8 +16,10 @@ import type { GameContext, GameModule } from '../../core/context';
 import { createClouds, type Clouds } from './clouds';
 import { createIsland, type Island } from './island';
 import { createPostProcessing, type PostProcessing } from './post';
-import { kelvinToRgb, mulRgb, parseLightDirection, resolveSkyLook, scaleRgb, sunIntensityFrom, sunVector, toLinear } from './presets';
+import { type SkyLook, kelvinToRgb, mulRgb, parseLightDirection, resolveSkyLook, scaleRgb, sunIntensityFrom, sunVector, toLinear } from './presets';
 import { createSky, type SkyDome } from './sky';
+import { FEATURE_FACTORIES } from './featureList';
+import type { EnvironmentFeature, EnvironmentHandle } from './features';
 
 const rgb3 = (c: [number, number, number]) => new Color3(c[0], c[1], c[2]);
 
@@ -33,6 +35,8 @@ class EnvironmentRuntime {
   private islandDepth = DEFAULT_ISLAND.depth;
   private time = 0;
   private offs: (() => void)[] = [];
+  private features: EnvironmentFeature[] = [];
+  private currentEnv: EnvironmentSpec | null = null;
   private frame: ReturnType<Scene['onBeforeRenderObservable']['add']>;
 
   constructor(private ctx: GameContext) {
@@ -70,7 +74,34 @@ class EnvironmentRuntime {
       this.time += dt;
       this.sky.update(this.time);
       this.clouds.update(dt);
+      this.eachFeature((f) => f.update?.(dt, this.time));
     });
+
+    const handle: EnvironmentHandle = {
+      ctx,
+      scene,
+      sun: this.sun,
+      hemi: this.hemi,
+      shadows: this.shadows,
+      sky: this.sky,
+      clouds: this.clouds,
+      post: this.post,
+      getIsland: () => this.island,
+      getEnvironment: () => this.currentEnv ?? store.getState().world.environment,
+      getSunDirection: () => this.toSun,
+      seaY: -70,
+      applyVirtual: (env, look) => this.applyEnvironment(env, look),
+    };
+    for (const create of FEATURE_FACTORIES) {
+      try {
+        const feature = create(handle);
+        feature.onQuality?.(ctx.quality.features());
+        this.features.push(feature);
+      } catch (error) {
+        console.warn('[environment] Effekt konnte nicht gestartet werden', error);
+      }
+    }
+    this.offs.push(ctx.quality.onChange((_level, features) => this.eachFeature((f) => f.onQuality?.(features))));
 
     const world = store.getState().world;
     this.buildIsland(world.island);
@@ -90,6 +121,17 @@ class EnvironmentRuntime {
     this.islandRadius = island.radius;
     this.islandDepth = island.depth;
     this.updateShadowFrustum();
+    this.eachFeature((f) => f.islandChanged?.(this.island));
+  }
+
+  private eachFeature(fn: (feature: EnvironmentFeature) => void): void {
+    for (const feature of this.features) {
+      try {
+        fn(feature);
+      } catch (error) {
+        console.warn(`[environment] Fehler im Effekt "${feature.id}"`, error);
+      }
+    }
   }
 
   private toSun = new Vector3(0.4, 0.7, 0.5);
@@ -106,9 +148,9 @@ class EnvironmentRuntime {
     this.sun.shadowMaxZ = dist + this.islandRadius + this.islandDepth + 20;
   }
 
-  applyEnvironment(env: EnvironmentSpec): void {
+  applyEnvironment(env: EnvironmentSpec, lookOverride?: SkyLook): void {
     const { scene } = this.ctx;
-    const look = resolveSkyLook(env.sky);
+    const look = lookOverride ?? resolveSkyLook(env.sky);
     const dir = parseLightDirection(env.light?.direction);
     const real = sunVector(dir);
     // Beleuchtung nie flacher als 6° (sonst entstehen endlos lange Schatten).
@@ -138,12 +180,16 @@ class EnvironmentRuntime {
     this.sky.apply(look, new Vector3(real[0], real[1], real[2]), sunVisible);
     this.clouds.apply(look);
     this.post.setExposure(look.exposure);
+    this.currentEnv = env;
+    this.eachFeature((f) => f.apply?.(env));
   }
 
   dispose(): void {
     const { scene } = this.ctx;
     for (const off of this.offs) off();
     scene.onBeforeRenderObservable.remove(this.frame);
+    this.eachFeature((f) => f.dispose?.());
+    this.features = [];
     this.island?.dispose();
     this.clouds.dispose();
     this.sky.dispose();

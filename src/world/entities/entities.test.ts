@@ -14,7 +14,9 @@ const base = (): EntitySpec => ({
 
 describe('Prefab-Register', () => {
   it('kennt alle Nicht-Medien-Refs', () => {
-    for (const ref of PREFAB_REFS.filter((r) => !r.startsWith('EntitySpec.media-'))) {
+    // Wasser, Spiegel und Wasserfall registriert Paket 23 (src/world/water/).
+    const lateRefs = ['EntitySpec.water', 'EntitySpec.mirror', 'EntitySpec.waterfall'];
+    for (const ref of PREFAB_REFS.filter((r) => !r.startsWith('EntitySpec.media-') && !lateRefs.includes(r))) {
       const def = getPrefab(ref);
       expect(def, ref).toBeTruthy();
       expect(def!.label.length).toBeGreaterThan(0);

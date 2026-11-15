@@ -35,3 +35,7 @@ Kreative Freiheit. Wer Baurecht hat, kann alles bauen, umfärben, mit Physik ver
 
 - Flache Tafel mit schmalem dunklem Rahmen auf zwei Standfüßen oder frei schwebend; Inhalt füllt die Fläche (Bild, Webseite, Video, Folien, Text).
 - Folien-Tafel mit Vor/Zurück direkt an der Tafel bedienbar.
+
+## Reflexionen und Wasser
+
+Zum Look gehören glänzende Oberflächen und Spiegelungen: Metall und Glas spiegeln den Himmel und die Umgebung, Wasser spiegelt Himmel und Inselrand und hat sanfte Wellen. Wasser und Spiegel sind farbig getönt, aber klar; keine matschigen Texturen. Ein Look („Stimmungsvorlage") ändert Farbe und Kontrast, nicht die Form der Welt. Teure Effekte bleiben abschaltbar (Qualitätsstufen).
