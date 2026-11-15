@@ -3,6 +3,7 @@ import { SCRIPT_EVENT_TIMEOUT_MS } from '../../../shared/scriptApi';
 import type { EntitySpec } from '../../../shared/types';
 import { EventBus, type GameEvents } from '../../core/events';
 import { createWorldStore } from '../../core/store';
+import { compactToGraph } from '../../../shared/graphCompact';
 import { ScriptHost, TIMEOUT_MESSAGE, type WorkerLike } from './host';
 
 class FakeWorker implements WorkerLike {
@@ -216,3 +217,67 @@ describe('ScriptHost', () => {
     expect(workers[0].events().map((e) => e.name)).toEqual(['onStart', 'onClick']);
   });
 });
+
+describe('ScriptHost mit Logik-Graph', () => {
+  const graph = (text = 'A') =>
+    compactToGraph({ nodes: [{ id: 'k', type: 'on_click' }, { id: 's', type: 'say', params: { text } }], connections: ['k.then -> s.in'] });
+  const noScript = (id: string, extra: Partial<EntitySpec>): EntitySpec => ({ ...entity(id, ''), script: undefined, ...extra });
+
+  it('ein Entity nur mit Graph läuft', () => {
+    const { add, workers, host } = setup();
+    add(noScript('g', { graph: graph() }));
+    expect(workers).toHaveLength(1);
+    expect(host.getStatus('g')).toBe('running');
+    workers[0].emit({ type: 'booted' });
+    expect(workers[0].sent.find((m) => m.type === 'init').source).toContain('function onClick');
+  });
+
+  it('eine Änderung des Graphen startet das Skript neu, gleiche Werte nicht', () => {
+    const { add, workers, store } = setup();
+    add(noScript('g', { graph: graph('A') }));
+    store.getState().updateEntity('g', { graph: graph('A') });
+    expect(workers).toHaveLength(1);
+    store.getState().updateEntity('g', { graph: graph('B') });
+    expect(workers).toHaveLength(2);
+    expect(workers[0].terminated).toBe(true);
+    workers[1].emit({ type: 'booted' });
+    expect(workers[1].sent.find((m) => m.type === 'init').source).toContain('"B"');
+  });
+
+  it('ein fehlerhafter Graph meldet Fehler und fällt auf das Skript zurück', () => {
+    const { add, workers, log, host } = setup();
+    const broken = { ...graph(), edges: [{ from: { node: 'k', port: 'name' }, to: { node: 's', port: 'in' } }] };
+    add(entity('g', 'function onStart(){}', { graph: broken }));
+    const errors = log.filter((l) => l.type === 'script.log' && l.payload.level === 'error');
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0].payload.message).toMatch(/Logik-Graph: .*Beim Anklicken/);
+    expect(log.filter((l) => l.type === 'script.status' && l.payload.status === 'error')).toHaveLength(1);
+    expect(workers).toHaveLength(1);
+    expect(host.getStatus('g')).toBe('running');
+  });
+
+  it('ein fehlerhafter Graph ohne Skript endet im Status error; Reparatur startet', () => {
+    const { add, workers, log, host, store } = setup();
+    const broken = { ...graph(), edges: [{ from: { node: 'k', port: 'name' }, to: { node: 's', port: 'in' } }] };
+    add(noScript('g', { graph: broken }));
+    expect(workers).toHaveLength(0);
+    expect(host.getStatus('g')).toBe('error');
+    expect(log.some((l) => l.type === 'script.log' && l.payload.level === 'error')).toBe(true);
+    store.getState().updateEntity('g', { graph: graph() });
+    expect(workers).toHaveLength(1);
+    expect(host.getStatus('g')).toBe('running');
+  });
+
+  it('ein deaktivierter Graph fällt auf entity.script zurück', () => {
+    const { add, workers, store, log } = setup();
+    add(entity('g', 'function onStart(){}', { graph: graph() }));
+    workers[0].emit({ type: 'booted' });
+    expect(workers[0].sent.find((m) => m.type === 'init').source).toContain('onClick');
+    store.getState().updateEntity('g', { graph: { ...graph(), enabled: false } });
+    expect(workers).toHaveLength(2);
+    workers[1].emit({ type: 'booted' });
+    expect(workers[1].sent.find((m) => m.type === 'init').source).toBe('function onStart(){}');
+    expect(log.some((l) => l.type === 'script.log')).toBe(false);
+  });
+});
+

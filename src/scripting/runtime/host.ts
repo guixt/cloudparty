@@ -2,6 +2,7 @@
  * Hauptthread-Verwaltung der Skript-Worker: Lebenszyklus, Ereignisse,
  * Watchdog (Zeitlimit), Ratenbegrenzung und Anwenden der Befehle.
  */
+import { entityScriptSource, resolveEntityScript } from '../../../shared/graphCompile';
 import { SCRIPT_EVENT_TIMEOUT_MS, SCRIPT_TICK_HZ } from '../../../shared/scriptApi';
 import type { EntitySpec } from '../../../shared/types';
 import type { EventBus } from '../../core/events';
@@ -65,14 +66,24 @@ interface Rec {
   lastSnapshot: { transform: EntitySpec['transform']; state: EntitySpec['state']; name: EntitySpec['name'] };
 }
 
-const runnable = (entity: EntitySpec | undefined): entity is EntitySpec =>
-  Boolean(entity?.script?.enabled && entity.script.source.trim());
+const runnable = (entity: EntitySpec | undefined): entity is EntitySpec => {
+  const script = entity ? entityScriptSource(entity) : null;
+  return Boolean(script?.enabled && script.source.trim());
+};
+
+/** Hat sich Skript oder Graph geändert (stabiler Vergleich der Serialisierung)? */
+const scriptChanged = (prev: EntitySpec, next: EntitySpec): boolean =>
+  prev.script?.source !== next.script?.source ||
+  prev.script?.enabled !== next.script?.enabled ||
+  (prev.graph !== next.graph && JSON.stringify(prev.graph) !== JSON.stringify(next.graph));
 
 export class ScriptHost {
   private recs = new Map<string, Rec>();
   /** Skripte, die nicht laufen: 'error' bleibt bis zur Änderung des Skripts oder Moduswechsel. */
   private final = new Map<string, 'stopped' | 'error'>();
   private unsubs: (() => void)[] = [];
+  /** Entities, deren Graph-Fehler bei diesem Start schon gemeldet wurden. */
+  private graphReported = new Set<string>();
   private commandDeps: CommandDeps;
 
   constructor(
@@ -104,11 +115,12 @@ export class ScriptHost {
       bus.on('entity.removed', ({ entity }) => {
         this.stop(entity.id, false);
         this.final.delete(entity.id);
+        this.graphReported.delete(entity.id);
       }),
     );
     u.push(
       bus.on('entity.changed', ({ entity, prev }) => {
-        if (prev.script?.source !== entity.script?.source || prev.script?.enabled !== entity.script?.enabled) {
+        if (scriptChanged(prev, entity)) {
           this.restart(entity.id);
           return;
         }
@@ -136,6 +148,7 @@ export class ScriptHost {
   stopAll(): void {
     for (const id of [...this.recs.keys()]) this.stop(id, false);
     this.final.clear();
+    this.graphReported.clear();
   }
 
   dispose(): void {
@@ -156,6 +169,7 @@ export class ScriptHost {
   restart(entityId: string): void {
     this.stop(entityId, false);
     this.final.delete(entityId);
+    this.graphReported.delete(entityId);
     this.start(entityId);
   }
 
@@ -165,7 +179,16 @@ export class ScriptHost {
     if (this.recs.has(id)) return;
     const { store, bus } = this.deps;
     const entity = store.getState().entities[id];
-    if (!runnable(entity) || store.getState().mode !== 'play') return;
+    if (!entity || store.getState().mode !== 'play') return;
+    const resolved = resolveEntityScript(entity);
+    if (resolved && resolved.graphErrors.length > 0 && !this.graphReported.has(id)) {
+      // Fehlerhafter Graph: jedes Problem melden, einmal Status „error“; mit entity.script geht es danach weiter.
+      this.graphReported.add(id);
+      for (const issue of resolved.graphErrors) this.emitLog(id, 'error', `Logik-Graph: ${issue.message}`);
+      bus.emit('script.status', { entityId: id, status: 'error', message: 'Der Logik-Graph enthält Fehler.' });
+      if (!runnable(entity)) this.final.set(id, 'error');
+    }
+    if (!runnable(entity)) return;
     if (this.final.get(id) === 'error') return;
     let worker: WorkerLike;
     try {
@@ -183,7 +206,7 @@ export class ScriptHost {
       worker,
       status: 'running',
       phase: 'booting',
-      source: entity.script?.source ?? "",
+      source: entityScriptSource(entity)?.source ?? '',
       dead: false,
       handlers: new Set(),
       queue: [],
