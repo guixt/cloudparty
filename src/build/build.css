@@ -4,7 +4,7 @@
 .cpb-scroll { overflow-y: auto; min-height: 0; flex: 1; margin-top: 4px; padding-right: 2px; }
 .cpb-hint { font-size: 11px; margin: 6px 0 2px; line-height: 1.35; }
 .cpb-group { margin: 10px 0 6px; font-size: 12px; color: var(--cp-muted); font-weight: 700; }
-.cpb-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.cpb-palette-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .cpb-item { display: flex; align-items: center; gap: 8px; font: inherit; font-size: 13px; color: var(--cp-text); text-align: left;
   background: rgba(255, 255, 255, 0.07); border: 1px solid var(--cp-border); border-radius: 8px; padding: 6px 8px; cursor: pointer; min-width: 0; }
 .cpb-item:hover { background: rgba(255, 255, 255, 0.16); }
@@ -57,3 +57,10 @@
 .cpb-preset-ball { width: 30px; height: 30px; border-radius: 50%; box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.3); }
 .cpb-preset-name { font-size: 10px; line-height: 1.1; }
 .cpb-check { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; }
+
+/* Bausteinliste: einklappbar, halbtransparent, volle Beschriftungen */
+.cpb-palette-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; background: none; border: 0; padding: 0; margin: 0 0 4px; color: inherit; font: inherit; cursor: pointer; }
+.cpb-palette-head .cp-heading { margin: 0; }
+.cpb-panel-collapsed { padding-bottom: 8px; }
+.cpb-panel-collapsed .cpb-palette-head { margin-bottom: 0; }
+[data-testid='palette'].cpb-panel:not(.cpb-panel-collapsed) { max-height: 60vh; }
