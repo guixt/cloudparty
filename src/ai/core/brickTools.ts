@@ -3,12 +3,23 @@
  * Die Rechnung steckt in shared/bricks.ts.
  */
 import { AI_LIMITS } from '../../../shared/aiTools';
-import { BRICK_KINDS, placedFromEntity, BRICK_REF, MAX_BRICK_STUDS, STUD, PLATE_H, brickState, brickWorldPos, kindPlates, floorFootprints, layerFootprints, restLevel, type BrickKind, type Footprint, type PlacedBrick } from '../../../shared/bricks';
+import { BRICK_KINDS, placedFromEntity, profilePieces, type ProfileEdge, type ProfileSegment, BRICK_REF, MAX_BRICK_STUDS, STUD, PLATE_H, brickState, brickWorldPos, kindPlates, floorFootprints, layerFootprints, restLevel, type BrickKind, type Footprint, type PlacedBrick } from '../../../shared/bricks';
 import { newEntityId, type EntitySpec, type Vec3 } from '../../../shared/types';
+import { yawQuat } from './buildGeometry';
 import { createEntityFromPrefab } from '../../world/entities/prefabs';
 import { applyCommon, coord, reserveEntities, fail, int, obj, ok, opts, str, type Handler, type RunCounters, type ToolContext } from './tools';
 
 const MAX_BRICKS = AI_LIMITS.maxPerCall;
+
+/** `rot` (0/90/180/270) oder der alte Schalter `rot90`. */
+function parseRot(r: Record<string, unknown>): number {
+  if (r.rot !== undefined) {
+    const v = typeof r.rot === 'number' ? ((Math.round(r.rot) % 360) + 360) % 360 : NaN;
+    if (![0, 90, 180, 270].includes(v)) fail('rot muss 0, 90, 180 oder 270 sein.');
+    return v;
+  }
+  return r.rot90 === true ? 90 : 0;
+}
 
 function colorOf(v: unknown, label: string): string | undefined {
   if (v === undefined) return undefined;
@@ -21,7 +32,9 @@ interface Spec extends Footprint {
   level?: number;
   kind: BrickKind;
   color?: string;
-  rot90: boolean;
+  /** Drehung in Grad: 0, 90, 180 oder 270 (Schrägen fallen bei 0 nach +z, 90 nach +x, 180 nach −z, 270 nach −x). */
+  rot: number;
+  studs?: boolean;
 }
 
 async function place(specs: Spec[], origin: Vec3, name: string, ctx: ToolContext, counters: RunCounters): Promise<{ ids: string[]; group: string; bounds: string }> {
@@ -34,17 +47,18 @@ async function place(specs: Spec[], origin: Vec3, name: string, ctx: ToolContext
   specs.forEach((s, i) => {
     const st = brickState({ w: s.w, d: s.d, kind: s.kind });
     const plates = kindPlates(st.kind, st.d);
-    const fp: Footprint = { gx: s.gx, gz: s.gz, w: s.rot90 ? st.d : st.w, d: s.rot90 ? st.w : st.d };
+    const turned = s.rot === 90 || s.rot === 270;
+    const fp: Footprint = { gx: s.gx, gz: s.gz, w: turned ? st.d : st.w, d: turned ? st.w : st.d };
     const level = s.level ?? restLevel(fp, placed);
     const brick: PlacedBrick = { ...fp, level, plates };
     placed.push(brick);
     mine.push(brick);
     const base = createEntityFromPrefab(BRICK_REF, [0, 0, 0]);
     // state.w/d sind die unrotierten Maße; die Drehung steckt in der Entity.
-    const common: Record<string, unknown> = { state: { w: st.w, d: st.d, kind: st.kind }, ...(s.color ? { material: { color: s.color, preset: 'lack' } } : {}) };
+    const common: Record<string, unknown> = { state: { w: st.w, d: st.d, kind: st.kind, ...(s.studs === false ? { studs: false } : {}) }, ...(s.color ? { material: { color: s.color, preset: 'lack' } } : {}) };
     const entity = applyCommon(base, common, base);
     entity.transform.pos = brickWorldPos(brick, origin);
-    if (s.rot90) entity.transform.rot = [0, Math.SQRT1_2, 0, Math.SQRT1_2];
+    if (s.rot !== 0) entity.transform.rot = yawQuat(s.rot);
     entity.name = `${name} ${i + 1}`;
     entity.group = group.id;
     entity.groupName = group.name;
@@ -84,6 +98,31 @@ function inOpening(fp: Footprint, layer: number, cols: number, rows: number, ope
 }
 
 export const brickHandlers: Record<string, Handler> = {
+  async bricks_profile(input, ctx, counters) {
+    const gx0 = int(input.x, 'x', -500, 500);
+    const gz0 = int(input.z, 'z', -500, 500);
+    const width = int(input.width, 'width', 1, 64);
+    const base = input.base === undefined ? 0 : int(input.base, 'base', 0, 400);
+    const origin = originOf(input);
+    const color = colorOf(input.color, 'color');
+    const raw = input.segments;
+    if (!Array.isArray(raw) || raw.length === 0 || raw.length > 20) fail('segments muss eine Liste mit 1 bis 20 Einträgen sein.');
+    const edges = ['none', 'slope', 'curve'];
+    const segments: ProfileSegment[] = (raw as unknown[]).map((v, i) => {
+      const r = obj(v, `segments[${i}]`);
+      const eb = r.edge_before === undefined ? 'none' : String(r.edge_before);
+      const ea = r.edge_after === undefined ? 'none' : String(r.edge_after);
+      if (!edges.includes(eb) || !edges.includes(ea)) fail(`segments[${i}]: edge_before/edge_after müssen none, slope oder curve sein.`);
+      return { len: int(r.len, `segments[${i}].len`, 1, 64), h: int(r.h, `segments[${i}].h`, 1, 120), edgeBefore: eb as ProfileEdge, edgeAfter: ea as ProfileEdge, color: colorOf(r.color, `segments[${i}].color`) };
+    });
+    const pieces = profilePieces(width, segments, base);
+    if (pieces.length > MAX_BRICKS) fail(`Das Profil braucht ${pieces.length} Teile (höchstens ${MAX_BRICKS} je Aufruf). Teile es in zwei Aufrufe.`);
+    const specs: Spec[] = pieces.map((p) => ({ gx: gx0 + p.gx, gz: gz0 + p.gz, w: p.w, d: p.d, level: p.level, kind: p.kind, color: segments[p.segment].color ?? color, rot: p.rot, studs: p.studs }));
+    const name = input.name === undefined ? 'Profil' : str(input.name, 'name', 80, true) || 'Profil';
+    const { ids, group, bounds } = await place(specs, origin, name, ctx, counters);
+    return ok(`Profil gebaut: ${ids.length} Teile, group="${group}". ${bounds} Segmente liegen nacheinander längs z ab Ecke (x=${gx0}, z=${gz0}) Noppen, Breite längs x.`, `${name} gebaut (${ids.length} Teile)`, true);
+  },
+
   async add_bricks(input, ctx, counters) {
     const list = input.bricks;
     if (!Array.isArray(list) || list.length === 0) fail('bricks muss eine nicht leere Liste sein.');
@@ -92,7 +131,7 @@ export const brickHandlers: Record<string, Handler> = {
     const specs: Spec[] = (list as unknown[]).map((b, i) => {
       const r = obj(b, `bricks[${i}]`);
       const kind = r.kind === undefined ? 'stein' : r.kind;
-      if (!BRICK_KINDS.includes(kind as BrickKind)) fail(`bricks[${i}].kind muss stein, platte oder fliese sein.`);
+      if (!BRICK_KINDS.includes(kind as BrickKind)) fail(`bricks[${i}].kind muss eines von ${BRICK_KINDS.join(', ')} sein.`);
       return {
         gx: int(r.x, `bricks[${i}].x`, -500, 500),
         gz: int(r.z, `bricks[${i}].z`, -500, 500),
@@ -101,7 +140,8 @@ export const brickHandlers: Record<string, Handler> = {
         ...(r.y === undefined ? {} : { level: int(r.y, `bricks[${i}].y`, 0, 400) }),
         kind: kind as BrickKind,
         color: colorOf(r.color, `bricks[${i}].color`),
-        rot90: r.rot90 === true,
+        rot: parseRot(r),
+        ...(r.studs === false ? { studs: false } : {}),
       };
     });
     const name = input.name === undefined ? 'Steine' : str(input.name, 'name', 80, true) || 'Steine';
@@ -133,7 +173,7 @@ export const brickHandlers: Record<string, Handler> = {
         if (mode === 'wall' && inOpening(fp, layer, cols, rows, openings)) continue;
         // Mauerwerk: Schicht n steht auf Schicht n-1 (Stein 3 Platten); Boden aus Platten.
         const plates = mode === 'wall' ? 3 : 1;
-        specs.push({ gx: gx0 + fp.gx, gz: gz0 + fp.gz, w: fp.w, d: fp.d, level: layer * plates, kind: mode === 'wall' ? 'stein' : 'platte', color, rot90: false });
+        specs.push({ gx: gx0 + fp.gx, gz: gz0 + fp.gz, w: fp.w, d: fp.d, level: layer * plates, kind: mode === 'wall' ? 'stein' : 'platte', color, rot: 0 });
       }
       if (specs.length > MAX_BRICKS) fail(`Zu viele Steine (mehr als ${MAX_BRICKS} pro Aufruf); teile die Arbeit in mehrere Aufrufe (weniger Schichten oder kleineres Rechteck).`);
     }

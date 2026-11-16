@@ -142,3 +142,30 @@ describe('Maße und Öffnungen von Klemmbaustein-Wänden', () => {
     expect(bricks.filter((e) => e.transform.pos[0] > 6 && e.transform.pos[0] < 6.5 && e.transform.pos[1] < 1.1)).toHaveLength(0);
   });
 });
+
+describe('Drehungen und Profil', () => {
+  it('rot 180 und 270: Schrägen fallen nach −z und −x, Grundfläche vertauscht bei 270', async () => {
+    const t = setup();
+    const r = await t.run('add_bricks', { bricks: [{ x: 0, z: 0, w: 2, d: 3, kind: 'bogen', rot: 180 }, { x: 10, z: 0, w: 2, d: 3, kind: 'schraeg', rot: 270 }] });
+    expect(r.ok).toBe(true);
+    const [a, b] = t.all().filter((e) => e.ref === 'EntitySpec.brick');
+    expect(a.transform.rot[1]).toBeCloseTo(1, 5); // 180° um Y
+    expect(a.transform.pos[0]).toBeCloseTo(0.25); // 2 breit: Mitte x = 1 Noppe
+    expect(a.transform.pos[2]).toBeCloseTo(0.375); // 3 tief
+    expect(b.transform.pos[0]).toBeCloseTo((10 + 1.5) * 0.25); // 270° vertauscht: 3 breit
+    expect((await t.run('add_bricks', { bricks: [{ x: 0, z: 0, w: 2, d: 2, rot: 45 }] })).ok).toBe(false);
+    expect((await t.run('add_bricks', { bricks: [{ x: 20, z: 0, w: 2, d: 2, kind: 'bogenlauf' }, { x: 30, z: 0, w: 4, d: 4, kind: 'kuppel' }, { x: 40, z: 0, w: 2, d: 2, kind: 'viertel' }, { x: 50, z: 0, w: 2, d: 2, kind: 'rundplatte' }] })).ok).toBe(true);
+  });
+  it('bricks_profile baut Rumpf mit Rändern in einem Aufruf', async () => {
+    const t = setup();
+    const r = await t.run('bricks_profile', { x: 0, z: 0, width: 8, segments: [{ len: 6, h: 5, edge_before: 'curve' }, { len: 8, h: 9 }, { len: 6, h: 6, edge_after: 'slope' }] });
+    expect(r.ok).toBe(true);
+    const bricks = t.all().filter((e) => e.ref === 'EntitySpec.brick');
+    expect(bricks.some((e) => e.state?.kind === 'bogen')).toBe(true);
+    expect(bricks.some((e) => e.state?.kind === 'schraeg')).toBe(true);
+    expect(bricks.some((e) => e.state?.studs === false)).toBe(true);
+    expect(r.content).toContain('Maße: min');
+    expect((await t.run('bricks_profile', { x: 0, z: 0, width: 8, segments: [] })).ok).toBe(false);
+    expect((await t.run('bricks_profile', { x: 0, z: 0, width: 8, segments: [{ len: 4, h: 3, edge_after: 'wild' }] })).ok).toBe(false);
+  });
+});

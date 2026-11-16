@@ -10,23 +10,30 @@ export const STUD_HEIGHT = 0.06;
 export const BRICK_REF = 'EntitySpec.brick';
 export const MAX_BRICK_STUDS = 16;
 
-/** stein, platte, fliese (ohne Noppen), schraeg (Dachstein: Noppen nur in der hinteren Reihe), rund (Rundstein, w = d, eine Noppe in der Mitte), rad (Rad: Achse längs x, Breite 1 Noppe, Durchmesser d Noppen). */
-export type BrickKind = 'stein' | 'platte' | 'fliese' | 'schraeg' | 'rund' | 'rad';
-export const BRICK_KINDS: readonly BrickKind[] = ['stein', 'platte', 'fliese', 'schraeg', 'rund', 'rad'];
+/**
+ * Arten: stein, platte, fliese (glatt), schraeg (Schrägstein, Noppen nur hinten), bogen (abgerundete Schräge),
+ * schraeg_um (umgedrehte Schräge), viertel (Viertelrundung, w = d), bogenlauf (Radlauf: Länge d ≥ 4, Dicke w),
+ * rund (Rundstein, w = d), rundplatte (runde Platte, w = d), kuppel (Halbkugel, w = d), rad (Rad: Achse längs x, Breite 1, Durchmesser d).
+ */
+export type BrickKind = 'stein' | 'platte' | 'fliese' | 'schraeg' | 'bogen' | 'schraeg_um' | 'viertel' | 'bogenlauf' | 'rund' | 'rundplatte' | 'kuppel' | 'rad';
+export const BRICK_KINDS: readonly BrickKind[] = ['stein', 'platte', 'fliese', 'schraeg', 'bogen', 'schraeg_um', 'viertel', 'bogenlauf', 'rund', 'rundplatte', 'kuppel', 'rad'];
 
-/** Höhe in Platten (Stein 3, Platte und Fliese 1). */
+/** Höhe in Platten (Stein 3, Platte, Fliese und Rundplatte 1; Rad und Kuppel nach Größe). */
 export function kindPlates(kind: BrickKind, d = 2): number {
   if (kind === 'rad') return Math.round(d * (STUD / PLATE_H)); // Durchmesser d Noppen
-  return kind === 'platte' || kind === 'fliese' ? 1 : 3;
+  if (kind === 'kuppel') return Math.max(2, Math.round((d * STUD) / 2 / PLATE_H)); // Halbkugel: Höhe = Radius
+  return kind === 'platte' || kind === 'fliese' || kind === 'rundplatte' ? 1 : 3;
 }
 export function kindHasStuds(kind: BrickKind): boolean {
-  return kind !== 'fliese' && kind !== 'rad';
+  return kind !== 'fliese' && kind !== 'rad' && kind !== 'kuppel';
 }
 
 export interface BrickState {
   w: number;
   d: number;
   kind: BrickKind;
+  /** false = ganz ohne Noppen (verdeckte Lagen). */
+  studs: boolean;
 }
 
 function clampInt(v: unknown, min: number, max: number, fallback: number): number {
@@ -34,18 +41,48 @@ function clampInt(v: unknown, min: number, max: number, fallback: number): numbe
   return Math.min(max, Math.max(min, n));
 }
 
-/** Liest `w`, `d`, `kind` aus einem freien `state`-Objekt (ungültiges wird zu Standardwerten). */
+/** Liest `w`, `d`, `kind` (und `studs`) aus einem freien `state`-Objekt (ungültiges wird zu Standardwerten). */
 export function brickState(state: Record<string, unknown> | undefined): BrickState {
   const kind = BRICK_KINDS.includes(state?.kind as BrickKind) ? (state!.kind as BrickKind) : 'stein';
   let w = clampInt(state?.w, 1, MAX_BRICK_STUDS, 2);
   let d = clampInt(state?.d, 1, MAX_BRICK_STUDS, 4);
-  if (kind === 'rund') d = w;
-  if (kind === 'schraeg') d = Math.max(2, d);
+  if (kind === 'rund' || kind === 'rundplatte' || kind === 'viertel' || kind === 'kuppel') d = w;
+  if (kind === 'schraeg' || kind === 'bogen' || kind === 'schraeg_um') d = Math.max(2, d);
+  if (kind === 'bogenlauf') d = Math.max(4, d);
+  if (kind === 'kuppel') {
+    w = Math.max(2, w);
+    d = w;
+  }
   if (kind === 'rad') {
     w = 1;
     d = Math.min(8, Math.max(2, d - (d % 2))); // gerader Durchmesser, damit die Höhe auf das Plattenraster passt
   }
-  return { w, d, kind };
+  return { w, d, kind, studs: state?.studs !== false };
+}
+
+/**
+ * Noppen-Positionen (x, z relativ zur Mitte der Grundfläche, in Metern) einer Art.
+ * Schräge/Bogen: nur die hintere Reihe (−z); Viertel: Zellen innerhalb der Rundung (Ecke bei −x/−z); rund: Mitte.
+ */
+export function studSpots(s: BrickState): [number, number][] {
+  if (!s.studs || !kindHasStuds(s.kind)) return [];
+  const out: [number, number][] = [];
+  const cx = (i: number) => (i + 0.5 - s.w / 2) * STUD;
+  const cz = (j: number) => (j + 0.5 - s.d / 2) * STUD;
+  if (s.kind === 'rund') return [[0, 0]];
+  if (s.kind === 'rundplatte' || s.kind === 'viertel') {
+    for (let i = 0; i < s.w; i++) {
+      for (let j = 0; j < s.d; j++) {
+        if (s.kind === 'rundplatte') {
+          if (s.w <= 2 ? i === 0 && j === 0 : Math.hypot(cx(i), cz(j)) <= (s.w * STUD) / 2 - 0.6 * STUD) out.push([s.w <= 2 ? 0 : cx(i), s.w <= 2 ? 0 : cz(j)]);
+        } else if (Math.hypot((i + 0.5) * STUD, (j + 0.5) * STUD) <= s.w * STUD - 0.35 * STUD) out.push([cx(i), cz(j)]);
+      }
+    }
+    return out;
+  }
+  const rows = s.kind === 'schraeg' || s.kind === 'bogen' ? 1 : s.d;
+  for (let i = 0; i < s.w; i++) for (let j = 0; j < rows; j++) out.push([cx(i), cz(j)]);
+  return out;
 }
 
 /** Maße in Metern (ohne Noppen). */
@@ -163,5 +200,92 @@ export function floorFootprints(cols: number, rows: number, maxSide = MAX_BRICK_
     }
     z += d;
   }
+  return out;
+}
+
+export type ProfileEdge = 'none' | 'slope' | 'curve';
+export interface ProfileSegment {
+  /** Länge in Noppen längs z. */
+  len: number;
+  /** Höhe in Platten über `base` (≥ 1). */
+  h: number;
+  /** Rand zum Segmentanfang (−z) bzw. -ende (+z): Schrägstein oder Bogenstein statt eines Quaders. */
+  edgeBefore?: ProfileEdge;
+  edgeAfter?: ProfileEdge;
+  color?: string;
+}
+export interface ProfilePiece extends Footprint {
+  level: number;
+  kind: BrickKind;
+  /** Drehung in Grad (0, 90, 180, 270). */
+  rot: number;
+  segment: number;
+  studs: boolean;
+}
+
+/** Teilt eine Strecke in Stücke von höchstens `max` Noppen (ohne 1er-Reste, wenn vermeidbar). */
+function chunks(len: number, max = MAX_BRICK_STUDS): number[] {
+  const out: number[] = [];
+  let rest = Math.floor(len);
+  while (rest > 0) {
+    let n = Math.min(max, rest);
+    if (rest - n === 1 && n > 2) n -= 1;
+    out.push(n);
+    rest -= n;
+  }
+  return out;
+}
+
+/**
+ * Seitenprofil als Höhenverlauf: Segmente längs z (in Noppen), Breite `width` längs x. Je Segment entstehen unten Platten (Rest von h/3) und darüber
+ * Steinlagen; die Lagen unter der obersten haben keine Noppen. Mit edge_before/edge_after wird die äußerste 2-Noppen-Reihe der obersten Lage durch einen
+ * Schräg- bzw. Bogenstein ersetzt (Anfang: fällt nach −z, Ende: nach +z). Koordinaten relativ zur Ecke (0, 0).
+ */
+export function profilePieces(width: number, segments: readonly ProfileSegment[], base = 0): ProfilePiece[] {
+  const out: ProfilePiece[] = [];
+  let z = 0;
+  segments.forEach((seg, index) => {
+    const len = Math.max(1, Math.floor(seg.len));
+    const h = Math.max(1, Math.floor(seg.h));
+    const remainder = h % 3;
+    const bricks = Math.floor(h / 3);
+    const layers: { level: number; plates: number }[] = [];
+    let level = base;
+    for (let i = 0; i < remainder; i++) layers.push({ level: level++, plates: 1 });
+    for (let i = 0; i < bricks; i++) {
+      layers.push({ level, plates: 3 });
+      level += 3;
+    }
+    const topIndex = layers.length - 1;
+    layers.forEach((layer, li) => {
+      const top = li === topIndex;
+      const kind: BrickKind = layer.plates === 3 ? 'stein' : 'platte';
+      const useBefore = top && layer.plates === 3 && seg.edgeBefore && seg.edgeBefore !== 'none' && len >= 3;
+      const useAfter = top && layer.plates === 3 && seg.edgeAfter && seg.edgeAfter !== 'none' && len >= 3;
+      const startRow = useBefore ? 2 : 0;
+      const endRow = len - (useAfter ? 2 : 0);
+      // Hauptfläche: möglichst große Stücke.
+      let zz = z + startRow;
+      for (const d of chunks(endRow - startRow)) {
+        let xx = 0;
+        for (const w of chunks(width)) {
+          out.push({ gx: xx, gz: zz, w, d, level: layer.level, kind, rot: 0, segment: index, studs: top });
+          xx += w;
+        }
+        zz += d;
+      }
+      // Ränder
+      const edgePiece = (edge: ProfileEdge | undefined, gz: number, rot: number) => {
+        let xx = 0;
+        for (const w of chunks(width)) {
+          out.push({ gx: xx, gz, w, d: 2, level: layer.level, kind: edge === 'curve' ? 'bogen' : 'schraeg', rot, segment: index, studs: true });
+          xx += w;
+        }
+      };
+      if (useBefore) edgePiece(seg.edgeBefore, z, 180);
+      if (useAfter) edgePiece(seg.edgeAfter, z + len - 2, 0);
+    });
+    z += len;
+  });
   return out;
 }

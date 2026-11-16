@@ -22,8 +22,8 @@ import { IDENTITY_TRANSFORM, newEntityId, type EntitySpec, type MaterialSpec, ty
 import type { GameContext } from '../../core/context';
 import { createFixedMaterial, createMainMaterial, lightColor, updateMainMaterials } from './materials';
 import { buildModel } from './model';
-import { createSlope } from './brickShapes';
-import { BRICK_REF, STUD, STUD_DIAMETER, STUD_HEIGHT, brickSize, brickState, kindHasStuds } from '../../../shared/bricks';
+import { createArch, createCurvedSlope, createDome, createInvertedSlope, createQuarter, createSlope } from './brickShapes';
+import { BRICK_REF, STUD, STUD_DIAMETER, STUD_HEIGHT, brickSize, brickState, studSpots } from '../../../shared/bricks';
 import { markBuildOnly, place, post, slab } from './parts';
 
 export type PrefabCategory = 'Grundformen' | 'Klemmbausteine' | 'Möbel' | 'Natur' | 'Licht' | 'Technik' | 'Medien';
@@ -424,32 +424,50 @@ const BUILTIN: PrefabDef[] = [
     category: 'Klemmbausteine',
     icon: '🧱',
     groundOffset: 0,
-    stateKeys: ['w', 'd', 'kind'],
+    stateKeys: ['w', 'd', 'kind', 'studs'],
     defaults: { material: { color: '#d93a2f', preset: 'lack' }, state: { w: 2, d: 4, kind: 'stein' }, physics: solid },
     build(ctx, entity, root) {
       const st = brickState(entity.state);
       const [bw, bh, bd] = brickSize(st);
       const mat = mainMat(ctx, entity, '#d93a2f', { roughness: 0.35 });
-      if (st.kind === 'schraeg') {
-        place(createSlope(ctx.scene, bw, bd, bh), root, mat);
-      } else if (st.kind === 'rund') {
-        post(ctx.scene, root, mat, bw, bw, bh, 0, 0, 0, 32);
-      } else if (st.kind === 'rad') {
-        // Reifen: Zylinder mit Achse längs x; Nabe als kleinerer, hellerer Zylinder.
-        const tire = post(ctx.scene, root, createFixedMaterial(ctx.scene, 'tire', '#1e2024', { roughness: 0.9 }), bd, bd, bw, 0, 0, 0, 32);
-        tire.rotation.z = Math.PI / 2;
-        tire.position.set(0, bd / 2, 0);
-        const hub = post(ctx.scene, root, mat, bd * 0.6, bd * 0.6, bw * 1.04, 0, 0, 0, 24);
-        hub.rotation.z = Math.PI / 2;
-        hub.position.set(0, bd / 2, 0);
-        return;
-      } else {
-        slab(ctx.scene, root, mat, bw, bh, bd, 0, 0, 0);
+      switch (st.kind) {
+        case 'schraeg':
+          place(createSlope(ctx.scene, bw, bd, bh), root, mat);
+          break;
+        case 'bogen':
+          place(createCurvedSlope(ctx.scene, bw, bd, bh), root, mat);
+          break;
+        case 'schraeg_um':
+          place(createInvertedSlope(ctx.scene, bw, bd, bh), root, mat);
+          break;
+        case 'bogenlauf':
+          place(createArch(ctx.scene, bw, bd, bh), root, mat);
+          break;
+        case 'viertel':
+          place(createQuarter(ctx.scene, st.w, bh), root, mat);
+          break;
+        case 'kuppel':
+          place(createDome(ctx.scene, st.w, bh), root, mat);
+          return;
+        case 'rund':
+        case 'rundplatte':
+          post(ctx.scene, root, mat, bw, bw, bh, 0, 0, 0, 32);
+          break;
+        case 'rad': {
+          // Reifen: Zylinder mit Achse längs x; Nabe als kleinerer, hellerer Zylinder.
+          const tire = post(ctx.scene, root, createFixedMaterial(ctx.scene, 'tire', '#1e2024', { roughness: 0.9 }), bd, bd, bw, 0, 0, 0, 32);
+          tire.rotation.z = Math.PI / 2;
+          tire.position.set(0, bd / 2, 0);
+          const hub = post(ctx.scene, root, mat, bd * 0.6, bd * 0.6, bw * 1.04, 0, 0, 0, 24);
+          hub.rotation.z = Math.PI / 2;
+          hub.position.set(0, bd / 2, 0);
+          return;
+        }
+        default:
+          slab(ctx.scene, root, mat, bw, bh, bd, 0, 0, 0);
       }
-      if (!kindHasStuds(st.kind)) return;
-      const spots: [number, number][] = [];
-      if (st.kind === 'rund') spots.push([0, 0]);
-      else for (let i = 0; i < st.w; i++) for (let j = 0; j < (st.kind === 'schraeg' ? 1 : st.d); j++) spots.push([(i + 0.5 - st.w / 2) * STUD, (j + 0.5 - st.d / 2) * STUD]);
+      const spots = studSpots(st);
+      if (spots.length === 0) return;
       const master = CreateCylinder('stud', { diameter: STUD_DIAMETER, height: STUD_HEIGHT, tessellation: 12 }, ctx.scene);
       place(master, root, mat, spots[0][0], bh + STUD_HEIGHT / 2, spots[0][1]);
       for (const [x, z] of spots.slice(1)) place(master.createInstance('stud') as unknown as Mesh, root, null, x, bh + STUD_HEIGHT / 2, z);
