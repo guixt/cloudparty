@@ -104,3 +104,7 @@ Neue Kategorie „Klemmbausteine“ in der Bau-Palette (Stein 2×4/2×2/1×2, Pl
 ## Vorschaubilder der Bausteine
 
 Die Bau-Palette zeigt zu jedem Baustein ein Vorschaubild (`public/previews/<key>.webp`, 128×128). Sie entstehen aus den echten 3D-Objekten: `npm run previews` (braucht Playwright mit Chromium) rendert jeden Katalogeintrag einzeln auf hellem Hintergrund; `--only key1,key2` nur einzelne. Einzelne Bilder lassen sich auch von Hand überschreiben. Fehlt ein Bild, zeigt die Palette die Farbfläche. Die Palette klappt nach dem Einfügen nicht mehr automatisch zu.
+
+## Bild-Texturen für Materialien
+
+Im Inspector (Material) lässt sich ein Bild als Textur hochladen („Bild hochladen“, auf höchstens 1024 px und ca. 170 kB verkleinert) oder wieder entfernen; „Textur-Wiederholung“ steuert die Kachelung. Die KI sucht mit `search_images` und belegt mit `use_texture` ein Objekt oder eine ganze Gruppe (Grundfarbe und Muster entfallen dabei, damit das Bild unverfälscht erscheint). Es gelten dieselben Schalter und Limits wie bei Bild-Tafeln (Bildsuche in den KI-Einstellungen, 4 Suchen, 6 Bilder je Auftrag). Texturen werden als Daten gespeichert, die KI kann keine fremden Adressen als Textur setzen. Fotos sind nicht nahtlos kachelbar; bei hoher Wiederholung sieht man Nähte, am besten nach „seamless texture“ suchen.

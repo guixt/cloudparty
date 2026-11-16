@@ -101,6 +101,7 @@ export type AiToolName =
   | 'search_images'
   | 'add_bricks'
   | 'fill_bricks'
+  | 'use_texture'
   | 'use_image';
 
 export interface AiToolDefinition {
@@ -635,6 +636,21 @@ export const AI_TOOLS: AiToolDefinition[] = [
         },
       },
       required: ['mode', 'x', 'z', 'cols', 'rows', 'layers'],
+    },
+    mutates: true,
+  },
+  {
+    name: 'use_texture',
+    description:
+      'Belegt ein Objekt (oder alle Teile einer Gruppe, wenn es zu einer gehört) mit einem Bild aus search_images als Textur, z. B. Holzmaserung, Ziegel, Stein, Stoff (nur wenn die Bildsuche erlaubt ist). `uv_scale` = wie oft sich das Bild über das Objekt wiederholt (Standard 1; große Flächen 4–10). Die Grundfarbe und ein Muster des Objekts werden dabei entfernt, damit das Bild unverfälscht erscheint. Zählt zum Limit von 6 Bildern pro Auftrag.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        result_id: { type: 'string', description: 'id eines Treffers von search_images' },
+        uv_scale: { type: 'number', minimum: 0.1, maximum: 50 },
+      },
+      required: ['id', 'result_id'],
     },
     mutates: true,
   },

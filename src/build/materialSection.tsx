@@ -1,6 +1,8 @@
 /** Material-Bereich des Inspectors: Voreinstellungen, Reflexion, Glas, Muster, Echtzeit-Spiegel. */
 import { MATERIAL_PATTERNS, type EntitySpec, type MaterialPattern, type MaterialPreset, type MaterialSpec, MATERIAL_PRESETS } from '../../shared/types';
 import { PATTERN_LABELS, PRESET_LABELS, presetMaterial } from '../world/entities/materialPresets';
+import { useRef, useState } from 'react';
+import { fileToTextureUrl } from '../world/media/upload';
 import { Field, NumField, Section, TextField } from './fields';
 
 /** Kleine Kugel-Vorschau je Voreinstellung (reines CSS). */
@@ -46,6 +48,8 @@ export function withPreset(m: MaterialSpec | undefined, preset: MaterialPreset):
 
 export function MaterialSection({ entity, patch }: { entity: EntitySpec; patch(p: Partial<EntitySpec>): void }) {
   const m = entity.material ?? {};
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [texError, setTexError] = useState('');
   const set = (next: Partial<MaterialSpec>) => {
     const merged: MaterialSpec = { ...m, ...next };
     for (const key of Object.keys(merged) as (keyof MaterialSpec)[]) if (merged[key] === undefined || merged[key] === '') delete merged[key];
@@ -118,9 +122,41 @@ export function MaterialSection({ entity, patch }: { entity: EntitySpec; patch(p
       <Field label="Textur-Wiederholung">
         <NumField value={m.uvScale ?? 1} step={0.5} min={0.1} max={50} testId="insp-uvscale" onChange={(v) => set({ uvScale: v })} />
       </Field>
-      <Field label="Textur-URL">
-        <TextField value={m.textureUrl ?? ''} placeholder="https://… oder leer" onChange={(v) => set({ textureUrl: v })} />
-      </Field>
+      <div className="cpb-texture" data-testid="insp-texture">
+        <div className="cpb-field-label">Textur (Bild)</div>
+        {m.textureUrl?.startsWith('data:') ? (
+          <div className="cpb-texture-row">
+            <img className="cpb-texture-preview" alt="" src={m.textureUrl} data-testid="insp-texture-preview" />
+            <button type="button" className="cp-button cp-button-danger" data-testid="insp-texture-remove" onClick={() => set({ textureUrl: undefined })}>
+              Entfernen
+            </button>
+          </div>
+        ) : (
+          <TextField value={m.textureUrl ?? ''} placeholder="https://… (am besten Bild hochladen)" onChange={(v) => set({ textureUrl: v || undefined })} />
+        )}
+        <button
+          type="button"
+          className="cp-button"
+          data-testid="insp-texture-upload"
+          onClick={() => fileRef.current?.click()}
+        >
+          Bild hochladen
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          hidden
+          data-testid="insp-texture-file"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            setTexError('');
+            if (file) void fileToTextureUrl(file).then((url) => set({ textureUrl: url }), (err) => setTexError(err instanceof Error ? err.message : 'Upload fehlgeschlagen'));
+          }}
+        />
+        {texError && <p className="cp-muted">{texError}</p>}
+      </div>
       <label className="cpb-check">
         <input type="checkbox" data-testid="insp-mirror" checked={!!m.mirror} onChange={(e) => set({ mirror: e.target.checked || undefined })} />
         <span>Echtzeit-Spiegel</span>

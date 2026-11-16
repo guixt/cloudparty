@@ -65,3 +65,7 @@
 .cpb-panel-collapsed { padding-bottom: 8px; }
 .cpb-panel-collapsed .cpb-palette-head { margin-bottom: 0; }
 [data-testid='palette'].cpb-panel:not(.cpb-panel-collapsed) { max-height: 60vh; }
+
+.cpb-texture { display: flex; flex-direction: column; gap: 6px; margin: 4px 0; }
+.cpb-texture-row { display: flex; align-items: center; gap: 8px; }
+.cpb-texture-preview { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.4); }

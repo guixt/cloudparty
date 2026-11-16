@@ -31,24 +31,30 @@ export async function fetchImageAsDataUrl(url: string, maxBytes = MAX_IMAGE_BYTE
     if (!blob.type.startsWith('image/') || blob.size > 25_000_000) return null;
     const bitmap = await createImageBitmap(blob);
     try {
-      for (const step of FIT_STEPS) {
-        const scale = Math.min(1, step.width / bitmap.width);
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-        const c = canvas.getContext('2d');
-        if (!c) return null;
-        c.fillStyle = '#ffffff'; // PNG-Transparenz → weiß (JPEG kennt keine)
-        c.fillRect(0, 0, canvas.width, canvas.height);
-        c.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-        const out = canvas.toDataURL('image/jpeg', step.quality);
-        if (dataUrlBytes(out) <= maxBytes) return { dataUrl: out, width: bitmap.width, height: bitmap.height };
-      }
-      return null;
+      const dataUrl = fitToJpeg(bitmap, bitmap.width, bitmap.height, maxBytes);
+      return dataUrl ? { dataUrl, width: bitmap.width, height: bitmap.height } : null;
     } finally {
       bitmap.close();
     }
   } catch {
     return null;
   }
+}
+
+/** Zeichnet ein Bild stufenweise kleiner, bis das JPEG nicht größer als `maxBytes` ist (null: nicht möglich). */
+export function fitToJpeg(source: CanvasImageSource, width: number, height: number, maxBytes = MAX_IMAGE_BYTES, maxWidth = 1024): string | null {
+  for (const step of FIT_STEPS) {
+    const scale = Math.min(1, Math.min(step.width, maxWidth) / width);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+    const c = canvas.getContext('2d');
+    if (!c) return null;
+    c.fillStyle = '#ffffff'; // PNG-Transparenz → weiß (JPEG kennt keine)
+    c.fillRect(0, 0, canvas.width, canvas.height);
+    c.drawImage(source, 0, 0, canvas.width, canvas.height);
+    const out = canvas.toDataURL('image/jpeg', step.quality);
+    if (dataUrlBytes(out) <= maxBytes) return out;
+  }
+  return null;
 }

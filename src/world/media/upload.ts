@@ -1,4 +1,5 @@
 /** Bild-Upload: Datei lesen, auf höchstens 1600 px verkleinern und als data:-URL zurückgeben. */
+import { fitToJpeg } from '../../ai/core/imageFetch';
 import { downscaleSize } from './helpers';
 
 function readAsDataUrl(file: Blob): Promise<string> {
@@ -44,4 +45,14 @@ export async function fileToDataUrl(file: File, max = 1600): Promise<string> {
   c.imageSmoothingQuality = 'high';
   c.drawImage(img, 0, 0, size.width, size.height);
   return lossless ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.86);
+}
+
+/** Bild als Material-Textur: höchstens 1024 px und ca. 170 kB (JPEG), damit Objekte klein bleiben. */
+export async function fileToTextureUrl(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) throw new Error('Das ist keine Bilddatei');
+  const img = await loadImage(await readAsDataUrl(file));
+  if (!img.naturalWidth || !img.naturalHeight) throw new Error('Das Bild hat keine feste Größe');
+  const out = fitToJpeg(img, img.naturalWidth, img.naturalHeight);
+  if (!out) throw new Error('Das Bild lässt sich nicht klein genug machen');
+  return out;
 }

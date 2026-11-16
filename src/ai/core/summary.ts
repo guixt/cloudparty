@@ -36,6 +36,7 @@ export function entitySummary(e: EntitySpec, includeGraph = false) {
   if (e.material?.preset) out.material_preset = e.material.preset;
   if (e.material?.pattern && e.material.pattern !== 'none') out.muster = e.material.pattern;
   if (e.material?.mirror) out.spiegel = true;
+  if (e.material?.textureUrl) out.textur = true;
   if (e.physics && e.physics.mode !== 'none') out.physik = e.physics.mode;
   if (e.script) out.skript = e.script.enabled ? 'ja' : 'aus';
   if (e.group) {

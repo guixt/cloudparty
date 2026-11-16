@@ -216,3 +216,44 @@ describe('Medien-Tafeln anlegen', () => {
     expect((await t.run('add_entity', { ref: 'EntitySpec.gibt-es-nicht', position: [0, 0, 0] })).ok).toBe(false);
   });
 });
+
+describe('Werkzeug use_texture', () => {
+  beforeEach(() => {
+    clearHits();
+    mockFetchJson({ 'commons.wikimedia.org': wikimedia, 'api.openverse.org': openverse });
+  });
+
+  async function hit(t: ReturnType<typeof setup>) {
+    const s = await t.run('search_images', { query: 'brick wall texture' });
+    return /"id":"(bild\d+)"/.exec(s.content)![1];
+  }
+
+  it('belegt eine ganze Gruppe, entfernt Farbe und Muster, zählt einmal', async () => {
+    const t = setup();
+    for (const id of ['w1', 'w2']) {
+      t.store.getState().addEntity({ id, ref: 'EntitySpec.box', name: id, group: 'g1', groupName: 'Wand', material: { color: '#ff0000', pattern: 'karo' }, transform: { pos: [0, 0, 0], rot: [0, 0, 0, 1], scale: [1, 1, 1] } }, { source: 'local' });
+    }
+    const r = await t.run('use_texture', { id: 'w1', result_id: await hit(t), uv_scale: 4 });
+    expect(r.ok).toBe(true);
+    for (const id of ['w1', 'w2']) {
+      const m = t.store.getState().entities[id].material!;
+      expect(m.textureUrl).toBe('data:image/jpeg;base64,AAAA');
+      expect(m.uvScale).toBe(4);
+      expect(m.color).toBeUndefined();
+      expect(m.pattern).toBeUndefined();
+    }
+    expect(t.fetchImage).toHaveBeenCalledTimes(1);
+    expect(t.counters.imageDownloads).toBe(1);
+  });
+
+  it('ausgeschaltet, unbekannter Treffer und fremde textureUrl in add_entity', async () => {
+    const off = setup({ imageSearch: false });
+    expect((await off.run('use_texture', { id: 'x', result_id: 'bild1' })).ok).toBe(false);
+    const t = setup();
+    t.store.getState().addEntity({ id: 'b', ref: 'EntitySpec.box', transform: { pos: [0, 0, 0], rot: [0, 0, 0, 1], scale: [1, 1, 1] } }, { source: 'local' });
+    expect((await t.run('use_texture', { id: 'b', result_id: 'bild99' })).ok).toBe(false);
+    t.store.getState().setCanBuild(true);
+    await t.run('update_entity', { id: 'b', material: { textureUrl: 'https://evil.example/x.png' } });
+    expect(t.store.getState().entities.b.material?.textureUrl).toBeUndefined();
+  });
+});

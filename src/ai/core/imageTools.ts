@@ -11,6 +11,30 @@ const off = (): never =>
   fail('Die Bildsuche ist ausgeschaltet. Bitte den Nutzer, sie in den KI-Einstellungen („KI darf im Internet nach Bildern suchen“) zu erlauben, und arbeite bis dahin ohne Fotos weiter.');
 
 export const imageHandlers: Record<string, Handler> = {
+  async use_texture(input, ctx, counters) {
+    if (!ctx.imageSearch) off();
+    if (!ctx.fetchImage) fail('Bilder herunterladen ist hier nicht verfügbar.');
+    if ((counters.imageDownloads ?? 0) >= AI_LIMITS.maxImageDownloads) {
+      return { ok: false, content: `Limit erreicht: höchstens ${AI_LIMITS.maxImageDownloads} Bilder pro Auftrag.`, summary: 'Bild-Limit erreicht', mutated: false };
+    }
+    const entity = getEntity(ctx, input.id);
+    const uv = input.uv_scale === undefined ? 1 : num(input.uv_scale, 'uv_scale', 0.1, 50);
+    const hitId = str(input.result_id, 'result_id', 40);
+    const hit = getHit(hitId) ?? fail(`Unbekannter Treffer „${hitId.slice(0, 30)}“. Suche zuerst mit search_images.`);
+    counters.imageDownloads = (counters.imageDownloads ?? 0) + 1;
+    const fetched = await (ctx.fetchImage as NonNullable<typeof ctx.fetchImage>)(hit.fetchUrl);
+    if (!fetched) return { ok: false, content: 'Das Bild konnte nicht geladen werden (der Anbieter erlaubt den Abruf nicht oder es ist zu groß). Nimm einen anderen Treffer.', summary: 'Bild konnte nicht geladen werden', mutated: false };
+    const { entities, order } = ctx.store.getState();
+    const targets = entity.group ? order.map((id) => entities[id]).filter((e) => e?.group === entity.group) : [entity];
+    for (const t of targets) {
+      const material = { ...(t.material ?? {}), textureUrl: fetched.dataUrl, uvScale: uv };
+      delete (material as { pattern?: unknown }).pattern;
+      delete (material as { color?: unknown }).color; // sonst färbt die Grundfarbe die Textur ein
+      ctx.store.getState().updateEntity(t.id, { material }, opts);
+    }
+    return ok(`Textur gesetzt auf ${targets.length} Objekt(e): ${hit.title} – ${hit.author}, ${hit.license}.`, `Textur „${hit.title.slice(0, 40)}“ gesetzt (${targets.length} Objekt${targets.length === 1 ? '' : 'e'})`, true);
+  },
+
   async search_images(input, ctx, counters) {
     if (!ctx.imageSearch) return { ok: false, content: 'Die Bildsuche ist ausgeschaltet. Bitte den Nutzer, sie in den KI-Einstellungen („KI darf im Internet nach Bildern suchen“) zu erlauben, und arbeite bis dahin ohne Fotos weiter.', summary: 'Bildsuche ist ausgeschaltet', mutated: false };
     if ((counters.imageSearches ?? 0) >= AI_LIMITS.maxImageSearches) {
