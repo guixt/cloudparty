@@ -126,6 +126,11 @@ export interface AiController {
   stop(): void;
   /** Setzt eine pausierte Warteschlange fort. */
   resume(): Promise<void>;
+  /**
+   * Führt einen Auftrag sofort aus (ohne Warteschlange) und meldet, ob er ohne Fehler und ohne Abbruch endete.
+   * Ist gerade ein Auftrag aktiv oder kein Key da, wird nichts gestartet (false). Für Plan-Knoten.
+   */
+  runPrompt(prompt: string): Promise<boolean>;
   removeQueued(id: number): void;
   clearQueue(): void;
   answer(id: number, ok: boolean): void;
@@ -229,6 +234,22 @@ export function createController(deps: ControllerDeps): AiController {
       update((s) => ({ ...s, queue: [...s.queue, { id: s.nextId, text }], nextId: s.nextId + 1 }));
       await pump();
     },
+    async runPrompt(prompt) {
+      const text = prompt.trim();
+      const api = getApi();
+      if (!text || !api) return false;
+      if (!api.getSettings().hasKey) {
+        needKey();
+        return false;
+      }
+      if (store.getState().running || pumping) {
+        notify('Die KI arbeitet gerade. Warte, bis der Auftrag fertig ist.', 'error');
+        return false;
+      }
+      const ok = await execute(text, api);
+      void pump(); // inzwischen eingereihte Nachrichten abarbeiten
+      return ok;
+    },
     async resume() {
       update((s) => ({ ...s, paused: false }));
       await pump();
@@ -291,3 +312,12 @@ export function setOpen(open: boolean): void {
   saveOpen(open);
 }
 export const aiStore: AiStore = createAiStore();
+
+/** Der aktive Controller des KI-Fensters (für Module wie die Plan-Ausführung). */
+let activeController: AiController | null = null;
+export function setActiveController(controller: AiController | null): void {
+  activeController = controller;
+}
+export function getActiveController(): AiController | null {
+  return activeController;
+}

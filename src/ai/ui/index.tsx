@@ -6,7 +6,7 @@
  * TEST-HOOK: Ist `window.__cloudpartyAiMock` gesetzt (Objekt, das `AssistantApi` umsetzt),
  * nutzt `useAssistant()` es statt des echten Kerns. Ohne Wert ändert sich nichts.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from 'zustand';
 import type { GameModule } from '../../core/context';
 import type { PanelProps } from '../../core/ui';
@@ -14,7 +14,7 @@ import type { AssistantApi } from '../api';
 import { getAssistant } from '../core';
 import { AssistantPanel, AssistantWindow } from './panel';
 import { SettingsDialog } from './settings';
-import { aiStore, aiWindow, createController, setOpen } from './state';
+import { aiStore, aiWindow, createController, setActiveController, setOpen } from './state';
 import './ui.css';
 
 export function resolveAssistant(): AssistantApi | null {
@@ -56,6 +56,10 @@ function Overlay({ ctx }: PanelProps) {
       }),
     [ctx],
   );
+  useEffect(() => {
+    setActiveController(controller);
+    return () => setActiveController(null);
+  }, [controller]);
   if (!open) return null;
   return (
     <>

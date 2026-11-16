@@ -21,6 +21,7 @@ import materials from './world/materials';
 import graphics from './ui/graphics';
 import aiCore from './ai/core';
 import aiUi from './ai/ui';
+import planRun from './plan/run';
 
 export const modules: GameModule[] = [
   persistence, // 3
@@ -41,4 +42,5 @@ export const modules: GameModule[] = [
   graphEditor, // 19
   aiCore, // 13
   aiUi, // 14
+  planRun, // 29
 ];
