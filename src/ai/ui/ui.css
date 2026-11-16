@@ -56,3 +56,13 @@
 .ai-number-invalid { outline: 2px solid var(--cp-danger); }
 .ai-unit { flex: 1; }
 .ai-limit-hint { font-size: 12px; margin-top: 2px; }
+
+.ai-input-buttons { display: flex; flex-direction: column; gap: 6px; }
+.ai-queue { margin: 0 0 8px; padding: 8px 10px; border: 1px solid var(--cp-border); border-radius: 8px; background: rgba(255, 255, 255, 0.05); max-height: 150px; overflow-y: auto; }
+.ai-queue-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.ai-queue-head .cp-heading { margin: 0; }
+.ai-queue-paused { font-size: 12.5px; color: #ffcf5c; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.ai-queue-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; counter-reset: q; }
+.ai-queue-item { display: flex; align-items: center; gap: 6px; counter-increment: q; font-size: 13px; }
+.ai-queue-item::before { content: counter(q) '.'; color: var(--cp-muted); min-width: 1.6em; }
+.ai-queue-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

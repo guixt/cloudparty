@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AssistantApi, RunOptions } from '../api';
-import { applyEvent, createAiStore, createController, formatTokens, initialView, usageLine } from './state';
+import { MAX_QUEUE, applyEvent, createAiStore, createController, formatTokens, initialView, usageLine } from './state';
 
 function fakeApi(run: (prompt: string, o: RunOptions) => Promise<void>, hasKey = true): AssistantApi & { undo: ReturnType<typeof vi.fn> } {
   const undo = vi.fn(() => true);
@@ -122,4 +122,127 @@ describe('controller', () => {
     expect(store.getState().messages).toHaveLength(0);
     expect(api.resetConversation).toHaveBeenCalled();
   });
+describe('Warteschlange', () => {
+  /** Ein Lauf, der erst beim Aufruf von release() endet. */
+  function gated() {
+    const started: string[] = [];
+    const gates: (() => void)[] = [];
+    const run = (prompt: string, o: RunOptions) =>
+      new Promise<void>((resolve) => {
+        started.push(prompt);
+        gates.push(() => {
+          o.onEvent({ type: 'done', stopped: false, changed: false });
+          resolve();
+        });
+      });
+    return { run, started, release: (i = 0) => gates[i]?.() };
+  }
+  const setup = (run: (p: string, o: RunOptions) => Promise<void>) => {
+    const store = createAiStore();
+    const notify = vi.fn();
+    const controller = createController({ store, getApi: () => fakeApi(run), notify, needKey: vi.fn() });
+    return { store, controller, notify };
+  };
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+
+  it('Nachrichten während eines Laufs warten und laufen danach der Reihe nach', async () => {
+    const g = gated();
+    const { store, controller } = setup(g.run);
+    void controller.send('eins');
+    void controller.send('zwei');
+    void controller.send('drei');
+    await tick();
+    expect(g.started).toEqual(['eins']);
+    expect(store.getState().queue.map((q) => q.text)).toEqual(['zwei', 'drei']);
+    g.release(0);
+    await tick();
+    expect(g.started).toEqual(['eins', 'zwei']);
+    g.release(1);
+    await tick();
+    expect(g.started).toEqual(['eins', 'zwei', 'drei']);
+    g.release(2);
+    await tick();
+    expect(store.getState().queue).toEqual([]);
+    expect(store.getState().running).toBe(false);
+    expect(store.getState().messages.filter((m) => m.kind === 'user').map((m) => (m as { text: string }).text)).toEqual(['eins', 'zwei', 'drei']);
+  });
+
+  it('Stopp hält die Schlange an, Fortsetzen arbeitet sie weiter ab', async () => {
+    const g = gated();
+    const { store, controller } = setup(g.run);
+    void controller.send('eins');
+    void controller.send('zwei');
+    await tick();
+    controller.stop();
+    g.release(0);
+    await tick();
+    expect(store.getState().paused).toBe(true);
+    expect(g.started).toEqual(['eins']);
+    void controller.resume();
+    await tick();
+    expect(store.getState().paused).toBe(false);
+    expect(g.started).toEqual(['eins', 'zwei']);
+    g.release(1);
+    await tick();
+    expect(store.getState().queue).toEqual([]);
+  });
+
+  it('ein Fehler pausiert die Schlange', async () => {
+    const started: string[] = [];
+    const run = async (prompt: string, o: RunOptions) => {
+      started.push(prompt);
+      o.onEvent({ type: 'error', message: 'kaputt' });
+      o.onEvent({ type: 'done', stopped: false, changed: false });
+    };
+    const { store, controller } = setup(run);
+    void controller.send('eins');
+    void controller.send('zwei');
+    await tick();
+    await tick();
+    expect(started).toEqual(['eins']);
+    expect(store.getState().paused).toBe(true);
+    expect(store.getState().queue.map((q) => q.text)).toEqual(['zwei']);
+  });
+
+  it('einzelne Einträge entfernen und die Schlange leeren', async () => {
+    const g = gated();
+    const { store, controller } = setup(g.run);
+    void controller.send('eins');
+    void controller.send('zwei');
+    void controller.send('drei');
+    await tick();
+    const id = store.getState().queue[0].id;
+    controller.removeQueued(id);
+    expect(store.getState().queue.map((q) => q.text)).toEqual(['drei']);
+    controller.clearQueue();
+    expect(store.getState().queue).toEqual([]);
+    g.release(0);
+    await tick();
+    expect(g.started).toEqual(['eins']);
+  });
+
+  it('Begrenzung auf MAX_QUEUE Nachrichten, Neues Gespräch leert die Schlange', async () => {
+    const g = gated();
+    const { store, controller, notify } = setup(g.run);
+    void controller.send('läuft');
+    for (let i = 0; i < MAX_QUEUE; i++) void controller.send(`n${i}`);
+    await tick();
+    expect(store.getState().queue).toHaveLength(MAX_QUEUE);
+    await controller.send('zu viel');
+    expect(store.getState().queue).toHaveLength(MAX_QUEUE);
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining('voll'), 'error');
+    controller.reset();
+    expect(store.getState().queue).toEqual([]);
+    expect(store.getState().paused).toBe(false);
+  });
+
+  it('ohne Key wird nichts eingereiht', async () => {
+    const store = createAiStore();
+    const needKey = vi.fn();
+    const controller = createController({ store, getApi: () => fakeApi(async () => {}, false), notify: vi.fn(), needKey });
+    await controller.send('hallo');
+    expect(needKey).toHaveBeenCalled();
+    expect(store.getState().queue).toEqual([]);
+  });
+});
 });

@@ -131,6 +131,36 @@ export function AssistantPanel({ api, store, controller, canBuild, onOpenSetting
           </button>
         )}
       </div>
+      {view.queue.length > 0 && (
+        <div className="ai-queue" data-testid="ai-queue">
+          <div className="ai-queue-head">
+            <span className="cp-heading">Warteschlange ({view.queue.length})</span>
+            <button type="button" className="cp-button ai-icon-btn" data-testid="ai-queue-clear" onClick={() => controller.clearQueue()}>
+              Leeren
+            </button>
+          </div>
+          {view.paused && !view.running && (
+            <div className="ai-queue-paused" data-testid="ai-queue-paused">
+              Angehalten.{' '}
+              <button type="button" className="cp-button cp-button-primary ai-icon-btn" data-testid="ai-queue-resume" onClick={() => void controller.resume()}>
+                Fortsetzen
+              </button>
+            </div>
+          )}
+          <ol className="ai-queue-list">
+            {view.queue.map((q) => (
+              <li key={q.id} className="ai-queue-item" data-testid="ai-queue-item">
+                <span className="ai-queue-text" title={q.text}>
+                  {q.text}
+                </span>
+                <button type="button" className="cp-button ai-icon-btn" aria-label="Aus der Warteschlange entfernen" data-testid="ai-queue-remove" onClick={() => controller.removeQueued(q.id)}>
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
       <div className="ai-input-row">
         <textarea
           ref={inputRef}
@@ -138,21 +168,21 @@ export function AssistantPanel({ api, store, controller, canBuild, onOpenSetting
           data-testid="ai-input"
           rows={2}
           value={text}
-          disabled={view.running}
-          placeholder="Was soll ich tun? (Enter sendet)"
+          placeholder={view.running ? 'Nächste Nachricht (kommt in die Warteschlange)' : 'Was soll ich tun? (Enter sendet)'}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
           onKeyUp={(e) => e.stopPropagation()}
         />
-        {view.running ? (
-          <button type="button" className="cp-button cp-button-danger" data-testid="ai-stop" onClick={() => controller.stop()}>
-            Stopp
-          </button>
-        ) : (
+        <div className="ai-input-buttons">
           <button type="button" className="cp-button cp-button-primary" data-testid="ai-send" disabled={!text.trim()} onClick={() => submit(text)}>
-            Senden
+            {view.running || view.queue.length > 0 ? 'Einreihen' : 'Senden'}
           </button>
-        )}
+          {view.running && (
+            <button type="button" className="cp-button cp-button-danger" data-testid="ai-stop" onClick={() => controller.stop()}>
+              Stopp
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

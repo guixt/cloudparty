@@ -17,16 +17,28 @@ export interface Usage {
   outputTokens: number;
 }
 
+export interface QueuedPrompt {
+  id: number;
+  text: string;
+}
+
+/** So viele Nachrichten dürfen höchstens warten. */
+export const MAX_QUEUE = 20;
+
 export interface AiView {
   messages: Message[];
   running: boolean;
+  /** Wartende Nachrichten (werden nacheinander abgearbeitet). */
+  queue: QueuedPrompt[];
+  /** Die Warteschlange ist angehalten (nach „Stopp" oder einem Fehler) und wartet auf „Fortsetzen". */
+  paused: boolean;
   /** Letzter Auftrag hat etwas verändert → „Rückgängig" anbieten. */
   changed: boolean;
   usage: Usage | null;
   nextId: number;
 }
 
-export const initialView = (): AiView => ({ messages: [], running: false, changed: false, usage: null, nextId: 1 });
+export const initialView = (): AiView => ({ messages: [], running: false, queue: [], paused: false, changed: false, usage: null, nextId: 1 });
 
 function push(state: AiView, make: (id: number) => Message): AiView {
   return { ...state, messages: [...state.messages, make(state.nextId)], nextId: state.nextId + 1 };
@@ -98,8 +110,14 @@ export interface ControllerDeps {
 }
 
 export interface AiController {
+  /** Startet die Nachricht sofort oder reiht sie in die Warteschlange ein, wenn gerade ein Auftrag läuft. */
   send(prompt: string): Promise<void>;
+  /** Hält den laufenden Auftrag an; wartende Nachrichten bleiben erhalten, die Schlange pausiert. */
   stop(): void;
+  /** Setzt eine pausierte Warteschlange fort. */
+  resume(): Promise<void>;
+  removeQueued(id: number): void;
+  clearQueue(): void;
   answer(id: number, ok: boolean): void;
   reset(): void;
   undo(): void;
@@ -110,6 +128,7 @@ export function createController(deps: ControllerDeps): AiController {
   const update = (fn: (s: AiView) => AiView) => store.setState(fn(store.getState()), true);
   const resolvers = new Map<number, (ok: boolean) => void>();
   let abort: AbortController | null = null;
+  let pumping = false;
 
   function settleAll(ok: boolean): void {
     for (const [id, resolve] of [...resolvers]) {
@@ -121,49 +140,102 @@ export function createController(deps: ControllerDeps): AiController {
     update((s) => ({ ...s, messages: s.messages.map((m) => (m.kind === 'confirm' && m.status === 'pending' ? { ...m, status: ok ? 'yes' : 'no' } : m)) }));
   }
 
+  /** Führt einen Auftrag aus. Gibt true zurück, wenn er regulär und ohne Fehler zu Ende ging. */
+  async function execute(text: string, api: AssistantApi): Promise<boolean> {
+    const ac = new AbortController();
+    abort = ac;
+    let failed = false;
+    update((s) => ({ ...addUser(s, text), running: true }));
+    try {
+      await api.run(text, {
+        signal: ac.signal,
+        onEvent: (ev) => {
+          if (ev.type === 'error' || (ev.type === 'done' && ev.stopped)) failed = true;
+          update((s) => applyEvent(s, ev));
+        },
+        confirm: (question, detail) =>
+          new Promise<boolean>((resolve) => {
+            if (ac.signal.aborted) return resolve(false);
+            let id = -1;
+            update((s) => {
+              const existing = s.messages.find((m) => m.kind === 'confirm' && m.status === 'pending' && m.question === question && !resolvers.has(m.id));
+              if (existing) {
+                id = existing.id;
+                return s;
+              }
+              id = s.nextId;
+              return push(s, (i) => ({ id: i, kind: 'confirm', question, detail, status: 'pending' }));
+            });
+            resolvers.set(id, resolve);
+          }),
+      });
+    } catch (e) {
+      failed = true;
+      if (!ac.signal.aborted) update((s) => applyEvent(s, { type: 'error', message: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      settleAll(false);
+      if (abort === ac) abort = null;
+      update((s) => ({ ...s, running: false }));
+    }
+    return !failed && !ac.signal.aborted;
+  }
+
+  /** Arbeitet die Warteschlange der Reihe nach ab; hält bei Stopp oder Fehler an. */
+  async function pump(): Promise<void> {
+    if (pumping) return;
+    pumping = true;
+    try {
+      for (;;) {
+        const s = store.getState();
+        const api = getApi();
+        if (!api || s.running || s.paused) return;
+        const next = s.queue[0];
+        if (!next) return;
+        update((v) => ({ ...v, queue: v.queue.slice(1) }));
+        const ok = await execute(next.text, api);
+        if (!ok) {
+          if (store.getState().queue.length > 0) update((v) => ({ ...v, paused: true }));
+          return;
+        }
+      }
+    } finally {
+      pumping = false;
+    }
+  }
+
   return {
     async send(prompt) {
       const text = prompt.trim();
       const api = getApi();
-      if (!text || !api || store.getState().running) return;
+      if (!text || !api) return;
       if (!api.getSettings().hasKey) {
         needKey();
         return;
       }
-      const ac = new AbortController();
-      abort = ac;
-      update((s) => ({ ...addUser(s, text), running: true }));
-      try {
-        await api.run(text, {
-          signal: ac.signal,
-          onEvent: (ev) => update((s) => applyEvent(s, ev)),
-          confirm: (question, detail) =>
-            new Promise<boolean>((resolve) => {
-              if (ac.signal.aborted) return resolve(false);
-              let id = -1;
-              update((s) => {
-                const existing = s.messages.find((m) => m.kind === 'confirm' && m.status === 'pending' && m.question === question && !resolvers.has(m.id));
-                if (existing) {
-                  id = existing.id;
-                  return s;
-                }
-                id = s.nextId;
-                return push(s, (i) => ({ id: i, kind: 'confirm', question, detail, status: 'pending' }));
-              });
-              resolvers.set(id, resolve);
-            }),
-        });
-      } catch (e) {
-        if (!ac.signal.aborted) update((s) => applyEvent(s, { type: 'error', message: e instanceof Error ? e.message : String(e) }));
-      } finally {
-        settleAll(false);
-        if (abort === ac) abort = null;
-        update((s) => ({ ...s, running: false }));
+      if (store.getState().queue.length >= MAX_QUEUE) {
+        notify(`Die Warteschlange ist voll (höchstens ${MAX_QUEUE} Nachrichten).`, 'error');
+        return;
       }
+      update((s) => ({ ...s, queue: [...s.queue, { id: s.nextId, text }], nextId: s.nextId + 1 }));
+      await pump();
+    },
+    async resume() {
+      update((s) => ({ ...s, paused: false }));
+      await pump();
+    },
+    removeQueued(id) {
+      update((s) => {
+        const queue = s.queue.filter((q) => q.id !== id);
+        return { ...s, queue, paused: queue.length === 0 ? false : s.paused };
+      });
+    },
+    clearQueue() {
+      update((s) => ({ ...s, queue: [], paused: false }));
     },
     stop() {
       abort?.abort();
       settleAll(false);
+      if (store.getState().queue.length > 0) update((s) => ({ ...s, paused: true }));
     },
     answer(id, ok) {
       const resolve = resolvers.get(id);
