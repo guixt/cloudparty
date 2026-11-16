@@ -29,6 +29,7 @@ import { groupHandlers } from './groupTools';
 import { libraryHandlers } from './libraryTools';
 import { graphHandlers } from './graphTools';
 import { planHandlers } from './planTools';
+import { visionHandlers } from './visionTools';
 
 export interface ToolContext {
   store: WorldStore;
@@ -37,6 +38,10 @@ export interface ToolContext {
   confirm(question: string, detail?: string): Promise<boolean>;
   /** true = Freigabe-Modus auto: Rückfragen entfallen (Prüfungen und Limits bleiben aktiv). */
   autoApprove?: boolean;
+  /** true = der Nutzer erlaubt Screenshots (Einstellung), pro Auftrag gelesen. */
+  vision?: boolean;
+  /** Rendert die Welt aus einer Kamera und liefert ein Base64-JPEG (ohne Präfix) oder null. */
+  captureView?(req: import('./capture').ViewRequest): Promise<string | null>;
 }
 /** Zähler pro Auftrag. */
 export interface RunCounters {
@@ -45,6 +50,8 @@ export interface RunCounters {
   removals: number;
   /** Der Nutzer hat große Löschungen in diesem Auftrag bereits erlaubt. */
   removalsApproved?: boolean;
+  /** Bisher gemachte Screenshots in diesem Auftrag. */
+  screenshots?: number;
 }
 export interface ToolOutcome {
   ok: boolean;
@@ -53,6 +60,8 @@ export interface ToolOutcome {
   /** Kurzer deutscher Satz für die Oberfläche. */
   summary: string;
   mutated: boolean;
+  /** Optionales Bild (Base64-JPEG ohne Präfix), wird dem Modell als Bild im Werkzeugergebnis gezeigt. */
+  image?: string;
 }
 
 export class ToolError extends Error {}
@@ -399,7 +408,7 @@ const handlers: Record<string, Handler> = {
 /** Führt ein Werkzeug aus. Wirft nie; Fehler kommen als `ok: false` zurück. */
 export async function executeTool(name: string, rawInput: unknown, ctx: ToolContext, counters: RunCounters): Promise<ToolOutcome> {
   const def = getToolDefinition(name);
-  const handler = def ? (handlers[name] ?? groupHandlers[name] ?? libraryHandlers[name] ?? graphHandlers[name] ?? planHandlers[name]) : undefined;
+  const handler = def ? (handlers[name] ?? groupHandlers[name] ?? libraryHandlers[name] ?? graphHandlers[name] ?? planHandlers[name] ?? visionHandlers[name]) : undefined;
   if (!def || !handler) {
     const msg = `Unbekanntes Werkzeug "${name.slice(0, 40)}".`;
     return { ok: false, content: msg, summary: msg, mutated: false };

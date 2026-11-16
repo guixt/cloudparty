@@ -69,6 +69,18 @@ export function setApproval(mode: AiApprovalMode): void {
   }
 }
 
+/** Darf die KI Screenshots der Welt ansehen? Standard: nein. */
+export function getVision(): boolean {
+  return read(AI_STORAGE_KEYS.vision) === '1';
+}
+export function setVision(on: boolean): void {
+  try {
+    storage()?.setItem(AI_STORAGE_KEYS.vision, on ? '1' : '0');
+  } catch {
+    /* ignorieren */
+  }
+}
+
 type LimitRange = { min: number; max: number; step: number; default: number };
 function clampLimit(raw: string, range: LimitRange): number {
   const n = Number(raw);

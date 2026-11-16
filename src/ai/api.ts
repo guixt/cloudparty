@@ -29,6 +29,8 @@ export interface AiSettings {
   model: string;
   /** ask = vor Skripten und vielen Löschungen fragen, auto = alles ohne Rückfragen. */
   approval: AiApprovalMode;
+  /** true = die KI darf Screenshots der Welt ansehen (Werkzeug look). */
+  vision: boolean;
   /** Obergrenze der Eingabe pro Anfrage in Tokens (siehe AI_TOKEN_LIMITS). */
   maxInputTokens: number;
   /** Obergrenze der Antwortlänge pro Anfrage in Tokens. */
@@ -41,6 +43,7 @@ export interface AssistantApi {
   setApiKey(key: string): void;
   setModel(model: string): void;
   setApproval(mode: AiApprovalMode): void;
+  setVision(on: boolean): void;
   /** Speichert die Längengrenzen (nur Browser); Werte werden auf den erlaubten Bereich begrenzt. */
   setTokenLimits(limits: { maxInputTokens?: number; maxOutputTokens?: number }): void;
   /** Führt einen Auftrag aus; Gesprächsverlauf bleibt zwischen Aufträgen erhalten. */

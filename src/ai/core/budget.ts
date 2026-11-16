@@ -10,9 +10,38 @@ const SHRUNK_RESULT_CHARS = 1500;
 const MIN_RESULT_CHARS = 300;
 const SHRUNK_NOTE = '\n…[gekürzt wegen des Eingabelimits]';
 
+/** Feste Schätzung für ein Bild (800 × 500 Pixel ≈ 550 Tokens), statt das Base64 als Text zu zählen. */
+export const IMAGE_TOKENS = 800;
+
 export function estimateTokens(value: unknown): number {
-  const text = typeof value === 'string' ? value : JSON.stringify(value) ?? '';
-  return Math.ceil(text.length / CHARS_PER_TOKEN);
+  if (typeof value === 'string') return Math.ceil(value.length / CHARS_PER_TOKEN);
+  let images = 0;
+  const text =
+    JSON.stringify(value, (_key, v) => {
+      if (v && typeof v === 'object' && (v as { type?: unknown }).type === 'image') {
+        images += 1;
+        return { type: 'image' };
+      }
+      return v;
+    }) ?? '';
+  return Math.ceil(text.length / CHARS_PER_TOKEN) + images * IMAGE_TOKENS;
+}
+
+const IMAGE_REMOVED = '[Älteres Bild entfernt, um Platz zu sparen]';
+
+/** Ersetzt Bilder in Werkzeugergebnissen durch einen Hinweistext; `keepLast` lässt die letzte Nachricht unberührt. Ändert die Liste nicht. */
+export function dropImages(messages: ApiMessage[], keepLast: boolean): ApiMessage[] {
+  const stop = keepLast ? messages.length - 1 : messages.length;
+  return messages.map((msg, i) => {
+    if (i >= stop || !Array.isArray(msg.content)) return msg;
+    let changed = false;
+    const content = msg.content.map((block): ContentBlock => {
+      if (block.type !== 'tool_result' || !Array.isArray(block.content) || !block.content.some((p) => p.type === 'image')) return block;
+      changed = true;
+      return { ...block, content: block.content.map((p) => (p.type === 'image' ? { type: 'text' as const, text: IMAGE_REMOVED } : p)) };
+    });
+    return changed ? { ...msg, content } : msg;
+  });
 }
 
 export function tooLongError(budget: number, needed: number): AiError {
@@ -51,6 +80,10 @@ export function fitToBudget(args: { system: string; tools: ApiTool[]; messages: 
   let messages = args.messages;
   let currentFrom = args.currentFrom;
   const total = () => base + estimateTokens(messages);
+  if (total() <= budget) return messages;
+
+  // 0. ältere Bilder weglassen (die Schätzung pro Bild ist fest, aber sie belegen Platz)
+  messages = dropImages(messages, true);
   if (total() <= budget) return messages;
 
   // 1. alte Gesprächsrunden (immer als Paar user/assistant) von vorn entfernen

@@ -199,6 +199,19 @@ export function SettingsDialog({ api, explain, onClose }: { api: AssistantApi; e
             force((n) => n + 1);
           }}
         />
+        <div className="cp-label">Screenshots</div>
+        <label className="ai-radio">
+          <input
+            type="checkbox"
+            data-testid="ai-vision"
+            checked={settings.vision}
+            onChange={(e) => {
+              api.setVision(e.target.checked);
+              force((n) => n + 1);
+            }}
+          />
+          <span>Die KI darf Screenshots der Welt ansehen (kostet zusätzliche Tokens; die Bilder gehen an Anthropic)</span>
+        </label>
         <div className="cp-label">Freigaben</div>
         <label className="ai-radio">
           <input

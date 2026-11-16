@@ -3,6 +3,7 @@
  * Test-Hook: nach `init` steht der Assistent als `window.__cloudpartyAi` bereit.
  */
 import type { GameModule } from '../../core/context';
+import { captureView } from './capture';
 import { runtime as buildRuntime } from '../../build/runtime';
 import type { AskClaude, AssistantApi } from '../api';
 import { streamMessage } from './client';
@@ -46,6 +47,7 @@ const mod: GameModule = {
       bus: ctx.bus,
       getAvatar: () => ({ position: [...ctx.localAvatar.presence.position], yaw: ctx.localAvatar.presence.yaw }),
       getHistory: () => buildRuntime.history,
+      captureView: (req) => captureView(ctx, req),
     });
     (globalThis as { __cloudpartyAi?: AssistantApi }).__cloudpartyAi = assistant;
   },

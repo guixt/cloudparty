@@ -21,8 +21,12 @@ function makeApi(run: (p: string, o: RunOptions) => Promise<void> = async () => 
   let hasKey = true;
   let model = 'claude-sonnet-5-5';
   let approval: 'ask' | 'auto' = 'ask';
+  let vision = false;
   const api = {
-    getSettings: () => ({ hasKey, model, approval, maxInputTokens: 40000, maxOutputTokens: 4096 }),
+    getSettings: () => ({ hasKey, model, approval, vision, maxInputTokens: 40000, maxOutputTokens: 4096 }),
+    setVision: vi.fn((on: boolean) => {
+      vision = on;
+    }),
     setTokenLimits: vi.fn(),
     setApproval: vi.fn((m: 'ask' | 'auto') => {
       approval = m;

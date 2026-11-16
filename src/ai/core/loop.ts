@@ -5,7 +5,7 @@ import type { AssistantApi, AssistantEvent, RunOptions } from '../api';
 import type { EventBus } from '../../core/events';
 import type { WorldStore } from '../../core/store';
 import { AiError, streamMessage, type ApiMessage, type ApiTool, type ContentBlock } from './client';
-import { fitToBudget } from './budget';
+import { dropImages, fitToBudget } from './budget';
 import { buildSystemPrompt } from './prompt';
 import * as settings from './settings';
 import { executeTool, type RunCounters } from './tools';
@@ -27,6 +27,8 @@ export interface AssistantDeps {
   bus: EventBus;
   getAvatar(): { position: Vec3; yaw: number } | null;
   getHistory(): HistoryLike | null;
+  /** Screenshot der Welt (Werkzeug look); fehlt es, sind Screenshots nicht verfügbar. */
+  captureView?(req: import('./capture').ViewRequest): Promise<string | null>;
 }
 
 const TOOLS: ApiTool[] = AI_TOOLS.map(({ name, description, input_schema }) => ({ name, description, input_schema }));
@@ -92,7 +94,7 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
       }
     };
     // Freigabe-Modus einmal pro Auftrag lesen, damit eine Umstellung mitten im Auftrag nicht halb wirkt.
-    const toolCtx = { store, bus, getAvatar: deps.getAvatar, confirm, autoApprove: settings.getApproval() === 'auto' };
+    const toolCtx = { store, bus, getAvatar: deps.getAvatar, confirm, autoApprove: settings.getApproval() === 'auto', vision: settings.getVision(), captureView: deps.captureView };
 
     try {
       let finished = false;
@@ -162,10 +164,22 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
           }
           if (outcome.mutated) changed = true;
           emit({ type: 'tool', name: use.name, summary: outcome.summary, ok: outcome.ok });
-          results.push({ type: 'tool_result', tool_use_id: use.id, content: outcome.content, ...(outcome.ok ? {} : { is_error: true }) });
+          results.push({
+            type: 'tool_result',
+            tool_use_id: use.id,
+            content: outcome.image
+              ? [
+                  { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: outcome.image } },
+                  { type: 'text', text: outcome.content },
+                ]
+              : outcome.content,
+            ...(outcome.ok ? {} : { is_error: true }),
+          });
         }
         if (stopped) break;
-        messages.push({ role: 'user', content: results });
+        // Nur das neueste Bild bleibt im Verlauf; ältere werden durch einen Hinweis ersetzt.
+        const older = dropImages(messages, false);
+        messages.splice(0, messages.length, ...older, { role: 'user', content: results });
       }
       if (!finished && !stopped) {
         stopped = true;
@@ -187,9 +201,10 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
   }
 
   return {
-    getSettings: () => ({ hasKey: settings.hasApiKey(), model: settings.getModel(), approval: settings.getApproval(), ...settings.getTokenLimits() }),
+    getSettings: () => ({ hasKey: settings.hasApiKey(), model: settings.getModel(), approval: settings.getApproval(), vision: settings.getVision(), ...settings.getTokenLimits() }),
     setTokenLimits: (limits) => settings.setTokenLimits(limits),
     setApproval: (mode) => settings.setApproval(mode),
+    setVision: (on) => settings.setVision(on),
     setApiKey: (key) => settings.setApiKey(key),
     setModel: (model) => {
       if (AI_MODELS.some((m) => m.id === model)) settings.setModel(model);

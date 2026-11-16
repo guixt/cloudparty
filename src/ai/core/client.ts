@@ -10,7 +10,10 @@ export const API_VERSION = '2023-06-01';
 export type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: unknown }
-  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean };
+  | { type: 'tool_result'; tool_use_id: string; content: string | ToolResultPart[]; is_error?: boolean };
+
+/** Teile eines Werkzeugergebnisses mit Bild (Screenshot als Base64-JPEG ohne Präfix). */
+export type ToolResultPart = { type: 'text'; text: string } | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg'; data: string } };
 export interface ApiMessage {
   role: 'user' | 'assistant';
   content: string | ContentBlock[];
