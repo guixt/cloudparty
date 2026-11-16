@@ -8,9 +8,10 @@
  * Mesh, wird die HTML-Fläche ausgeblendet (die Tafel zeigt dann ihren Platzhalter).
  * Bei nur teilweiser Verdeckung bleibt ein Rest-Fehler.
  */
-import { quadToMatrix3d, type Quad } from './helpers';
+import { quadToMatrix3d, referrerPolicyFor, type Quad } from './helpers';
 
 export const EMBED_HINT = 'Manche Webseiten erlauben das Einbetten nicht';
+export const VIDEO_HINT = 'Das Video erlaubt das Einbetten nicht, oder die Seite läuft nicht über http:// (nicht als Datei öffnen)';
 const CAPTION_H = 34;
 
 export type OverlayContent = 'iframe' | 'img';
@@ -43,7 +44,7 @@ export class OverlayQuad {
     if (contentKind === 'iframe') {
       const frame = document.createElement('iframe');
       frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups');
-      frame.setAttribute('referrerpolicy', 'no-referrer');
+      frame.setAttribute('referrerpolicy', 'no-referrer'); // wird je Adresse in setSource angepasst
       frame.setAttribute('loading', 'lazy');
       frame.setAttribute('allow', 'autoplay; encrypted-media; fullscreen; picture-in-picture');
       frame.className = 'cp-media-frame';
@@ -74,6 +75,7 @@ export class OverlayQuad {
 
   /** Setzt die geladene Adresse (iframe: Einbettungs-URL; pageUrl: Link/Anzeige). */
   setSource(url: string, pageUrl: string): void {
+    if (this.content instanceof HTMLIFrameElement) this.content.setAttribute('referrerpolicy', referrerPolicyFor(url));
     if (this.content.getAttribute('src') !== url) this.content.setAttribute('src', url);
     if (this.link) this.link.href = pageUrl;
     if (this.label) this.label.textContent = pageUrl.replace(/^https?:\/\//, '');

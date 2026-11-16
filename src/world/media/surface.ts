@@ -28,7 +28,7 @@ import {
   type Ctx2D,
 } from './draw';
 import { currentSlide, letterbox, neighbourSlides, resolveSource, shortUrl, wrapSlide, type Quad } from './helpers';
-import { EMBED_HINT, OverlayQuad } from './overlay';
+import { EMBED_HINT, OverlayQuad, VIDEO_HINT } from './overlay';
 
 const MAX_DISTANCE = 40;
 
@@ -274,7 +274,7 @@ export class MediaSurface {
     const src = resolveSource('video', raw, location.href);
     if (src.mode === 'web') {
       this.removeVideo();
-      this.drawCanvas((c, w, h) => drawWebPlaceholder(c, w, h, src.pageUrl, EMBED_HINT));
+      this.drawCanvas((c, w, h) => drawWebPlaceholder(c, w, h, src.pageUrl, VIDEO_HINT));
       this.showOverlay('iframe', src.url, src.pageUrl);
       return;
     }

@@ -51,6 +51,20 @@ export function youtubeEmbedUrl(u: URL): string | null {
   return `https://www.youtube.com/embed/${id}`;
 }
 
+const VIDEO_HOSTS = /(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be|vimeo\.com)$/i;
+
+/**
+ * Referrer-Richtlinie für eingebettete Seiten: Video-Player (YouTube, Vimeo) verlangen die Herkunft der einbettenden Seite
+ * (YouTube meldet sonst „Fehler 153“), deshalb nur dort die Herkunft ohne Pfad senden; alle anderen Seiten bekommen nichts.
+ */
+export function referrerPolicyFor(url: string): 'strict-origin-when-cross-origin' | 'no-referrer' {
+  try {
+    return VIDEO_HOSTS.test(new URL(url).hostname) ? 'strict-origin-when-cross-origin' : 'no-referrer';
+  } catch {
+    return 'no-referrer';
+  }
+}
+
 /** Baut aus einer Vimeo-Seiten-URL die Embed-URL (oder null). */
 export function vimeoEmbedUrl(u: URL): string | null {
   const host = u.hostname.replace(/^www\./, '');

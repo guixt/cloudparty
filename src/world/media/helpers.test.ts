@@ -159,3 +159,15 @@ describe('Homografie', () => {
     expect(quadToMatrix3d(100, 100, [[0, 0], [0, 0], [0, 0], [0, 0]])).toBeNull();
   });
 });
+
+describe('referrerPolicyFor', () => {
+  it('Video-Player bekommen die Herkunft, alle anderen Seiten nichts', async () => {
+    const { referrerPolicyFor } = await import('./helpers');
+    for (const u of ['https://www.youtube.com/embed/dQw4w9WgXcQ', 'https://www.youtube-nocookie.com/embed/abc', 'https://youtu.be/abc', 'https://player.vimeo.com/video/123']) {
+      expect(referrerPolicyFor(u)).toBe('strict-origin-when-cross-origin');
+    }
+    for (const u of ['https://example.com/', 'https://evilyoutube.com/x', 'https://youtube.com.evil.org/x', 'kaputt', '']) {
+      expect(referrerPolicyFor(u)).toBe('no-referrer');
+    }
+  });
+});

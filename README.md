@@ -90,6 +90,7 @@ Aufbau und Verträge zwischen den Modulen stehen in [`docs/architecture.md`](doc
 ## Bekannte Grenzen
 
 - **Skript-Sandbox:** Skripte laufen in Web Workern ohne DOM- und Netzzugriff, mit Zeitlimit. Das ist Best-Effort und kein Schutz gegen gezielte Angriffe (z. B. Speicherverbrauch); eine Content-Security-Policy fehlt noch. Auf offenen Servern solltest du fremden Inseln nur vertrauen, wenn du dem Besitzer vertraust.
+- **Videos von YouTube/Vimeo:** Sie werden als Player in die Tafel eingebettet (Adresse der Seite genügt). Das klappt nur, wenn Cloudparty über `http://` läuft (z. B. `npm run dev` oder `npx vite preview`, nicht per Doppelklick auf `index.html` als Datei) und der Besitzer des Videos das Einbetten erlaubt hat; sonst zeigt der Player einen Fehler (z. B. „Fehler 153“) und die Tafel bleibt dunkel – dann hilft „In neuem Tab öffnen“. Bedienen lässt sich der Player nur im Spielmodus, nicht im Baumodus.
 - **Web-Tafeln:** Viele Webseiten verbieten das Einbetten. Eine Web-Tafel kann außerdem nicht von 3D-Objekten davor verdeckt werden.
 - **Avatare:** Der Avatar ist prozedural gebaut (keine fertigen 3D-Modelle); er ist so angelegt, dass später ein glTF-Modell eingesetzt werden kann.
 - **Nicht enthalten:** Marktplatz mit Währung, Voice-Chat, Avatar-Kleidungseditor, eigenständige KI-Bewohner (die KI arbeitet nur auf deinen Auftrag, auch beim Plan-Board).
