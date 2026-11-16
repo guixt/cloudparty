@@ -19,9 +19,18 @@ export interface Usage {
   cacheReadTokens?: number;
 }
 
+/** Ausgang eines eingereihten Auftrags: ok = fertig, failed = Fehler/Abbruch, skipped = nie gestartet (entfernt/geleert/kein Key). */
+export type PromptResult = 'ok' | 'failed' | 'skipped';
+
 export interface QueuedPrompt {
   id: number;
   text: string;
+  /** Kurzer Anzeigetext statt des (langen) Auftragstexts, z. B. bei Plan-Knoten. */
+  label?: string;
+  /** Wird direkt vor dem Start dieses Auftrags aufgerufen (z. B. frischer Gesprächsverlauf). */
+  beforeRun?: () => void;
+  /** Meldet, wie der Auftrag endete. */
+  onResult?: (result: PromptResult) => void;
 }
 
 /** So viele Nachrichten dürfen höchstens warten. */
@@ -127,10 +136,10 @@ export interface AiController {
   /** Setzt eine pausierte Warteschlange fort. */
   resume(): Promise<void>;
   /**
-   * Führt einen Auftrag sofort aus (ohne Warteschlange) und meldet, ob er ohne Fehler und ohne Abbruch endete („ok“/„failed“).
-   * Ist gerade ein Auftrag aktiv oder kein Key da, wird nichts gestartet („skipped“). Für Plan-Knoten.
+   * Reiht einen Auftrag in dieselbe Warteschlange wie normale Nachrichten ein (läuft gerade etwas, wartet er) und
+   * liefert, wie er endete. Für Plan-Knoten: `label` erscheint in der Liste, `beforeRun` läuft direkt vor dem Start.
    */
-  runPrompt(prompt: string): Promise<'ok' | 'failed' | 'skipped'>;
+  enqueuePrompt(prompt: string, hooks?: { label?: string; beforeRun?: () => void }): Promise<PromptResult>;
   removeQueued(id: number): void;
   clearQueue(): void;
   answer(id: number, ok: boolean): void;
@@ -156,11 +165,11 @@ export function createController(deps: ControllerDeps): AiController {
   }
 
   /** Führt einen Auftrag aus. Gibt true zurück, wenn er regulär und ohne Fehler zu Ende ging. */
-  async function execute(text: string, api: AssistantApi): Promise<boolean> {
+  async function execute(text: string, api: AssistantApi, display?: string): Promise<boolean> {
     const ac = new AbortController();
     abort = ac;
     let failed = false;
-    update((s) => ({ ...addUser(s, text), running: true }));
+    update((s) => ({ ...addUser(s, display ?? text), running: true }));
     try {
       await api.run(text, {
         signal: ac.signal,
@@ -207,7 +216,9 @@ export function createController(deps: ControllerDeps): AiController {
         const next = s.queue[0];
         if (!next) return;
         update((v) => ({ ...v, queue: v.queue.slice(1) }));
-        const ok = await execute(next.text, api);
+        next.beforeRun?.();
+        const ok = await execute(next.text, api, next.label);
+        next.onResult?.(ok ? 'ok' : 'failed');
         if (!ok) {
           if (store.getState().queue.length > 0) update((v) => ({ ...v, paused: true }));
           return;
@@ -234,33 +245,36 @@ export function createController(deps: ControllerDeps): AiController {
       update((s) => ({ ...s, queue: [...s.queue, { id: s.nextId, text }], nextId: s.nextId + 1 }));
       await pump();
     },
-    async runPrompt(prompt) {
+    enqueuePrompt(prompt, hooks = {}) {
       const text = prompt.trim();
       const api = getApi();
-      if (!text || !api) return 'skipped';
+      if (!text || !api) return Promise.resolve('skipped');
       if (!api.getSettings().hasKey) {
         needKey();
-        return 'skipped';
+        return Promise.resolve('skipped');
       }
-      if (store.getState().running || pumping) {
-        notify('Die KI arbeitet gerade. Warte, bis der Auftrag fertig ist.', 'error');
-        return 'skipped';
+      if (store.getState().queue.length >= MAX_QUEUE) {
+        notify(`Die Warteschlange ist voll (höchstens ${MAX_QUEUE} Nachrichten).`, 'error');
+        return Promise.resolve('skipped');
       }
-      const ok = await execute(text, api);
-      void pump(); // inzwischen eingereihte Nachrichten abarbeiten
-      return ok ? 'ok' : 'failed';
+      return new Promise<PromptResult>((resolve) => {
+        update((s) => ({ ...s, queue: [...s.queue, { id: s.nextId, text, label: hooks.label, beforeRun: hooks.beforeRun, onResult: resolve }], nextId: s.nextId + 1 }));
+        void pump();
+      });
     },
     async resume() {
       update((s) => ({ ...s, paused: false }));
       await pump();
     },
     removeQueued(id) {
+      store.getState().queue.find((q) => q.id === id)?.onResult?.('skipped');
       update((s) => {
         const queue = s.queue.filter((q) => q.id !== id);
         return { ...s, queue, paused: queue.length === 0 ? false : s.paused };
       });
     },
     clearQueue() {
+      for (const q of store.getState().queue) q.onResult?.('skipped');
       update((s) => ({ ...s, queue: [], paused: false }));
     },
     stop() {
@@ -275,6 +289,7 @@ export function createController(deps: ControllerDeps): AiController {
       resolve?.(ok);
     },
     reset() {
+      for (const q of store.getState().queue) q.onResult?.('skipped');
       abort?.abort();
       settleAll(false);
       getApi()?.resetConversation();

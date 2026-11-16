@@ -1,4 +1,5 @@
 /** Fenster „Plan“: Kopfzeile, Arbeitsfläche mit Knoten und Kanten, Seitenleiste für den gewählten Knoten. */
+import { bringToFront, useWindowZ } from '../../core/windowStack';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as RKey, PointerEvent as RPtr } from 'react';
 import { useStore } from 'zustand';
@@ -31,6 +32,8 @@ export default function PlanWindow({ ctx }: { ctx: GameContext }) {
   const [pending, setPending] = useState<{ from: string; to: Pt } | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const z = useWindowZ('plan');
+  useEffect(() => bringToFront('plan'), []);
   const [rect, setRect] = useState<Rect>(() => ({ x: 80, y: 70, w: Math.min(980, Math.max(420, window.innerWidth - 120)), h: Math.min(640, Math.max(340, window.innerHeight - 160)) }));
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -202,7 +205,7 @@ export default function PlanWindow({ ctx }: { ctx: GameContext }) {
   const runAllReason = plan ? runAllBlockReason(plan, canBuild) : 'Kein Plan.';
 
   return (
-    <div ref={rootRef} className="cp-panel pe-window" data-testid="plan-editor" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }} onKeyDown={onKey} onKeyUp={onKey} onKeyPress={onKey}>
+    <div ref={rootRef} className="cp-panel pe-window" data-testid="plan-editor" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, zIndex: z }} onPointerDownCapture={() => bringToFront('plan')} onKeyDown={onKey} onKeyUp={onKey} onKeyPress={onKey}>
       <div className="pe-titlebar"
         onPointerDown={(e) => { if (e.button !== 0 || (e.target as HTMLElement).closest('button, input, select')) return; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); wdrag.current = { px: e.clientX, py: e.clientY, r: rect }; }}
         onPointerMove={(e) => { const d = wdrag.current; if (d) setRect({ ...d.r, x: Math.min(Math.max(d.r.x + e.clientX - d.px, 80 - d.r.w), window.innerWidth - 80), y: Math.min(Math.max(d.r.y + e.clientY - d.py, 0), window.innerHeight - 40) }); }}

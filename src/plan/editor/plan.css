@@ -34,6 +34,7 @@
 @keyframes pe-pulse { 0%, 100% { box-shadow: 0 0 0 1px #4da3ff, 0 0 4px #4da3ff; } 50% { box-shadow: 0 0 0 2px #4da3ff, 0 0 14px #4da3ff; } }
 .pe-badge { font-size: 11px; font-weight: 700; border-radius: 10px; padding: 1px 8px; color: #08101c; white-space: nowrap; }
 .pe-badge-open { background: #aab4c4; }
+.pe-badge-queued { background: #e0b341; }
 .pe-badge-running { background: #4da3ff; animation: pe-blink 1.2s ease-in-out infinite; }
 .pe-badge-done { background: #58c26f; }
 .pe-badge-failed { background: #ff6b6b; }

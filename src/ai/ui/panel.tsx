@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
 import { useStore } from 'zustand';
+import { bringToFront, useWindowZ } from '../../core/windowStack';
 import type { AssistantApi } from '../api';
 import { SUGGESTIONS, usageLine, type AiController, type AiStore, type Message } from './state';
 
@@ -150,8 +151,8 @@ export function AssistantPanel({ api, store, controller, canBuild, onOpenSetting
           <ol className="ai-queue-list">
             {view.queue.map((q) => (
               <li key={q.id} className="ai-queue-item" data-testid="ai-queue-item">
-                <span className="ai-queue-text" title={q.text}>
-                  {q.text}
+                <span className="ai-queue-text" title={q.label ?? q.text}>
+                  {q.label ?? q.text}
                 </span>
                 <button type="button" className="cp-button ai-icon-btn" aria-label="Aus der Warteschlange entfernen" data-testid="ai-queue-remove" onClick={() => controller.removeQueued(q.id)}>
                   ✕
@@ -208,6 +209,7 @@ export function AssistantWindow({
   badge?: string;
   children: React.ReactNode;
 }) {
+  const z = useWindowZ('ai');
   const [pos, setPos] = useState<Pos | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ dx: number; dy: number } | null>(null);
@@ -235,7 +237,8 @@ export function AssistantWindow({
       ref={rootRef}
       className={`cp-panel ai-window ${pos ? 'ai-moved' : 'ai-docked'}`}
       data-testid="ai-window"
-      style={pos ? { left: pos.x, top: pos.y } : undefined}
+      style={{ ...(pos ? { left: pos.x, top: pos.y } : {}), zIndex: z }}
+      onPointerDownCapture={() => bringToFront('ai')}
       onKeyDown={(e) => e.stopPropagation()}
       onKeyUp={(e) => e.stopPropagation()}
     >

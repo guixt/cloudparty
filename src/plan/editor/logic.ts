@@ -1,5 +1,5 @@
 /** Reine Logik des Plan-Editors: Geometrie, Kantenpfade, Fortschritt, Ausführbarkeits-Gründe. */
-import { isRunnable, predecessors, runOrder, type PlanNode, type PlanSpec, type PlanStatus } from '../../../shared/plan';
+import { isQueueable, predecessors, queueableOrder, type PlanNode, type PlanSpec, type PlanStatus } from '../../../shared/plan';
 
 export const NODE_W = 200;
 export const NODE_H = 92;
@@ -45,20 +45,20 @@ export function runBlockReason(plan: PlanSpec, nodeId: string, canBuild: boolean
   const n = plan.nodes.find((x) => x.id === nodeId);
   if (!n) return 'Knoten nicht gefunden.';
   if (n.status === 'running') return 'Der Knoten läuft gerade.';
+  if (n.status === 'queued') return 'Der Knoten wartet schon in der Warteschlange.';
   if (n.status === 'done') return 'Der Knoten ist schon fertig. Erst auf offen zurücksetzen.';
   if (n.status === 'disabled') return 'Der Knoten ist deaktiviert.';
-  if (!isRunnable(plan, nodeId)) return 'Vorgänger noch nicht fertig.';
+  if (!isQueueable(plan, nodeId)) return 'Vorgänger noch nicht fertig (oder eingereiht).';
   return null;
 }
 
 export function runAllBlockReason(plan: PlanSpec, canBuild: boolean): string | null {
   if (!canBuild) return 'Auf dieser Insel darfst du nicht bauen.';
-  if (runOrder(plan).length === 0) return 'Nichts mehr auszuführen.';
-  if (plan.nodes.some((n) => n.status === 'running')) return 'Es läuft gerade ein Knoten.';
+  if (queueableOrder(plan).length === 0) return plan.nodes.some((n) => n.status === 'queued' || n.status === 'running') ? 'Alles ist schon eingereiht oder läuft.' : 'Nichts mehr auszuführen.';
   return null;
 }
 
-export const STATUS_LABEL: Record<PlanStatus, string> = { open: 'Offen', running: 'Läuft', done: 'Fertig', failed: 'Fehler', disabled: 'Deaktiviert' };
+export const STATUS_LABEL: Record<PlanStatus, string> = { open: 'Offen', queued: 'Wartet', running: 'Läuft', done: 'Fertig', failed: 'Fehler', disabled: 'Deaktiviert' };
 
 export const previewNotes = (notes: string, max = 70): string => {
   const t = notes.replace(/\s+/g, ' ').trim();

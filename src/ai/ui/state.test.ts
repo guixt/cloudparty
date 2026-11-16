@@ -248,32 +248,55 @@ describe('Warteschlange', () => {
 });
 });
 
-describe('runPrompt (Plan-Knoten)', () => {
-  it('führt sofort aus und meldet Erfolg, Fehler und Abbruch', async () => {
-    const ok = createController({ store: createAiStore(), getApi: () => fakeApi(async (_p, o) => o.onEvent({ type: 'done', stopped: false, changed: true })), notify: vi.fn(), needKey: vi.fn() });
-    expect(await ok.runPrompt('Knoten')).toBe('ok');
-    const bad = createController({ store: createAiStore(), getApi: () => fakeApi(async (_p, o) => o.onEvent({ type: 'error', message: 'kaputt' })), notify: vi.fn(), needKey: vi.fn() });
-    expect(await bad.runPrompt('Knoten')).toBe('failed');
-    const stopped = createController({ store: createAiStore(), getApi: () => fakeApi(async (_p, o) => o.onEvent({ type: 'done', stopped: true, changed: false })), notify: vi.fn(), needKey: vi.fn() });
-    expect(await stopped.runPrompt('Knoten')).toBe('failed');
+describe('enqueuePrompt (Plan-Knoten)', () => {
+  it('läuft sofort, wenn nichts anderes arbeitet, und meldet ok, failed und skipped', async () => {
+    const mk = (ev: (o: RunOptions) => void) => createController({ store: createAiStore(), getApi: () => fakeApi(async (_p, o) => ev(o)), notify: vi.fn(), needKey: vi.fn() });
+    expect(await mk((o) => o.onEvent({ type: 'done', stopped: false, changed: true })).enqueuePrompt('Knoten')).toBe('ok');
+    expect(await mk((o) => o.onEvent({ type: 'error', message: 'kaputt' })).enqueuePrompt('Knoten')).toBe('failed');
+    expect(await mk((o) => o.onEvent({ type: 'done', stopped: true, changed: false })).enqueuePrompt('Knoten')).toBe('failed');
   });
 
-  it('startet nichts ohne Key oder während ein Auftrag läuft', async () => {
-    const needKey = vi.fn();
-    const noKey = createController({ store: createAiStore(), getApi: () => fakeApi(async () => {}, false), notify: vi.fn(), needKey });
-    expect(await noKey.runPrompt('x')).toBe('skipped');
-    expect(needKey).toHaveBeenCalled();
-
-    const notify = vi.fn();
+  it('wartet hinter einem laufenden Auftrag und startet danach; beforeRun läuft erst direkt vor dem Start; Label statt Prompttext', async () => {
+    const order: string[] = [];
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
     const store = createAiStore();
-    const busy = createController({ store, getApi: () => fakeApi(async (_p, o) => { await gate; o.onEvent({ type: 'done', stopped: false, changed: false }); }), notify, needKey: vi.fn() });
-    const first = busy.send('lang');
+    const api = fakeApi(async (p, o) => {
+      order.push(`run:${p}`);
+      if (p === 'lang') await gate;
+      o.onEvent({ type: 'done', stopped: false, changed: false });
+    });
+    const ctl = createController({ store, getApi: () => api, notify: vi.fn(), needKey: vi.fn() });
+    const first = ctl.send('lang');
     await Promise.resolve();
-    expect(await busy.runPrompt('zweiter')).toBe('skipped');
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining('arbeitet'), 'error');
+    const node = ctl.enqueuePrompt('LANGER PROMPTTEXT', { label: 'Plan: Fundament', beforeRun: () => order.push('before') });
+    expect(store.getState().queue.map((q) => q.label ?? q.text)).toEqual(['Plan: Fundament']);
+    expect(order).toEqual(['run:lang']); // beforeRun noch nicht
     release();
+    expect(await node).toBe('ok');
     await first;
+    expect(order).toEqual(['run:lang', 'before', 'run:LANGER PROMPTTEXT']);
+    expect(store.getState().messages.filter((m) => m.kind === 'user').map((m) => (m as { text: string }).text)).toEqual(['lang', 'Plan: Fundament']);
+  });
+
+  it('entfernen, leeren und zurücksetzen melden skipped; ohne Key skipped', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const store = createAiStore();
+    const ctl = createController({ store, getApi: () => fakeApi(async (_p, o) => { await gate; o.onEvent({ type: 'done', stopped: false, changed: false }); }), notify: vi.fn(), needKey: vi.fn() });
+    void ctl.send('lang');
+    await Promise.resolve();
+    const a = ctl.enqueuePrompt('a');
+    const b = ctl.enqueuePrompt('b');
+    ctl.removeQueued(store.getState().queue[0].id);
+    expect(await a).toBe('skipped');
+    ctl.clearQueue();
+    expect(await b).toBe('skipped');
+    release();
+
+    const needKey = vi.fn();
+    const noKey = createController({ store: createAiStore(), getApi: () => fakeApi(async () => {}, false), notify: vi.fn(), needKey });
+    expect(await noKey.enqueuePrompt('x')).toBe('skipped');
+    expect(needKey).toHaveBeenCalled();
   });
 });

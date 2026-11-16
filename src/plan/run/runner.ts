@@ -3,8 +3,10 @@
  * Jeder Knoten ist ein eigener Auftrag (ein Undo-Schritt) mit frischem Gesprächsverlauf: Die KI liest den
  * Knoten selbst per plan_get (inklusive der Ergebnisse der Vorgänger) und meldet ihn mit plan_complete_node.
  * Dadurch bleibt der Kontext klein, egal wie viele Knoten schon fertig sind.
+ * Die Aufträge laufen über die Warteschlange des KI-Fensters: arbeitet die KI gerade, wartet der Knoten
+ * (Status „queued“) und startet danach (Status „running“).
  */
-import { isRunnable, runOrder } from '../../../shared/plan';
+import { isQueueable, isRunnable, queueableOrder, runOrder } from '../../../shared/plan';
 import { PlanError, getPlan, updateNode, type PlanCtx } from '../core/api';
 
 /** Höchstens so viele Knoten pro „Alle ausführen“. */
@@ -12,9 +14,14 @@ export const MAX_NODES_PER_RUN = 20;
 /** Grobe Obergrenze der Tokens (Ein- plus Ausgabe) pro Lauf; danach hält er zwischen zwei Knoten an. */
 export const RUN_TOKEN_LIMIT = 600_000;
 
+export type PromptResult = 'ok' | 'failed' | 'skipped';
+
 export interface RunDeps {
-  /** Führt einen Auftrag aus: ok = regulär beendet, failed = Fehler/Abbruch, skipped = gar nicht gestartet (kein Key, KI beschäftigt). */
-  runPrompt(prompt: string): Promise<'ok' | 'failed' | 'skipped'>;
+  /**
+   * Reiht einen Auftrag ein und meldet, wie er endete: ok = regulär beendet, failed = Fehler/Abbruch,
+   * skipped = nie gestartet (kein Key, aus der Warteschlange entfernt). `beforeRun` läuft direkt vor dem Start.
+   */
+  runPrompt(prompt: string, hooks: { label: string; beforeRun: () => void }): Promise<PromptResult>;
   /** Setzt den Gesprächsverlauf des Modells zurück (frischer Kontext je Knoten). */
   resetContext(): void;
   /** Tokens (Ein- plus Ausgabe) des zuletzt beendeten Auftrags. */
@@ -39,20 +46,42 @@ export function buildNodePrompt(planId: string, nodeId: string): string {
   ].join('\n');
 }
 
-/** Warum ein Knoten gerade nicht ausgeführt werden kann (null = geht). */
-export function blockedReason(ctx: PlanCtx, planId: string, nodeId: string): string | null {
+/** Warum ein Knoten gerade nicht eingereiht werden kann (null = geht). Einreihen geht auch, während die KI arbeitet. */
+export function queueBlockReason(ctx: PlanCtx, planId: string, nodeId: string): string | null {
   const plan = getPlan(ctx, planId);
   const node = plan?.nodes.find((n) => n.id === nodeId);
   if (!plan || !node) return 'Diesen Knoten gibt es nicht mehr.';
   if (!ctx.store.getState().canBuild) return 'Du hast hier kein Baurecht.';
   if (node.status === 'running') return 'Dieser Knoten läuft gerade.';
+  if (node.status === 'queued') return 'Dieser Knoten wartet schon in der Warteschlange.';
   if (node.status === 'done') return 'Dieser Knoten ist schon fertig. Setze ihn zuerst auf offen zurück.';
   if (node.status === 'disabled') return 'Dieser Knoten ist deaktiviert.';
-  if (!isRunnable(plan, nodeId)) return 'Die Vorgänger dieses Knotens sind noch nicht fertig.';
+  if (!isQueueable(plan, nodeId)) return 'Die Vorgänger dieses Knotens sind noch nicht fertig (und nicht eingereiht).';
   return null;
 }
 
-/** Führt einen Knoten oder (ohne nodeId) alle offenen Knoten in Abhängigkeitsreihenfolge aus. */
+/** Markiert Knoten als „queued“ (sie warten auf ihre Ausführung). */
+export function markQueued(ctx: PlanCtx, planId: string, nodeIds: string[]): void {
+  for (const id of nodeIds) {
+    const n = getPlan(ctx, planId)?.nodes.find((x) => x.id === id);
+    if (n && (n.status === 'open' || n.status === 'failed')) updateNode(ctx, planId, id, { status: 'queued' });
+  }
+}
+
+/** Setzt eingereihte Knoten zurück auf offen (Lauf abgebrochen, Plan geändert …). */
+export function releaseQueued(ctx: PlanCtx, planId: string, nodeIds: string[]): void {
+  for (const id of nodeIds) {
+    const n = getPlan(ctx, planId)?.nodes.find((x) => x.id === id);
+    if (n?.status === 'queued') updateNode(ctx, planId, id, { status: 'open' });
+  }
+}
+
+export { queueableOrder };
+
+/**
+ * Führt einen Knoten oder (ohne nodeId) alle noch nicht erledigten Knoten in Abhängigkeitsreihenfolge aus.
+ * Knoten, die inzwischen von einem anderen Lauf erledigt wurden, werden übersprungen.
+ */
 export async function runPlan(ctx: PlanCtx, planId: string, nodeId: string | undefined, deps: RunDeps): Promise<RunReport> {
   const report: RunReport = { completed: [] };
   const initial = getPlan(ctx, planId);
@@ -60,42 +89,56 @@ export async function runPlan(ctx: PlanCtx, planId: string, nodeId: string | und
     deps.notify('Diesen Plan gibt es nicht mehr.', 'error');
     return { ...report, stoppedBecause: 'Plan nicht gefunden' };
   }
-  const queue = nodeId ? [nodeId] : runOrder(initial);
-  if (queue.length === 0) {
+  const ids = nodeId ? [nodeId] : runOrder(initial);
+  if (ids.length === 0) {
     deps.notify('Es gibt nichts auszuführen: alle Knoten sind fertig oder deaktiviert.');
     return report;
   }
   let spent = 0;
   let count = 0;
 
-  for (const id of queue) {
-    const reason = blockedReason(ctx, planId, id);
-    if (reason) {
-      // Bei „Alle ausführen“ sind deaktivierte/fertige Knoten schon aussortiert; ein Rest hier ist ein echtes Hindernis.
-      deps.notify(reason, 'error');
-      report.stoppedBecause = reason;
-      return report;
+  const stop = (index: number, why: string, kind: 'info' | 'error' = 'error'): RunReport => {
+    releaseQueued(ctx, planId, ids.slice(index));
+    report.stoppedBecause = why;
+    deps.notify(why, kind);
+    return report;
+  };
+
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    const plan = getPlan(ctx, planId);
+    const node = plan?.nodes.find((n) => n.id === id);
+    if (!plan || !node) {
+      if (!plan) return stop(i, 'Der Plan wurde während des Laufs gelöscht.');
+      continue; // Knoten gelöscht
     }
-    if (count >= MAX_NODES_PER_RUN) {
-      report.stoppedBecause = `Pro Lauf werden höchstens ${MAX_NODES_PER_RUN} Knoten ausgeführt. Starte „Alle ausführen“ erneut für den Rest.`;
-      deps.notify(report.stoppedBecause);
-      return report;
-    }
-    if (spent > RUN_TOKEN_LIMIT) {
-      report.stoppedBecause = 'Das Token-Limit für einen Lauf ist erreicht. Starte „Alle ausführen“ erneut für den Rest.';
-      deps.notify(report.stoppedBecause, 'error');
-      return report;
-    }
+    // Schon erledigt, deaktiviert oder von einem anderen Lauf in Arbeit: überspringen.
+    if (node.status === 'done' || node.status === 'disabled' || node.status === 'running') continue;
+    if (!ctx.store.getState().canBuild) return stop(i, 'Du hast hier kein Baurecht.');
+    if (!isRunnable(plan, id)) return stop(i, 'Die Vorgänger eines Knotens sind nicht fertig geworden; der Lauf hält an.');
+    if (count >= MAX_NODES_PER_RUN) return stop(i, `Pro Lauf werden höchstens ${MAX_NODES_PER_RUN} Knoten ausgeführt. Starte „Alle ausführen“ erneut für den Rest.`, 'info');
+    if (spent > RUN_TOKEN_LIMIT) return stop(i, 'Das Token-Limit für einen Lauf ist erreicht. Starte „Alle ausführen“ erneut für den Rest.');
 
     const created = new Set<string>();
     const off = ctx.bus.on('entity.added', ({ entity, source, transient }) => {
       if (source === 'local' && !transient) created.add(entity.id);
     });
-    let result: 'ok' | 'failed' | 'skipped' = 'failed';
+    let result: PromptResult = 'failed';
     try {
-      updateNode(ctx, planId, id, { status: 'running', result: null });
-      deps.resetContext();
-      result = await deps.runPrompt(buildNodePrompt(planId, id));
+      markQueued(ctx, planId, [id]);
+      const label = `Plan: ${node.title}`.slice(0, 70);
+      result = await deps.runPrompt(buildNodePrompt(planId, id), {
+        label,
+        beforeRun: () => {
+          // Direkt vor dem eigentlichen Start: Knoten läuft jetzt, frischer Gesprächsverlauf.
+          try {
+            updateNode(ctx, planId, id, { status: 'running', result: null });
+          } catch (error) {
+            if (!(error instanceof PlanError)) throw error;
+          }
+          deps.resetContext();
+        },
+      });
       spent += deps.lastRunTokens();
     } catch (error) {
       if (!(error instanceof PlanError)) throw error;
@@ -104,29 +147,23 @@ export async function runPlan(ctx: PlanCtx, planId: string, nodeId: string | und
       off();
     }
 
-    const ok = result === 'ok';
     const after = getPlan(ctx, planId)?.nodes.find((n) => n.id === id);
-    if (!after) {
-      report.stoppedBecause = 'Der Plan oder Knoten wurde während des Laufs gelöscht.';
-      return report;
-    }
-    if (ok && after.status === 'done') {
+    if (!after) return stop(i + 1, 'Der Plan oder Knoten wurde während des Laufs gelöscht.');
+    if (result === 'ok' && after.status === 'done') {
       report.completed.push(id);
-    } else if (ok) {
+    } else if (result === 'ok') {
       // Die KI hat vergessen, den Knoten abzuschließen: Ergebnis aus den neu angelegten Objekten ableiten.
       const alive = [...created].filter((eid) => !!ctx.store.getState().entities[eid]);
       updateNode(ctx, planId, id, { status: 'done', result: { entityIds: alive, summary: 'Automatisch verknüpft: die KI hat den Knoten nicht selbst abgeschlossen.' } });
       report.completed.push(id);
     } else if (result === 'skipped') {
-      // Der Auftrag wurde nie gestartet: Knoten zurück auf offen, kein Fehler des Knotens.
-      updateNode(ctx, planId, id, { status: 'open' });
-      report.stoppedBecause = 'Der Auftrag wurde nicht gestartet.';
-      return report;
+      // Der Auftrag wurde nie gestartet (aus der Warteschlange entfernt, kein Key): Knoten zurück auf offen.
+      if (after.status === 'queued' || after.status === 'running') updateNode(ctx, planId, id, { status: 'open' });
+      return stop(i + 1, 'Der Auftrag wurde nicht gestartet.');
     } else {
       updateNode(ctx, planId, id, { status: 'failed' });
       report.failed = id;
-      report.stoppedBecause = 'Ein Knoten ist fehlgeschlagen oder wurde abgebrochen.';
-      return report;
+      return stop(i + 1, 'Ein Knoten ist fehlgeschlagen oder wurde abgebrochen.');
     }
     count += 1;
   }

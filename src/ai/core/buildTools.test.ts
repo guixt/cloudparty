@@ -1,0 +1,172 @@
+import { describe, expect, it } from 'vitest';
+import { AI_LIMITS } from '../../../shared/aiTools';
+import { EventBus } from '../../core/events';
+import { createWorldStore } from '../../core/store';
+import { executeTool, type RunCounters, type ToolContext } from './tools';
+
+function setup(canBuild = true) {
+  const bus = new EventBus();
+  const store = createWorldStore(bus);
+  store.getState().setCanBuild(canBuild);
+  const ctx: ToolContext = { store, bus, getAvatar: () => ({ position: [0, 0, 6], yaw: 0 }), confirm: async () => true };
+  const counters: RunCounters = { toolCalls: 0, newEntities: 0, removals: 0 };
+  const run = (name: string, input: unknown) => executeTool(name, input, ctx, counters);
+  const all = () => {
+    const s = store.getState();
+    return s.order.map((id) => s.entities[id]);
+  };
+  return { store, ctx, counters, run, all, base: store.getState().order.length };
+}
+
+describe('add_wall', () => {
+  it('legt eine Wand mit Tür als Gruppe an, ein Aufruf', async () => {
+    const t = setup();
+    const r = await t.run('add_wall', { from: [0, 0], to: [8, 0], height: 3, thickness: 0.3, openings: [{ at: 3, width: 2, height: 2.2 }], material: { color: '#c0a080' }, name: 'Südwand' });
+    expect(r.ok).toBe(true);
+    const parts = t.all().filter((e) => e.groupName === 'Südwand');
+    expect(parts).toHaveLength(3);
+    expect(new Set(parts.map((p) => p.group)).size).toBe(1);
+    expect(parts.every((p) => p.physics?.mode === 'static' && p.material?.color === '#c0a080')).toBe(true);
+    expect(t.counters.newEntities).toBe(3);
+  });
+
+  it('prüft Eingaben und Limits', async () => {
+    const t = setup();
+    expect((await t.run('add_wall', { from: [0, 0], to: [0.01, 0], height: 3 })).ok).toBe(false);
+    expect((await t.run('add_wall', { from: [0, 0], to: [8, 0], height: 3, openings: [{ at: 7, width: 3, height: 2 }] })).content).toContain('nicht auf der Wand');
+    expect((await t.run('add_wall', { from: [0], to: [8, 0], height: 3 })).ok).toBe(false);
+    expect((await t.run('add_wall', { from: [0, 0], to: [900, 0], height: 3 })).ok).toBe(false);
+    t.counters.newEntities = AI_LIMITS.maxNewEntities - 1;
+    const over = await t.run('add_wall', { from: [0, 0], to: [8, 0], height: 3, openings: [{ at: 3, width: 2, height: 2 }] });
+    expect(over.ok).toBe(false);
+    expect(over.content).toContain('Limit');
+    expect(t.all()).toHaveLength(t.base);
+  });
+
+  it('ohne Baurecht wird nichts angelegt', async () => {
+    const t = setup(false);
+    expect((await t.run('add_wall', { from: [0, 0], to: [8, 0], height: 3 })).ok).toBe(false);
+    expect(t.all()).toHaveLength(t.base);
+  });
+});
+
+describe('add_beam', () => {
+  it('Balken zwischen zwei Punkten', async () => {
+    const t = setup();
+    const r = await t.run('add_beam', { from: [0, 0, 0], to: [0, 4, 0], thickness: 0.2 });
+    expect(r.ok).toBe(true);
+    const beam = t.all().at(-1)!;
+    expect(beam.ref).toBe('EntitySpec.cylinder');
+    expect(beam.transform.pos).toEqual([0, 2, 0]);
+    expect(beam.transform.scale).toEqual([0.2, 4, 0.2]);
+    expect((await t.run('add_beam', { from: [0, 0, 0], to: [0, 0.01, 0], thickness: 0.2 })).ok).toBe(false);
+    expect((await t.run('add_beam', { from: [0, 0, 0], to: [0, 100, 0], thickness: 0.2 })).ok).toBe(false);
+    expect((await t.run('add_beam', { from: [0, 0, 0], to: [1, 1, 1], thickness: 0.2, shape: 'kugel' })).ok).toBe(false);
+  });
+});
+
+describe('array', () => {
+  it('Zinnen im Kreis, gruppiert, mit gemeinsamer Größe', async () => {
+    const t = setup();
+    const r = await t.run('array', { ref: 'EntitySpec.box', pattern: 'circle', count: 12, radius: 6, center: [0, 4, 0], face_center: true, scale: [1, 1, 0.5], name: 'Zinne', material: { color: '#999999' } });
+    expect(r.ok).toBe(true);
+    const parts = t.all().filter((e) => e.groupName === 'Zinne');
+    expect(parts).toHaveLength(12);
+    expect(parts.every((p) => p.transform.scale[2] === 0.5 && Math.abs(Math.hypot(p.transform.pos[0], p.transform.pos[2]) - 6) < 1e-6)).toBe(true);
+    expect(t.counters.newEntities).toBe(12);
+  });
+
+  it('Linie, Raster und Fehler', async () => {
+    const t = setup();
+    expect((await t.run('array', { ref: 'EntitySpec.cylinder', pattern: 'line', count: 5, start: [0, 1, 0], step: [2, 0, 0] })).ok).toBe(true);
+    expect((await t.run('array', { ref: 'EntitySpec.box', pattern: 'grid', rows: 3, cols: 4, spacing: [2, 2], origin: [0, 0.5, 10] })).ok).toBe(true);
+    expect(t.all()).toHaveLength(t.base + 5 + 12);
+    expect((await t.run('array', { ref: 'EntitySpec.nix', pattern: 'line', count: 2, start: [0, 0, 0], step: [1, 0, 0] })).ok).toBe(false);
+    expect((await t.run('array', { ref: 'EntitySpec.box', pattern: 'kreis' })).ok).toBe(false);
+    expect((await t.run('array', { ref: 'EntitySpec.box', pattern: 'grid', rows: 50, cols: 50, spacing: [1, 1], origin: [0, 0, 0] })).ok).toBe(false);
+    expect((await t.run('array', { ref: 'EntitySpec.box', pattern: 'line', count: 2, start: [0, 0, 0] })).ok).toBe(false);
+  });
+});
+
+describe('clone_group', () => {
+  async function tower(t: ReturnType<typeof setup>) {
+    // Zwei Wände mit Tür = zwei Gruppen; die zweite Gruppe (Seitenwand mit Tür) hat 3 Teile.
+    await t.run('add_wall', { from: [4, 0], to: [4, 8], height: 3, name: 'Turm', openings: [{ at: 3, width: 2, height: 2 }] });
+    return t.all().find((e) => e.groupName === 'Turm')!;
+  }
+
+  it('kopiert die ganze Gruppe mit Offset als neue Gruppe', async () => {
+    const t = setup();
+    await t.run('add_wall', { from: [0, 0], to: [4, 0], height: 3, openings: [{ at: 1, width: 1, height: 2 }], name: 'Wand' });
+    const src = t.all().find((e) => e.groupName === 'Wand')!;
+    const before = t.all().length;
+    const r = await t.run('clone_group', { id: src.id, offset: [10, 0, 0] });
+    expect(r.ok).toBe(true);
+    const added = t.all().slice(before);
+    expect(added).toHaveLength(3);
+    expect(new Set(added.map((e) => e.group)).size).toBe(1);
+    expect(added[0].group).not.toBe(src.group);
+    expect(added.map((e) => e.transform.pos[0]).sort()).toEqual(t.all().filter((e) => e.group === src.group).map((e) => e.transform.pos[0] + 10).sort());
+    expect(added.every((e) => !t.all().some((o) => o.id === e.id && o.group === src.group))).toBe(true);
+  });
+
+  it('Drehen, Spiegeln, mehrere Kopien, Fehler', async () => {
+    const t = setup();
+    const src = await tower(t);
+    const before = t.all().length;
+    expect((await t.run('clone_group', { id: src.id })).ok).toBe(false); // nichts angegeben
+    expect((await t.run('clone_group', { id: src.id, mirror: 'y' })).ok).toBe(false);
+    expect((await t.run('clone_group', { id: 'nix', offset: [1, 0, 0] })).ok).toBe(false);
+    expect((await t.run('clone_group', { id: src.id, rotate_y_degrees: 90, pivot: [0, 0], count: 3 })).ok).toBe(true);
+    expect(t.all().length - before).toBe(9); // 3 Kopien × 3 Teile
+    expect((await t.run('clone_group', { id: src.id, mirror: 'x', pivot: [0, 0] })).ok).toBe(true);
+    const mirrored = t.all().slice(-3);
+    expect(mirrored.every((e) => e.transform.pos[0] <= 0)).toBe(true);
+  });
+
+  it('beachtet das Objektlimit', async () => {
+    const t = setup();
+    const src = await tower(t);
+    t.counters.newEntities = AI_LIMITS.maxNewEntities - 2; // die Gruppe hat 3 Teile
+    const r = await t.run('clone_group', { id: src.id, offset: [5, 0, 0] });
+    expect(r.ok).toBe(false);
+    expect(r.content).toContain('Limit');
+  });
+});
+
+describe('get_bounds und surface_height_at', () => {
+  it('Maße eines Würfels und einer Gruppe', async () => {
+    const t = setup();
+    await t.run('add_entity', { ref: 'EntitySpec.box', position: [2, 1.5, 3], scale: [2, 3, 4], name: 'Klotz' });
+    const box = t.all().find((e) => e.name === 'Klotz')!;
+    const r = await t.run('get_bounds', { id: box.id });
+    expect(r.ok).toBe(true);
+    expect(r.content).toContain('"min":[1,0,1]');
+    expect(r.content).toContain('"max":[3,3,5]');
+    expect(r.content).toContain('"groesse":[2,3,4]');
+    expect(r.content).toContain('welt_daten');
+    await t.run('add_wall', { from: [0, 0], to: [4, 0], height: 3, thickness: 0.4, name: 'Wand' });
+    const wall = t.all().find((e) => e.groupName === 'Wand')!;
+    const g = await t.run('get_bounds', { id: wall.id });
+    expect(g.content).toContain('"max":[4,3,0.2]');
+    expect((await t.run('get_bounds', { id: 'nix' })).ok).toBe(false);
+  });
+
+  it('Höhe: Boden, auf einem Klotz, außerhalb der Insel', async () => {
+    const t = setup();
+    await t.run('add_entity', { ref: 'EntitySpec.box', position: [20, 1.5, 20], scale: [4, 3, 4] });
+    const ground = await t.run('surface_height_at', { x: 0, z: 30 });
+    expect(ground.content).toContain('"hoehe":0');
+    expect(ground.content).toContain('"aufDerInsel":true');
+    const on = await t.run('surface_height_at', { x: 21, z: 21 });
+    expect(on.content).toContain('"hoehe":3');
+    const off = await t.run('surface_height_at', { x: 100, z: 0 });
+    expect(off.content).toContain('"aufDerInsel":false');
+    expect((await t.run('surface_height_at', { x: 'a', z: 0 })).ok).toBe(false);
+  });
+
+  it('Lesewerkzeuge gehen auch ohne Baurecht', async () => {
+    const t = setup(false);
+    expect((await t.run('surface_height_at', { x: 0, z: 0 })).ok).toBe(true);
+  });
+});

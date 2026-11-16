@@ -28,6 +28,14 @@ export function listPlans(ctx: PlanCtx): PlanSpec[] {
   return normalizePlans(ctx.store.getState().world.extensions?.[PLAN_EXTENSION_KEY]);
 }
 
+/** Setzt flüchtige Status (queued, running) auf open – nach dem Laden einer Welt, wenn nichts mehr läuft. */
+export function resetTransientStatuses(ctx: PlanCtx): void {
+  const raw = ctx.store.getState().world.extensions?.[PLAN_EXTENSION_KEY];
+  const reset = normalizePlans(raw, { resetTransient: true });
+  if (JSON.stringify(reset) === JSON.stringify(normalizePlans(raw))) return;
+  save(ctx, reset, '');
+}
+
 export function getPlan(ctx: PlanCtx, planId: string): PlanSpec | undefined {
   return listPlans(ctx).find((p) => p.id === planId);
 }

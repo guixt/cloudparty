@@ -102,8 +102,9 @@ describe('Plan-Kern', () => {
       },
       { title: 'ohne id' },
     ];
-    const [plan] = normalizePlans(dirty);
+    const [plan] = normalizePlans(dirty, { resetTransient: true });
     expect(normalizePlans(dirty)).toHaveLength(1);
+    expect(normalizePlans(dirty)[0].nodes[0].status).toBe('running'); // ohne resetTransient bleibt der Status
     expect(plan.title.length).toBe(PLAN_LIMITS.title);
     expect(plan.nodes.map((n) => [n.id, n.status])).toEqual([['a', 'open'], ['b', 'open']]);
     expect(plan.nodes[0].notes.length).toBe(PLAN_LIMITS.notes);

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AI_LIMITS } from '../../../shared/aiTools';
 import type { GraphSpec } from '../../../shared/graph';
 import { EventBus } from '../../core/events';
 import { createWorldStore } from '../../core/store';
@@ -116,7 +117,7 @@ describe('Bibliothek', () => {
     expect((await executeTool('library_place', { id: 'i1', position: [9999, 0, 0] }, s.ctx, s.counters())).ok).toBe(false);
     expect((await executeTool('library_place', { id: 'nix', position: [0, 0, 0] }, s.ctx, s.counters())).ok).toBe(false);
     const full = s.counters();
-    full.newEntities = 78;
+    full.newEntities = AI_LIMITS.maxNewEntities - 2;
     expect((await executeTool('library_place', { id: 'i1', position: [0, 0, 0] }, s.ctx, full)).content).toContain('Limit');
   });
   it('save prüft ids, ist keine Weltänderung', async () => {

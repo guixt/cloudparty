@@ -30,6 +30,7 @@ import { libraryHandlers } from './libraryTools';
 import { graphHandlers } from './graphTools';
 import { planHandlers } from './planTools';
 import { visionHandlers } from './visionTools';
+import { buildHandlers } from './buildTools';
 
 export interface ToolContext {
   store: WorldStore;
@@ -213,7 +214,7 @@ export function validateScript(source: unknown): string {
 
 export type Handler = (input: Record<string, unknown>, ctx: ToolContext, counters: RunCounters) => Promise<ToolOutcome> | ToolOutcome;
 
-function applyCommon(entity: EntitySpec, input: Record<string, unknown>, existing?: EntitySpec): EntitySpec {
+export function applyCommon(entity: EntitySpec, input: Record<string, unknown>, existing?: EntitySpec): EntitySpec {
   const next: EntitySpec = { ...entity, transform: { ...entity.transform } };
   if (input.name !== undefined) next.name = str(input.name, 'name', 80, true);
   if (input.position !== undefined) next.transform.pos = coord(input.position, 'position');
@@ -408,7 +409,7 @@ const handlers: Record<string, Handler> = {
 /** Führt ein Werkzeug aus. Wirft nie; Fehler kommen als `ok: false` zurück. */
 export async function executeTool(name: string, rawInput: unknown, ctx: ToolContext, counters: RunCounters): Promise<ToolOutcome> {
   const def = getToolDefinition(name);
-  const handler = def ? (handlers[name] ?? groupHandlers[name] ?? libraryHandlers[name] ?? graphHandlers[name] ?? planHandlers[name] ?? visionHandlers[name]) : undefined;
+  const handler = def ? (handlers[name] ?? groupHandlers[name] ?? libraryHandlers[name] ?? graphHandlers[name] ?? planHandlers[name] ?? visionHandlers[name] ?? buildHandlers[name]) : undefined;
   if (!def || !handler) {
     const msg = `Unbekanntes Werkzeug "${name.slice(0, 40)}".`;
     return { ok: false, content: msg, summary: msg, mutated: false };
