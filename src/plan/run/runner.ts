@@ -13,8 +13,8 @@ export const MAX_NODES_PER_RUN = 20;
 export const RUN_TOKEN_LIMIT = 600_000;
 
 export interface RunDeps {
-  /** Führt einen Auftrag aus; true = regulär beendet, false = Fehler/Abbruch/nicht gestartet. */
-  runPrompt(prompt: string): Promise<boolean>;
+  /** Führt einen Auftrag aus: ok = regulär beendet, failed = Fehler/Abbruch, skipped = gar nicht gestartet (kein Key, KI beschäftigt). */
+  runPrompt(prompt: string): Promise<'ok' | 'failed' | 'skipped'>;
   /** Setzt den Gesprächsverlauf des Modells zurück (frischer Kontext je Knoten). */
   resetContext(): void;
   /** Tokens (Ein- plus Ausgabe) des zuletzt beendeten Auftrags. */
@@ -91,19 +91,20 @@ export async function runPlan(ctx: PlanCtx, planId: string, nodeId: string | und
     const off = ctx.bus.on('entity.added', ({ entity, source, transient }) => {
       if (source === 'local' && !transient) created.add(entity.id);
     });
-    let ok = false;
+    let result: 'ok' | 'failed' | 'skipped' = 'failed';
     try {
       updateNode(ctx, planId, id, { status: 'running', result: null });
       deps.resetContext();
-      ok = await deps.runPrompt(buildNodePrompt(planId, id));
+      result = await deps.runPrompt(buildNodePrompt(planId, id));
       spent += deps.lastRunTokens();
     } catch (error) {
       if (!(error instanceof PlanError)) throw error;
-      ok = false;
+      result = 'skipped';
     } finally {
       off();
     }
 
+    const ok = result === 'ok';
     const after = getPlan(ctx, planId)?.nodes.find((n) => n.id === id);
     if (!after) {
       report.stoppedBecause = 'Der Plan oder Knoten wurde während des Laufs gelöscht.';
@@ -116,6 +117,11 @@ export async function runPlan(ctx: PlanCtx, planId: string, nodeId: string | und
       const alive = [...created].filter((eid) => !!ctx.store.getState().entities[eid]);
       updateNode(ctx, planId, id, { status: 'done', result: { entityIds: alive, summary: 'Automatisch verknüpft: die KI hat den Knoten nicht selbst abgeschlossen.' } });
       report.completed.push(id);
+    } else if (result === 'skipped') {
+      // Der Auftrag wurde nie gestartet: Knoten zurück auf offen, kein Fehler des Knotens.
+      updateNode(ctx, planId, id, { status: 'open' });
+      report.stoppedBecause = 'Der Auftrag wurde nicht gestartet.';
+      return report;
     } else {
       updateNode(ctx, planId, id, { status: 'failed' });
       report.failed = id;

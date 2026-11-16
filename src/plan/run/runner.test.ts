@@ -15,7 +15,7 @@ function setup() {
   const base: RunDeps = {
     runPrompt: async (p) => {
       prompts.push(p);
-      return true;
+      return 'ok' as const;
     },
     resetContext: () => {
       resets += 1;
@@ -38,7 +38,7 @@ function completing(ctx: PlanCtx, planId: string, extra?: () => void): RunDeps['
     const nodeId = /node="([^"]+)"/.exec(prompt)![1];
     extra?.();
     updateNode(ctx, planId, nodeId, { status: 'done', result: { entityIds: [], summary: 'ok' } });
-    return true;
+    return 'ok';
   };
 }
 
@@ -96,7 +96,7 @@ describe('Plan-Ausführung', () => {
       ...t.base,
       runPrompt: async (p) => {
         calls += 1;
-        if (calls === 2) return false;
+        if (calls === 2) return 'failed';
         return completing(t.ctx, plan.id)(p);
       },
     });
@@ -113,7 +113,7 @@ describe('Plan-Ausführung', () => {
       ...t.base,
       runPrompt: async () => {
         t.ctx.store.getState().addEntity({ id: 'neu-1', ref: 'EntitySpec.box', transform: { pos: [0, 0, 0], rot: [0, 0, 0, 1], scale: [1, 1, 1] } }, { source: 'local' });
-        return true;
+        return 'ok';
       },
     });
     expect(report.completed).toHaveLength(1);
@@ -149,9 +149,18 @@ describe('Plan-Ausführung', () => {
       ...t.base,
       runPrompt: async () => {
         t.ctx.store.getState().setExtension(PLAN_EXTENSION_KEY, undefined);
-        return true;
+        return 'ok';
       },
     });
     expect(report.stoppedBecause).toMatch(/gelöscht/);
+  });
+
+  it('nicht gestarteter Auftrag (kein Key/KI beschäftigt): Knoten bleibt offen statt „failed“', async () => {
+    const t = setup();
+    const plan = createPlan(t.ctx, 'Haus', house);
+    const report = await runPlan(t.ctx, plan.id, undefined, { ...t.base, runPrompt: async () => 'skipped' });
+    expect(getPlan(t.ctx, plan.id)!.nodes[0].status).toBe('open');
+    expect(report.failed).toBeUndefined();
+    expect(report.stoppedBecause).toMatch(/nicht gestartet/);
   });
 });

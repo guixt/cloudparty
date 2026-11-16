@@ -250,17 +250,17 @@ describe('Warteschlange', () => {
 describe('runPrompt (Plan-Knoten)', () => {
   it('führt sofort aus und meldet Erfolg, Fehler und Abbruch', async () => {
     const ok = createController({ store: createAiStore(), getApi: () => fakeApi(async (_p, o) => o.onEvent({ type: 'done', stopped: false, changed: true })), notify: vi.fn(), needKey: vi.fn() });
-    expect(await ok.runPrompt('Knoten')).toBe(true);
+    expect(await ok.runPrompt('Knoten')).toBe('ok');
     const bad = createController({ store: createAiStore(), getApi: () => fakeApi(async (_p, o) => o.onEvent({ type: 'error', message: 'kaputt' })), notify: vi.fn(), needKey: vi.fn() });
-    expect(await bad.runPrompt('Knoten')).toBe(false);
+    expect(await bad.runPrompt('Knoten')).toBe('failed');
     const stopped = createController({ store: createAiStore(), getApi: () => fakeApi(async (_p, o) => o.onEvent({ type: 'done', stopped: true, changed: false })), notify: vi.fn(), needKey: vi.fn() });
-    expect(await stopped.runPrompt('Knoten')).toBe(false);
+    expect(await stopped.runPrompt('Knoten')).toBe('failed');
   });
 
   it('startet nichts ohne Key oder während ein Auftrag läuft', async () => {
     const needKey = vi.fn();
     const noKey = createController({ store: createAiStore(), getApi: () => fakeApi(async () => {}, false), notify: vi.fn(), needKey });
-    expect(await noKey.runPrompt('x')).toBe(false);
+    expect(await noKey.runPrompt('x')).toBe('skipped');
     expect(needKey).toHaveBeenCalled();
 
     const notify = vi.fn();
@@ -270,7 +270,7 @@ describe('runPrompt (Plan-Knoten)', () => {
     const busy = createController({ store, getApi: () => fakeApi(async (_p, o) => { await gate; o.onEvent({ type: 'done', stopped: false, changed: false }); }), notify, needKey: vi.fn() });
     const first = busy.send('lang');
     await Promise.resolve();
-    expect(await busy.runPrompt('zweiter')).toBe(false);
+    expect(await busy.runPrompt('zweiter')).toBe('skipped');
     expect(notify).toHaveBeenCalledWith(expect.stringContaining('arbeitet'), 'error');
     release();
     await first;

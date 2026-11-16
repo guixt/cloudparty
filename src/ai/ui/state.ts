@@ -127,10 +127,10 @@ export interface AiController {
   /** Setzt eine pausierte Warteschlange fort. */
   resume(): Promise<void>;
   /**
-   * Führt einen Auftrag sofort aus (ohne Warteschlange) und meldet, ob er ohne Fehler und ohne Abbruch endete.
-   * Ist gerade ein Auftrag aktiv oder kein Key da, wird nichts gestartet (false). Für Plan-Knoten.
+   * Führt einen Auftrag sofort aus (ohne Warteschlange) und meldet, ob er ohne Fehler und ohne Abbruch endete („ok“/„failed“).
+   * Ist gerade ein Auftrag aktiv oder kein Key da, wird nichts gestartet („skipped“). Für Plan-Knoten.
    */
-  runPrompt(prompt: string): Promise<boolean>;
+  runPrompt(prompt: string): Promise<'ok' | 'failed' | 'skipped'>;
   removeQueued(id: number): void;
   clearQueue(): void;
   answer(id: number, ok: boolean): void;
@@ -237,18 +237,18 @@ export function createController(deps: ControllerDeps): AiController {
     async runPrompt(prompt) {
       const text = prompt.trim();
       const api = getApi();
-      if (!text || !api) return false;
+      if (!text || !api) return 'skipped';
       if (!api.getSettings().hasKey) {
         needKey();
-        return false;
+        return 'skipped';
       }
       if (store.getState().running || pumping) {
         notify('Die KI arbeitet gerade. Warte, bis der Auftrag fertig ist.', 'error');
-        return false;
+        return 'skipped';
       }
       const ok = await execute(text, api);
       void pump(); // inzwischen eingereihte Nachrichten abarbeiten
-      return ok;
+      return ok ? 'ok' : 'failed';
     },
     async resume() {
       update((s) => ({ ...s, paused: false }));

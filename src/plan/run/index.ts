@@ -36,6 +36,7 @@ const mod: GameModule = {
           .then((report) => {
             if (!report.stoppedBecause) toast(`Fertig: ${report.completed.length} Knoten ausgeführt.`);
           })
+          .catch((error) => toast(`Der Plan-Lauf ist abgebrochen: ${error instanceof Error ? error.message : String(error)}`, 'error'))
           .finally(() => {
             running = false;
           });
