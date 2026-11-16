@@ -123,3 +123,22 @@ describe('Mengengrenzen', () => {
     expect(full.content).toContain('Die Welt hat höchstens');
   });
 });
+
+describe('Maße und Öffnungen von Klemmbaustein-Wänden', () => {
+  it('get_bounds kennt die echten Maße; die Tür steht mit Weltkoordinaten im Ergebnis', async () => {
+    const t = setup();
+    const r = await t.run('fill_bricks', { mode: 'wall', x: 20, z: 20, cols: 10, rows: 6, layers: 6, openings: [{ side: 'south', at: 4, width: 2, layers: 4 }] });
+    expect(r.ok).toBe(true);
+    expect(r.content).toContain('south: x 6');
+    expect(r.content).toContain('z = 6.5');
+    const g = /group="(grp_[^"]+)"/.exec(r.content)![1];
+    const b = JSON.parse(/<welt_daten>\n([\s\S]*)\n<\/welt_daten>/.exec((await t.run('get_bounds', { id: g })).content)![1]);
+    expect(b.groesse[0]).toBeCloseTo(2.5);
+    expect(b.groesse[1]).toBeCloseTo(1.8);
+    expect(b.groesse[2]).toBeCloseTo(1.5);
+    expect(b.ungefaehr).not.toBe(true);
+    // in der Türlücke (south = größeres z, x 6.0–6.5, y < 1.2) steht kein Stein
+    const bricks = t.all().filter((e) => e.ref === 'EntitySpec.brick' && e.transform.pos[2] > 6.2);
+    expect(bricks.filter((e) => e.transform.pos[0] > 6 && e.transform.pos[0] < 6.5 && e.transform.pos[1] < 1.1)).toHaveLength(0);
+  });
+});

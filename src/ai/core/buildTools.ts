@@ -3,6 +3,7 @@
  * Die Rechnung steckt in buildGeometry.ts; hier werden Eingaben geprüft und Objekte angelegt.
  */
 import { AI_LIMITS } from '../../../shared/aiTools';
+import { BRICK_REF, brickSize, brickState } from '../../../shared/bricks';
 import { DEFAULT_ISLAND, newEntityId, type EntitySpec, type Quat, type Vec3 } from '../../../shared/types';
 import { createEntityFromPrefab, getPrefab } from '../../world/entities/prefabs';
 import { baseEntityFor, isKnownRef, knownRefs } from './refs';
@@ -64,6 +65,12 @@ const PRIMITIVES = new Set(['EntitySpec.box', 'EntitySpec.sphere', 'EntitySpec.c
 
 /** Rahmen eines Objekts; bei zusammengesetzten Bausteinen (Ursprung am Boden) nur geschätzt. */
 export function entityBox(e: EntitySpec): { box: Box; approx: boolean } {
+  if (e.ref === BRICK_REF) {
+    // Klemmbaustein: Maße aus Noppen/Art; Ursprung = Mitte der Grundfläche an der Unterkante.
+    const size = brickSize(brickState(e.state));
+    const center: Vec3 = [e.transform.pos[0], e.transform.pos[1] + size[1] / 2, e.transform.pos[2]];
+    return { box: rotatedBox(center, size, e.transform.rot), approx: false };
+  }
   const [sx, sy, sz] = e.transform.scale;
   if (PRIMITIVES.has(e.ref)) {
     const thin = e.ref === 'EntitySpec.plane' ? 0.05 : 1;

@@ -37,6 +37,20 @@ export function entitySummary(e: EntitySpec, includeGraph = false) {
   if (e.material?.pattern && e.material.pattern !== 'none') out.muster = e.material.pattern;
   if (e.material?.mirror) out.spiegel = true;
   if (e.material?.textureUrl) out.textur = true;
+  const mat = e.material;
+  if (mat) {
+    const extra: Record<string, unknown> = {};
+    if (mat.metallic !== undefined) extra.metallic = mat.metallic;
+    if (mat.roughness !== undefined) extra.roughness = mat.roughness;
+    if (mat.alpha !== undefined && mat.alpha !== 1) extra.alpha = mat.alpha;
+    if (mat.emissive) extra.emissive = mat.emissive;
+    if (mat.emissiveIntensity !== undefined) extra.emissiveIntensity = mat.emissiveIntensity;
+    if (mat.uvScale !== undefined) extra.uvScale = mat.uvScale;
+    if (mat.reflect !== undefined) extra.reflect = mat.reflect;
+    if (mat.clearcoat !== undefined) extra.clearcoat = mat.clearcoat;
+    if (mat.glass !== undefined) extra.glass = mat.glass;
+    if (Object.keys(extra).length > 0) out.material_werte = extra;
+  }
   if (e.physics && e.physics.mode !== 'none') out.physik = e.physics.mode;
   if (e.script) out.skript = e.script.enabled ? 'ja' : 'aus';
   if (e.group) {
@@ -54,7 +68,20 @@ export function entitySummary(e: EntitySpec, includeGraph = false) {
       }
     }
   }
-  if (e.media) out.medien = e.media.kind;
+  if (e.media) {
+    const m = e.media;
+    out.medien = m.kind;
+    const d: Record<string, unknown> = {};
+    if (m.kind === 'slides') {
+      d.folien = m.urls?.length ?? 0;
+      d.aktuelle_folie = m.slide ?? 0;
+    } else if (m.kind === 'text') {
+      if (m.text) d.text = m.text.slice(0, 80);
+    } else if (m.url) {
+      d[m.kind === 'image' ? 'bild_gesetzt' : 'adresse_gesetzt'] = true;
+    }
+    if (Object.keys(d).length > 0) out.medien_details = d;
+  }
   if (e.particles?.enabled) out.partikel = e.particles.preset;
   if (e.state && Object.keys(e.state).length > 0) out.zustand = e.state;
   return out;
@@ -109,7 +136,13 @@ export function buildWorldSummary(state: WorldState, avatar: { position: Vec3; y
   let rows: Record<string, unknown>[];
   let hint: string | undefined;
   if (opts.group) {
-    const members = byGroup.get(opts.group) ?? [];
+    let members = byGroup.get(opts.group) ?? [];
+    if (members.length === 0) {
+      // Gruppenname (eindeutig) statt Gruppen-id
+      const needle = opts.group.trim().toLowerCase();
+      const named = all.filter((e) => e.group && (e.groupName ?? '').trim().toLowerCase() === needle);
+      if (new Set(named.map((e) => e.group)).size === 1) members = named;
+    }
     rows = members.slice(0, MAX_SUMMARY_ENTITIES).map((e) => entitySummary(e, false));
     hint = members.length === 0 ? `Keine Gruppe „${opts.group.slice(0, 40)}“.` : members.length > rows.length ? `Nur die ersten ${rows.length} von ${members.length} Mitgliedern gezeigt.` : undefined;
   } else {

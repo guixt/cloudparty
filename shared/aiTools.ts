@@ -582,7 +582,7 @@ export const AI_TOOLS: AiToolDefinition[] = [
   {
     name: 'add_bricks',
     description:
-      'Setzt Klemmbausteine (Noppensteine) in ein Raster. Maße: 1 Noppe = 0,25 m, Stein = 3 Platten (0,3 m) hoch, Platte/Fliese = 1 Platte (0,1 m). Jeder Eintrag: `x`, `z` = Ecke des Steins in Noppen (ganze Zahlen, ab `origin`), `w` × `d` = Größe in Noppen (1–16, `rot90` vertauscht sie), `kind` = stein | platte | fliese (glatt, ohne Noppen) | schraeg (Schrägstein/Dachstein: Noppen nur hinten, die Schräge zeigt nach +z, mindestens 2 tief) | rund (Rundstein, Breite = Tiefe, eine Noppe) | rad (Rad: Achse längs x, `w` wird 1, `d` = gerader Durchmesser in Noppen 2–8, rot90 dreht die Achse nach z), `color`. `y` = Unterkante in Platten ab `origin` (weglassen = automatisch auf dem Stein darunter, sonst auf dem Boden). `origin` [x, y, z] in Metern (Standard [0, 0, 0]). Bis zu 500 Steine pro Aufruf, als Gruppe.',
+      'Setzt Klemmbausteine (Noppensteine) in ein Raster. Maße: 1 Noppe = 0,25 m, Stein = 3 Platten (0,3 m) hoch, Platte/Fliese = 1 Platte (0,1 m). Jeder Eintrag: `x`, `z` = Ecke des Steins in NOPPEN (ganze Zahlen; 1 Noppe = 0,25 m; Weltposition = origin + 0,25 · Wert), `w` × `d` = Größe in Noppen (1–16, `rot90` vertauscht sie), `kind` = stein | platte | fliese (glatt, ohne Noppen) | schraeg (Schrägstein/Dachstein: Noppen nur hinten, die Schräge zeigt nach +z, mindestens 2 tief) | rund (Rundstein, Breite = Tiefe, eine Noppe) | rad (Rad: Achse längs x, `w` wird 1, `d` = gerader Durchmesser in Noppen 2–8, rot90 dreht die Achse nach z), `color`. `y` = Unterkante in Platten ab `origin` (weglassen = automatisch auf dem Stein darunter, sonst auf dem Boden). `origin` [x, y, z] in Metern (Standard [0, 0, 0]). Bis zu 500 Steine pro Aufruf, als Gruppe.',
     input_schema: {
       type: 'object',
       properties: {
@@ -615,7 +615,7 @@ export const AI_TOOLS: AiToolDefinition[] = [
   {
     name: 'fill_bricks',
     description:
-      'Mauert ein Rechteck aus Klemmbausteinen mit versetzten Fugen (wie echtes Mauerwerk). `mode` = wall (einreihiger Rand: Hauswand, Turm) oder floor (volle Fläche aus Platten). `x`, `z` = Ecke in Noppen, `cols` × `rows` = Größe in Noppen (Wand: ≥ 3 × 3), `layers` = Anzahl Schichten (Wand: Stein hoch, Boden: Platten; Böden bestehen aus großen Platten bis 16 × 16 Noppen), `origin` [x, y, z] in Metern, `color`, `openings` (nur Wand): [{ side: north|south|east|west, at (Noppen vom Wandanfang), width (Noppen), layers (Höhe in Schichten) }] für Türen und Fenster; mit `sill_layers` Brüstung. Bis zu 500 Steine pro Aufruf.',
+      'Mauert ein Rechteck aus Klemmbausteinen mit versetzten Fugen (wie echtes Mauerwerk). `mode` = wall (einreihiger Rand: Hauswand, Turm) oder floor (volle Fläche aus Platten). `x`, `z` = Ecke in Noppen, `cols` × `rows` = Größe in Noppen (Wand: ≥ 3 × 3), `layers` = Anzahl Schichten (Wand: Stein hoch, Boden: Platten; Böden bestehen aus großen Platten bis 16 × 16 Noppen), `origin` [x, y, z] in Metern, `color`, `openings` (nur Wand; north = Seite mit kleinerem z, south = größerem z, west = kleinerem x, east = größerem x): [{ side: north|south|east|west, at (Noppen vom Wandanfang), width (Noppen), layers (Höhe in Schichten) }] für Türen und Fenster; mit `sill_layers` Brüstung. Bis zu 500 Steine pro Aufruf.',
     input_schema: {
       type: 'object',
       properties: {

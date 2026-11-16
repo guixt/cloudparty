@@ -148,7 +148,13 @@ function parseMaterial(v: unknown, base?: MaterialSpec): MaterialSpec {
   if (m.metallic !== undefined) out.metallic = num(m.metallic, 'material.metallic', 0, 1);
   if (m.roughness !== undefined) out.roughness = num(m.roughness, 'material.roughness', 0, 1);
   if (m.alpha !== undefined) out.alpha = num(m.alpha, 'material.alpha', 0, 1);
-  if (m.preset !== undefined) out.preset = oneOf(m.preset, 'material.preset', MATERIAL_PRESETS);
+  if (m.preset !== undefined) {
+    out.preset = oneOf(m.preset, 'material.preset', MATERIAL_PRESETS);
+    // Voreinstellung ohne eigene Farbe/Werte: die Standardfarbe des Bausteins darf sie nicht überstimmen (Gold wäre sonst rot).
+    if (m.color === undefined) delete out.color;
+    if (m.metallic === undefined) delete out.metallic;
+    if (m.roughness === undefined) delete out.roughness;
+  }
   if (m.reflect !== undefined) out.reflect = num(m.reflect, 'material.reflect', 0, 1);
   if (m.clearcoat !== undefined) out.clearcoat = num(m.clearcoat, 'material.clearcoat', 0, 1);
   if (m.glass !== undefined) out.glass = num(m.glass, 'material.glass', 0, 1);

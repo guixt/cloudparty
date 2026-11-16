@@ -261,3 +261,29 @@ describe('Namen als Ziel', () => {
     expect(members.length).toBeGreaterThan(3);
   });
 });
+
+describe('Material-Voreinstellung und get_world-Details', () => {
+  it('preset gold ohne eigene Farbe: Standardfarbe der Kugel entfällt', async () => {
+    const t = setup();
+    await t.run('add_entity', { ref: 'EntitySpec.sphere', position: [0, 0.5, 0], material: { preset: 'gold' }, name: 'Goldkugel' });
+    const e = t.all().find((x) => x.name === 'Goldkugel')!;
+    expect(e.material?.preset).toBe('gold');
+    expect(e.material?.color).toBeUndefined();
+    await t.run('add_entity', { ref: 'EntitySpec.sphere', position: [3, 0.5, 0], material: { preset: 'lack', color: '#3366ff' }, name: 'Blau' });
+    expect(t.all().find((x) => x.name === 'Blau')!.material?.color).toBe('#3366ff');
+  });
+  it('get_world zeigt Materialwerte, Folien und Gruppennamen-Filter', async () => {
+    const t = setup();
+    await t.run('add_entity', { ref: 'EntitySpec.box', position: [0, 0.5, 0], name: 'M', material: { metallic: 0.7, roughness: 0.2, uv_scale: 4, pattern: 'karo' } });
+    const id = t.all().find((x) => x.name === 'M')!.id;
+    t.store.getState().updateEntity(id, { media: { kind: 'slides', urls: ['data:image/png;base64,AA', 'data:image/png;base64,BB'], slide: 1 } }, { source: 'local' });
+    const w = JSON.parse(/<welt_daten>\n([\s\S]*)\n<\/welt_daten>/.exec((await t.run('get_world', { name_contains: 'M' })).content)![1]);
+    const row = w.objekte.find((o: { id: string }) => o.id === id);
+    expect(row.material_werte).toMatchObject({ metallic: 0.7, roughness: 0.2, uvScale: 4 });
+    expect(row.medien_details).toEqual({ folien: 2, aktuelle_folie: 1 });
+    const wall = await t.run('add_wall', { from: [0, 5], to: [6, 5], height: 3, name: 'Gartenmauer', openings: [{ at: 2, width: 1, height: 2 }] });
+    expect(wall.ok).toBe(true);
+    const byName = JSON.parse(/<welt_daten>\n([\s\S]*)\n<\/welt_daten>/.exec((await t.run('get_world', { group: 'gartenmauer' })).content)![1]);
+    expect(byName.objekte.length).toBeGreaterThan(2);
+  });
+});

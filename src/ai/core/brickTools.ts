@@ -55,7 +55,7 @@ async function place(specs: Spec[], origin: Vec3, name: string, ctx: ToolContext
   const lo = [Math.min(...mine.map((b) => origin[0] + b.gx * STUD)), Math.min(...mine.map((b) => origin[1] + b.level * PLATE_H)), Math.min(...mine.map((b) => origin[2] + b.gz * STUD))];
   const hi = [Math.max(...mine.map((b) => origin[0] + (b.gx + b.w) * STUD)), Math.max(...mine.map((b) => origin[1] + (b.level + b.plates) * PLATE_H)), Math.max(...mine.map((b) => origin[2] + (b.gz + b.d) * STUD))];
   const f = (v: number[]) => v.map((n) => Math.round(n * 100) / 100).join(', ');
-  return { ids, group: group.id, bounds: `Maße: min [${f(lo)}], max [${f(hi)}] (m, Noppen ohne Höhe; Oberkante y = ${f([hi[1]])}).` };
+  return { ids, group: group.id, bounds: `Maße: min [${f(lo)}], max [${f(hi)}] (Meter, Welt-Koordinaten). x/z der Steine sind Noppen ab origin (1 Noppe = 0,25 m).` };
 }
 
 function originOf(input: Record<string, unknown>): Vec3 {
@@ -140,6 +140,17 @@ export const brickHandlers: Record<string, Handler> = {
     if (specs.length === 0) fail('Es bleibt kein Stein übrig (Öffnungen füllen alles).');
     const name = input.name === undefined ? (mode === 'wall' ? 'Mauer' : 'Bodenplatte') : str(input.name, 'name', 80, true) || 'Mauer';
     const { ids, group, bounds } = await place(specs, origin, name, ctx, counters);
-    return ok(`${ids.length} Steine gemauert: group="${group}". ${bounds}`, `${name} gemauert (${ids.length} Steine)`, true);
+    const m = (n: number) => Math.round(n * 100) / 100;
+    const doors = openings.map((o) => {
+      const y0 = origin[1] + o.sill * 0.3;
+      const y1 = origin[1] + (o.sill + o.layers) * 0.3;
+      if (o.side === 'north' || o.side === 'south') {
+        const z = origin[2] + (gz0 + (o.side === 'north' ? 0 : rows)) * STUD;
+        return `${o.side}: x ${m(origin[0] + (gx0 + o.at) * STUD)}–${m(origin[0] + (gx0 + o.at + o.width) * STUD)} m an der Wand bei z = ${m(z)}, Höhe ${m(y0)}–${m(y1)} m`;
+      }
+      const x = origin[0] + (gx0 + (o.side === 'west' ? 0 : cols)) * STUD;
+      return `${o.side}: z ${m(origin[2] + (gz0 + o.at) * STUD)}–${m(origin[2] + (gz0 + o.at + o.width) * STUD)} m an der Wand bei x = ${m(x)}, Höhe ${m(y0)}–${m(y1)} m`;
+    });
+    return ok(`${ids.length} Steine gemauert: group="${group}". ${bounds}${doors.length ? ` Öffnungen (Welt-Koordinaten; north = kleineres z, south = größeres z, west = kleineres x, east = größeres x): ${doors.join('; ')}.` : ''}`, `${name} gemauert (${ids.length} Steine)`, true);
   },
 };

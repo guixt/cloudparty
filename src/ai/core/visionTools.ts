@@ -2,6 +2,8 @@
 import { AI_LIMITS } from '../../../shared/aiTools';
 import type { Vec3 } from '../../../shared/types';
 import { VIEW_NAMES, type ViewName } from './capture';
+import { entityBox } from './buildTools';
+import { unionBox } from './buildGeometry';
 import { fail, getEntityOrGroup, num, ok, type Handler, type ToolContext } from './tools';
 
 /** Mittelpunkt und Radius um ein Objekt (bei Gruppen: um alle Mitglieder). */
@@ -9,15 +11,7 @@ export function boundsFor(ctx: ToolContext, id: unknown): { center: Vec3; radius
   const entity = getEntityOrGroup(ctx, id);
   const { entities, order } = ctx.store.getState();
   const members = entity.group ? order.map((i) => entities[i]).filter((e) => e?.group === entity.group) : [entity];
-  const min: Vec3 = [Infinity, Infinity, Infinity];
-  const max: Vec3 = [-Infinity, -Infinity, -Infinity];
-  for (const e of members) {
-    const half = Math.max(...e.transform.scale) / 2;
-    for (let k = 0; k < 3; k++) {
-      min[k] = Math.min(min[k], e.transform.pos[k] - half);
-      max[k] = Math.max(max[k], e.transform.pos[k] + half);
-    }
-  }
+  const { min, max } = unionBox(members.map((m) => entityBox(m).box));
   const center: Vec3 = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
   const radius = Math.max(1.5, Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) / 2);
   return { center, radius };

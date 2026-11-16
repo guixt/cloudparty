@@ -136,3 +136,7 @@ Im Baumodus: **Mitteltaste ziehen** dreht die Ansicht um den Blickpunkt, **Shift
 ## Mengengrenzen der KI
 
 Je Aufruf bis zu 500 Steine/Teile, je Auftrag bis zu 1000 neue Objekte (ab 300 fragt die KI den Nutzer einmal um Erlaubnis, außer im Modus „alles erlaubt“) und höchstens 2000 Objekte je Welt (wie der Server). Darüber meldet das Werkzeug der KI den Grund und rät, die Arbeit aufzuteilen oder größere Teile zu nehmen. Die Zahlen stehen in `AI_LIMITS` (`shared/aiTools.ts`). Ob der Browser 2000 Steine mit Noppen flüssig darstellt, hängt von der Grafikkarte ab und ist nicht getestet.
+
+### Nach dem Testsuite-Lauf
+
+`get_bounds` und `look` rechnen Klemmbaustein-Gruppen jetzt mit den echten Maßen (vorher geschätzt, Wand 3,25 × 2,5 × 2,25 statt 2,5 × 1,8 × 1,5 m). `fill_bricks` nennt Öffnungen mit Welt-Koordinaten und erklärt die Seiten (north = kleineres z, south = größeres z, west = kleineres x, east = größeres x). Eine Materialvoreinstellung ohne eigene Farbe (`preset: gold`) wird nicht mehr von der Standardfarbe des Bausteins überstimmt. `get_world` zeigt Materialwerte (metallic, roughness, uvScale …) und Medien-Details (Folienzahl, aktuelle Folie, Text) und versteht Gruppennamen bei `group`. Wichtig beim Testen: Browser und Dev-Server nach jedem Update neu laden, sonst läuft die KI mit alten Werkzeugen.
