@@ -467,6 +467,11 @@ const HELP: { title: string; rows: [string, string][] }[] = [
       ['Löschen', 'Entf'],
       ['Rückgängig', 'Strg + Z'],
       ['Skript bearbeiten', 'E'],
+      ['Ansicht drehen', 'Mitteltaste ziehen (oder Rechtstaste, Alt + Linkstaste)'],
+      ['Ansicht verschieben', 'Shift + Mitteltaste, oder W A S D / Q E'],
+      ['Zoomen', 'Mausrad oder Strg + Mitteltaste'],
+      ['Standardansichten', 'Ziffernblock 1 / 3 / 7 (Strg: Gegenseite), 4 6 8 2 drehen'],
+      ['Auf Auswahl zentrieren', 'F oder Ziffernblock-Punkt'],
     ],
   },
   {

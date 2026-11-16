@@ -128,3 +128,11 @@ Gruppen-ids (`grp_…`) gelten jetzt auch für `remove_entity` (ganze Gruppe, z�
 - `plan_add_node` kennt ein optionales `key` (z. B. „n08“); `after` löst echte id, `key` und Titelnummer („8“, „n08“ ↔ „8 Hauswand …“) auf, und der Fehler nennt die vorhandenen Knoten. `plan_get` zeigt die aktuelle Gruppen-id eines Knoten-Ergebnisses, auch wenn die Objekte später neu gruppiert wurden.
 - Werkzeuge nehmen als Ziel zusätzlich eindeutige **Objekt- oder Gruppennamen**; mehrdeutige Namen werden mit den ersten ids gemeldet. `look`, `library_save` und `group_entities` akzeptieren Gruppen-ids.
 - `fill_bricks` mauert Böden aus großen Platten (bis 16 × 16 Noppen) und erlaubt bis 200 Steine je Aufruf. `get_world` mit `group` oder `name_contains` liefert ohne Katalog und Umgebung (spart Tokens).
+
+## Baukamera (Blender-Steuerung)
+
+Im Baumodus: **Mitteltaste ziehen** dreht die Ansicht um den Blickpunkt, **Shift + Mitteltaste** verschiebt sie, **Strg + Mitteltaste** und das **Mausrad** zoomen. Rechtstaste ziehen und Alt + Linkstaste drehen ebenfalls (für Mäuse ohne Mitteltaste), Shift verschiebt auch dort. **Ziffernblock** 1 / 3 / 7 = Vorder-, Seiten-, Draufsicht (mit Strg die Gegenseite), 4 / 6 / 8 / 2 drehen in 15°-Schritten, **F** oder Ziffernblock-Punkt zentriert auf die Auswahl; WASD/QE verschieben weiter. Die frühere Belegung über Babylons Standard-Eingabe reagierte in diesem Aufbau gar nicht auf Maus-Ziehen; die Steuerung steckt jetzt selbst in `src/build/camera.ts` (Rechnung in `cameraControls.ts`). Orthografische Ansicht (Ziffernblock 5) gibt es noch nicht.
+
+## Mengengrenzen der KI
+
+Je Aufruf bis zu 500 Steine/Teile, je Auftrag bis zu 1000 neue Objekte (ab 300 fragt die KI den Nutzer einmal um Erlaubnis, außer im Modus „alles erlaubt“) und höchstens 2000 Objekte je Welt (wie der Server). Darüber meldet das Werkzeug der KI den Grund und rät, die Arbeit aufzuteilen oder größere Teile zu nehmen. Die Zahlen stehen in `AI_LIMITS` (`shared/aiTools.ts`). Ob der Browser 2000 Steine mit Noppen flüssig darstellt, hängt von der Grafikkarte ab und ist nicht getestet.

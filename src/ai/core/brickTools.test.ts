@@ -76,3 +76,50 @@ describe('Großer Boden', () => {
     expect(area).toBe(1600);
   });
 });
+
+describe('Mengengrenzen', () => {
+  function setupAsk(answer: boolean) {
+    const bus = new EventBus();
+    const store = createWorldStore(bus);
+    store.getState().setCanBuild(true);
+    const asked: string[] = [];
+    const ctx: ToolContext = { store, bus, getAvatar: () => null, confirm: async (q) => (asked.push(q), answer) };
+    const counters: RunCounters = { toolCalls: 0, newEntities: 0, removals: 0 };
+    return { store, asked, counters, run: (n: string, i: unknown) => executeTool(n, i, ctx, counters) };
+  }
+  const bricks = (n: number) => Array.from({ length: n }, (_, i) => ({ x: (i % 200) * 2, z: Math.floor(i / 200) * 2, w: 2, d: 2 }));
+
+  it('große Aufträge (≥ 300 Objekte) fragen einmal nach; Ablehnung baut nichts', async () => {
+    const t = setupAsk(true);
+    expect((await t.run('add_bricks', { bricks: bricks(250) })).ok).toBe(true);
+    expect(t.asked).toHaveLength(0);
+    expect((await t.run('add_bricks', { bricks: bricks(100) })).ok).toBe(true);
+    expect(t.asked).toHaveLength(1);
+    expect((await t.run('add_bricks', { bricks: bricks(50) })).ok).toBe(true);
+    expect(t.asked).toHaveLength(1); // nur einmal pro Auftrag
+    const no = setupAsk(false);
+    const r = await no.run('add_bricks', { bricks: bricks(400) });
+    expect(r.ok).toBe(false);
+    expect(no.store.getState().order.filter((i) => no.store.getState().entities[i].ref === 'EntitySpec.brick')).toHaveLength(0);
+  });
+
+  it('harte Grenzen: je Aufruf 500, je Auftrag 1000, je Welt 2000', async () => {
+    const t = setupAsk(true);
+    expect((await t.run('add_bricks', { bricks: bricks(501) })).ok).toBe(false);
+    for (let i = 0; i < 2; i++) expect((await t.run('add_bricks', { bricks: bricks(500) })).ok).toBe(true);
+    const over = await t.run('add_bricks', { bricks: bricks(1) });
+    expect(over.ok).toBe(false);
+    expect(over.content).toContain(`${AI_LIMITS.maxNewEntities}`);
+    const w = setupAsk(true);
+    for (let i = 0; i < 3; i++) {
+      w.counters.newEntities = 0; // neue „Aufträge“
+      expect((await w.run('add_bricks', { bricks: bricks(500) })).ok).toBe(true);
+    }
+    w.counters.newEntities = 0;
+    expect((await w.run('add_bricks', { bricks: bricks(AI_LIMITS.maxWorldEntities - w.store.getState().order.length) })).ok).toBe(true);
+    w.counters.newEntities = 0;
+    const full = await w.run('add_bricks', { bricks: bricks(10) });
+    expect(full.ok).toBe(false);
+    expect(full.content).toContain('Die Welt hat höchstens');
+  });
+});

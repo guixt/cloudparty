@@ -6,13 +6,9 @@ import { AI_LIMITS } from '../../../shared/aiTools';
 import { BRICK_KINDS, placedFromEntity, BRICK_REF, MAX_BRICK_STUDS, STUD, PLATE_H, brickState, brickWorldPos, kindPlates, floorFootprints, layerFootprints, restLevel, type BrickKind, type Footprint, type PlacedBrick } from '../../../shared/bricks';
 import { newEntityId, type EntitySpec, type Vec3 } from '../../../shared/types';
 import { createEntityFromPrefab } from '../../world/entities/prefabs';
-import { applyCommon, coord, fail, int, obj, ok, opts, str, type Handler, type RunCounters, type ToolContext } from './tools';
+import { applyCommon, coord, reserveEntities, fail, int, obj, ok, opts, str, type Handler, type RunCounters, type ToolContext } from './tools';
 
-const MAX_BRICKS = 200;
-
-function reserve(counters: RunCounters, count: number, what: string): void {
-  if (counters.newEntities + count > AI_LIMITS.maxNewEntities) fail(`Limit: höchstens ${AI_LIMITS.maxNewEntities} neue Objekte pro Auftrag (${what} braucht ${count}, schon neu: ${counters.newEntities}).`);
-}
+const MAX_BRICKS = AI_LIMITS.maxPerCall;
 
 function colorOf(v: unknown, label: string): string | undefined {
   if (v === undefined) return undefined;
@@ -28,8 +24,8 @@ interface Spec extends Footprint {
   rot90: boolean;
 }
 
-function place(specs: Spec[], origin: Vec3, name: string, ctx: ToolContext, counters: RunCounters): { ids: string[]; group: string; bounds: string } {
-  reserve(counters, specs.length, name);
+async function place(specs: Spec[], origin: Vec3, name: string, ctx: ToolContext, counters: RunCounters): Promise<{ ids: string[]; group: string; bounds: string }> {
+  await reserveEntities(ctx, counters, specs.length, name);
   const { entities, order } = ctx.store.getState();
   const placed: PlacedBrick[] = order.map((id) => entities[id]).filter((e): e is EntitySpec => !!e).map((e) => placedFromEntity(e, origin)).filter((b): b is PlacedBrick => !!b);
   const group = { id: newEntityId('grp'), name };
@@ -88,7 +84,7 @@ function inOpening(fp: Footprint, layer: number, cols: number, rows: number, ope
 }
 
 export const brickHandlers: Record<string, Handler> = {
-  add_bricks(input, ctx, counters) {
+  async add_bricks(input, ctx, counters) {
     const list = input.bricks;
     if (!Array.isArray(list) || list.length === 0) fail('bricks muss eine nicht leere Liste sein.');
     if ((list as unknown[]).length > MAX_BRICKS) fail(`Höchstens ${MAX_BRICKS} Steine pro Aufruf.`);
@@ -109,11 +105,11 @@ export const brickHandlers: Record<string, Handler> = {
       };
     });
     const name = input.name === undefined ? 'Steine' : str(input.name, 'name', 80, true) || 'Steine';
-    const { ids, group, bounds } = place(specs, origin, name, ctx, counters);
+    const { ids, group, bounds } = await place(specs, origin, name, ctx, counters);
     return ok(`${ids.length} Steine gesetzt: group="${group}"${ids.length <= 10 ? `, ids: ${ids.join(', ')}` : ''}. ${bounds}`, `${ids.length} Steine gesetzt`, true);
   },
 
-  fill_bricks(input, ctx, counters) {
+  async fill_bricks(input, ctx, counters) {
     const mode = input.mode;
     if (mode !== 'wall' && mode !== 'floor') fail('mode muss wall oder floor sein.');
     const gx0 = int(input.x, 'x', -500, 500);
@@ -143,7 +139,7 @@ export const brickHandlers: Record<string, Handler> = {
     }
     if (specs.length === 0) fail('Es bleibt kein Stein übrig (Öffnungen füllen alles).');
     const name = input.name === undefined ? (mode === 'wall' ? 'Mauer' : 'Bodenplatte') : str(input.name, 'name', 80, true) || 'Mauer';
-    const { ids, group, bounds } = place(specs, origin, name, ctx, counters);
+    const { ids, group, bounds } = await place(specs, origin, name, ctx, counters);
     return ok(`${ids.length} Steine gemauert: group="${group}". ${bounds}`, `${name} gemauert (${ids.length} Steine)`, true);
   },
 };

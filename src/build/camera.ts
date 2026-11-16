@@ -7,6 +7,7 @@ import type { Observer } from '@babylonjs/core/Misc/observable';
 import type { Scene } from '@babylonjs/core/scene';
 import type { GameContext } from '../core/context';
 import { isTyping } from './state';
+import { dragModeFor, numpadView, orbitStep, panStep, presetView, zoomStep, type DragMode } from './cameraControls';
 
 export const BUILD_CAMERA_NAME = 'build.camera';
 
@@ -20,7 +21,7 @@ export class BuildCamera {
   private active = false;
   private keys = new Set<string>();
   private frameObserver: Observer<Scene> | null = null;
-  private altOrbit: { x: number; y: number } | null = null;
+  private drag: { mode: DragMode; x: number; y: number } | null = null;
   /** true, wenn der letzte Mausdruck eine Kamerabewegung war (kein Auswahlklick). */
   suppressTap = false;
   private cleanups: (() => void)[] = [];
@@ -38,8 +39,8 @@ export class BuildCamera {
     camera.panningSensibility = 0;
     camera.inertia = 0.75;
     camera.inputs.removeByType('ArcRotateCameraKeyboardMoveInput');
-    const pointers = camera.inputs.attached.pointers as unknown as { buttons: number[] } | undefined;
-    if (pointers) pointers.buttons = [1, 2];
+    // Maussteuerung wie Blender macht diese Klasse selbst (Mitteltaste drehen, Shift verschieben, Strg zoomen).
+    camera.inputs.removeByType('ArcRotateCameraPointersInput');
     this.camera = camera;
   }
 
@@ -79,24 +80,67 @@ export class BuildCamera {
     const onBlur = () => this.keys.clear();
     const onDown = (e: PointerEvent) => {
       this.suppressTap = false;
-      if (e.button === 0 && e.altKey) {
-        this.altOrbit = { x: e.clientX, y: e.clientY };
-        this.suppressTap = true;
-        canvas.setPointerCapture?.(e.pointerId);
-      } else if (e.button === 1 || e.button === 2) {
-        this.suppressTap = true;
-      }
+      const mode = dragModeFor(e.button, { shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
+      if (!mode) return;
+      this.drag = { mode, x: e.clientX, y: e.clientY };
+      this.suppressTap = true;
+      if (e.button === 1) e.preventDefault(); // kein Autoscroll
+      canvas.setPointerCapture?.(e.pointerId);
     };
     const onMove = (e: PointerEvent) => {
-      if (!this.altOrbit) return;
-      this.camera.alpha -= (e.clientX - this.altOrbit.x) * 0.008;
-      this.camera.beta = Math.min(this.camera.upperBetaLimit!, Math.max(this.camera.lowerBetaLimit!, this.camera.beta - (e.clientY - this.altOrbit.y) * 0.008));
-      this.altOrbit = { x: e.clientX, y: e.clientY };
+      const d = this.drag;
+      if (!d) return;
+      const dx = e.clientX - d.x;
+      const dy = e.clientY - d.y;
+      this.drag = { ...d, x: e.clientX, y: e.clientY };
+      const cam = this.camera;
+      if (d.mode === 'orbit') {
+        const next = orbitStep(cam.alpha, cam.beta, dx, dy, cam.lowerBetaLimit ?? 0.05, cam.upperBetaLimit ?? 2.3);
+        cam.alpha = next.alpha;
+        cam.beta = next.beta;
+      } else if (d.mode === 'zoom') {
+        cam.radius = zoomStep(cam.radius, dy, cam.lowerRadiusLimit ?? 1, cam.upperRadiusLimit ?? 160);
+      } else {
+        const step = panStep(cam.radius, cam.fov, canvas.clientHeight, dx, dy);
+        const right = cam.getDirection(Vector3.Right());
+        const up = cam.getDirection(Vector3.Up());
+        cam.target.addInPlace(right.scale(step.right)).addInPlace(up.scale(step.up));
+      }
     };
     const onUp = (e: PointerEvent) => {
-      if (this.altOrbit) canvas.releasePointerCapture?.(e.pointerId);
-      this.altOrbit = null;
+      if (this.drag) canvas.releasePointerCapture?.(e.pointerId);
+      this.drag = null;
     };
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button === 1) e.preventDefault(); // Autoscroll der mittleren Taste unterdrücken
+    };
+    const onNumpad = (e: KeyboardEvent) => {
+      if (isTyping() || e.altKey || e.metaKey || !e.code.startsWith('Numpad')) return;
+      const view = numpadView(e.code, e.ctrlKey);
+      if (view) {
+        const v = presetView(view, this.camera.lowerBetaLimit ?? 0.05, this.camera.upperBetaLimit ?? 2.3);
+        this.camera.alpha = v.alpha;
+        this.camera.beta = v.beta;
+        e.preventDefault();
+      } else if (e.code === 'Numpad4' || e.code === 'Numpad6') {
+        this.camera.alpha += (e.code === 'Numpad4' ? -1 : 1) * (Math.PI / 12);
+        e.preventDefault();
+      } else if (e.code === 'Numpad8' || e.code === 'Numpad2') {
+        this.camera.beta = Math.min(this.camera.upperBetaLimit ?? 2.3, Math.max(this.camera.lowerBetaLimit ?? 0.05, this.camera.beta + (e.code === 'Numpad8' ? -1 : 1) * (Math.PI / 12)));
+        e.preventDefault();
+      }
+    };
+    const onContext = (e: Event) => e.preventDefault();
+    canvas.addEventListener('contextmenu', onContext);
+    window.addEventListener('keydown', onNumpad);
+    canvas.addEventListener('mousedown', onMouseDown, true);
+    canvas.addEventListener('auxclick', onMouseDown, true);
+    this.cleanups.push(
+      () => window.removeEventListener('keydown', onNumpad),
+      () => canvas.removeEventListener('contextmenu', onContext),
+      () => canvas.removeEventListener('mousedown', onMouseDown, true),
+      () => canvas.removeEventListener('auxclick', onMouseDown, true),
+    );
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', onBlur);
@@ -124,7 +168,7 @@ export class BuildCamera {
     if (this.frameObserver) scene.onBeforeRenderObservable.remove(this.frameObserver);
     this.frameObserver = null;
     this.keys.clear();
-    this.altOrbit = null;
+    this.drag = null;
     const restore = () => {
       if (scene.activeCamera === this.camera && this.previous && !this.previous.isDisposed()) scene.activeCamera = this.previous;
     };

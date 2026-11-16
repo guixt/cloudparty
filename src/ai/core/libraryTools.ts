@@ -3,7 +3,7 @@ import { AI_LIMITS } from '../../../shared/aiTools';
 import { LIBRARY_LIMITS } from '../../../shared/library';
 import { getLibrary } from '../../library';
 import type { LibraryApi } from '../../library/api';
-import { coord, expandTargets, fail, getEntity, num, obj, ok, str, type Handler } from './tools';
+import { coord, expandTargets, reserveEntities, fail, getEntity, num, obj, ok, str, type Handler } from './tools';
 import { wrapData } from './summary';
 
 function lib(): LibraryApi {
@@ -33,10 +33,7 @@ export const libraryHandlers: Record<string, Handler> = {
     const item = await api.get(id);
     if (!item) fail(`Kein Baustein mit der id "${id.slice(0, 60)}" gefunden. Rufe library_list auf.`);
     const count = item!.count ?? item!.entities?.length ?? 1;
-    if (counters.newEntities + count > AI_LIMITS.maxNewEntities) {
-      fail(`Limit: höchstens ${AI_LIMITS.maxNewEntities} neue Objekte pro Auftrag (dieser Baustein hat ${count}, schon neu: ${counters.newEntities}).`);
-    }
-    void ctx;
+    await reserveEntities(ctx, counters, count, 'dieser Baustein');
     const ids = await api.place(id, { at, ...(yaw !== undefined ? { yawDegrees: yaw } : {}), ...(groupName ? { groupName } : {}) });
     counters.newEntities += ids.length || count;
     return ok(`Baustein platziert, ${ids.length} Objekte: ${JSON.stringify(ids)}`, `Baustein „${item!.name.slice(0, 40)}“ platziert (${ids.length} Objekte)`, true);

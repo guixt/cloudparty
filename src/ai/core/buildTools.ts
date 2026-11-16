@@ -22,10 +22,10 @@ import {
   type Opening,
 } from './buildGeometry';
 import { wrapData } from './summary';
-import { applyCommon, coord, fail, getEntityOrGroup, num, obj, ok, opts, str, vec, type Handler, type RunCounters, type ToolContext } from './tools';
+import { applyCommon, coord, reserveEntities, fail, getEntityOrGroup, num, obj, ok, opts, str, vec, type Handler, type RunCounters, type ToolContext } from './tools';
 
-const MAX_WALL_PIECES = 40;
-const MAX_ARRAY_ITEMS = 100;
+const MAX_WALL_PIECES = 100;
+const MAX_ARRAY_ITEMS = AI_LIMITS.maxPerCall;
 const MAX_CLONES = 10;
 const round = (n: number) => Math.round(n * 100) / 100;
 const roundVec = (v: Vec3): Vec3 => [round(v[0]), round(v[1]), round(v[2])];
@@ -36,12 +36,6 @@ function guard<T>(fn: () => T): T {
   } catch (error) {
     if (error instanceof GeometryError) return fail(error.message);
     throw error;
-  }
-}
-
-function reserve(counters: RunCounters, count: number, what: string): void {
-  if (counters.newEntities + count > AI_LIMITS.maxNewEntities) {
-    fail(`Limit: höchstens ${AI_LIMITS.maxNewEntities} neue Objekte pro Auftrag (${what} braucht ${count}, schon neu: ${counters.newEntities}).`);
   }
 }
 
@@ -97,7 +91,7 @@ function membersOf(ctx: ToolContext, e: EntitySpec): EntitySpec[] {
 }
 
 export const buildHandlers: Record<string, Handler> = {
-  add_wall(input, ctx, counters) {
+  async add_wall(input, ctx, counters) {
     const from = xz(input.from, 'from');
     const to = xz(input.to, 'to');
     const height = num(input.height, 'height', 0.2, AI_LIMITS.maxSize);
@@ -117,7 +111,7 @@ export const buildHandlers: Record<string, Handler> = {
     });
     const pieces = guard(() => wallPieces(from, to, height, thickness, y0, openings));
     if (pieces.length > MAX_WALL_PIECES) fail(`Die Wand besteht aus zu vielen Teilen (${pieces.length}, höchstens ${MAX_WALL_PIECES}).`);
-    reserve(counters, pieces.length, 'diese Wand');
+    await reserveEntities(ctx, counters, pieces.length, 'diese Wand');
     const name = input.name === undefined ? 'Wand' : str(input.name, 'name', 80, true) || 'Wand';
     const group = { id: newEntityId('grp'), name };
     const ids: string[] = [];
@@ -132,8 +126,8 @@ export const buildHandlers: Record<string, Handler> = {
     return ok(`Wand angelegt: group="${group.id}", ${pieces.length} Teile${idsText(ids)}. ${boundsText(made)}`, `${name} gebaut (${pieces.length} Teile)`, true);
   },
 
-  add_beam(input, ctx, counters) {
-    reserve(counters, 1, 'dieser Balken');
+  async add_beam(input, ctx, counters) {
+    await reserveEntities(ctx, counters, 1, 'dieser Balken');
     const a = coord(input.from, 'from');
     const b = coord(input.to, 'to');
     const thickness = num(input.thickness, 'thickness', AI_LIMITS.minSize, 10);
@@ -151,7 +145,7 @@ export const buildHandlers: Record<string, Handler> = {
     return ok(`Balken angelegt, id="${entity.id}", Länge ${round(t.length)} m.`, `${name} gesetzt (${round(t.length)} m)`, true);
   },
 
-  array(input, ctx, counters) {
+  async array(input, ctx, counters) {
     const ref = str(input.ref, 'ref', 100);
     if (!isKnownRef(ref)) fail(`Unbekannter ref "${ref.slice(0, 60)}". Gültige refs: ${knownRefs().join(', ')}`);
     const pattern = input.pattern;
@@ -178,7 +172,7 @@ export const buildHandlers: Record<string, Handler> = {
       return fail('pattern muss circle, line oder grid sein.');
     }
     if (items.length > MAX_ARRAY_ITEMS) fail(`Zu viele Teile (höchstens ${MAX_ARRAY_ITEMS}).`);
-    reserve(counters, items.length, 'diese Anordnung');
+    await reserveEntities(ctx, counters, items.length, 'diese Anordnung');
     const label = input.name === undefined ? getPrefab(ref)?.label ?? 'Objekt' : str(input.name, 'name', 80, true) || 'Objekt';
     const group = { id: newEntityId('grp'), name: label };
     const ids: string[] = [];
@@ -202,11 +196,11 @@ export const buildHandlers: Record<string, Handler> = {
     return ok(`Angeordnet: group="${group.id}", ${items.length} Objekte${idsText(ids)}. ${boundsText(made)}`, `${items.length}× ${label} angeordnet`, true);
   },
 
-  clone_group(input, ctx, counters) {
+  async clone_group(input, ctx, counters) {
     const source = getEntityOrGroup(ctx, input.id);
     const members = membersOf(ctx, source);
     const count = input.count === undefined ? 1 : Math.round(num(input.count, 'count', 1, MAX_CLONES));
-    reserve(counters, members.length * count, 'dieses Klonen');
+    await reserveEntities(ctx, counters, members.length * count, 'dieses Klonen');
     const offset: Vec3 = input.offset === undefined ? [0, 0, 0] : vec(input.offset, 'offset', -2 * AI_LIMITS.maxCoordinate, 2 * AI_LIMITS.maxCoordinate);
     const yaw = input.rotate_y_degrees === undefined ? 0 : num(input.rotate_y_degrees, 'rotate_y_degrees', -3600, 3600);
     const mirror: Mirror = input.mirror === undefined ? undefined : input.mirror === 'x' || input.mirror === 'z' ? input.mirror : (fail('mirror muss x oder z sein.') as never);

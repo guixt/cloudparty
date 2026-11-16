@@ -230,7 +230,7 @@ const build: GameModule = {
       } else if (key === '1' || key === 'g') buildState.setState({ tool: 'move' });
       else if (key === '2' || key === 'r') buildState.setState({ tool: 'rotate' });
       else if (key === '3') buildState.setState({ tool: 'scale' });
-      else if (key === 'f') cam.focus(state.selection ? ctx.entityNodes.get(state.selection) : null);
+      else if (key === 'f' || e.code === 'NumpadDecimal') cam.focus(state.selection ? ctx.entityNodes.get(state.selection) : null);
     };
     window.addEventListener('keydown', onKeyDown);
     cleanups.push(() => window.removeEventListener('keydown', onKeyDown));

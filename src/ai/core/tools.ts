@@ -60,6 +60,8 @@ export interface RunCounters {
   removals: number;
   /** Der Nutzer hat große Löschungen in diesem Auftrag bereits erlaubt. */
   removalsApproved?: boolean;
+  /** Der Nutzer hat einen großen Bau (viele neue Objekte) in diesem Auftrag erlaubt. */
+  bigBuildApproved?: boolean;
   /** Bisher gemachte Screenshots in diesem Auftrag. */
   screenshots?: number;
   imageSearches?: number;
@@ -266,6 +268,26 @@ export function expandTargets(ctx: ToolContext, raw: unknown[]): EntitySpec[] {
   return [...out.values()];
 }
 
+/**
+ * Prüft vor dem Anlegen von `count` Objekten die Grenzen: je Auftrag (maxNewEntities), je Welt (maxWorldEntities)
+ * und fragt ab confirmNewEntitiesAt einmal pro Auftrag den Nutzer (außer im Modus „alles erlaubt“).
+ */
+export async function reserveEntities(ctx: ToolContext, counters: RunCounters, count: number, what: string): Promise<void> {
+  const total = counters.newEntities + count;
+  if (total > AI_LIMITS.maxNewEntities) {
+    fail(`Limit: höchstens ${AI_LIMITS.maxNewEntities} neue Objekte pro Auftrag (${what} braucht ${count}, schon neu: ${counters.newEntities}). Teile die Arbeit auf mehrere Aufträge auf oder frage den Nutzer.`);
+  }
+  const inWorld = ctx.store.getState().order.length;
+  if (inWorld + count > AI_LIMITS.maxWorldEntities) {
+    fail(`Die Welt hat höchstens ${AI_LIMITS.maxWorldEntities} Objekte (jetzt ${inWorld}, ${what} braucht ${count}). Entferne Objekte oder fasse Teile zu größeren zusammen (z. B. große Platten statt vieler kleiner Steine).`);
+  }
+  if (!ctx.autoApprove && !counters.bigBuildApproved && total >= AI_LIMITS.confirmNewEntitiesAt) {
+    const yes = await ctx.confirm(`Die KI möchte in diesem Auftrag insgesamt ${total} neue Objekte anlegen (${what}). Erlauben?`);
+    if (!yes) fail('Nutzer hat abgelehnt');
+    counters.bigBuildApproved = true;
+  }
+}
+
 export function ok(content: string, summary: string, mutated: boolean): ToolOutcome {
   return { ok: true, content, summary, mutated };
 }
@@ -315,8 +337,8 @@ const handlers: Record<string, Handler> = {
     return ok(wrapData(JSON.stringify(summary)), 'Welt angesehen', false);
   },
 
-  add_entity(input, ctx, counters) {
-    if (counters.newEntities >= AI_LIMITS.maxNewEntities) fail(`Limit erreicht: höchstens ${AI_LIMITS.maxNewEntities} neue Objekte pro Auftrag.`);
+  async add_entity(input, ctx, counters) {
+    await reserveEntities(ctx, counters, 1, 'dieses Objekt');
     const ref = str(input.ref, 'ref', 100);
     if (!isKnownRef(ref)) {
       fail(`Unbekannter ref "${ref.slice(0, 60)}". Gültige refs: ${knownRefs().join(', ')}`);
