@@ -212,6 +212,18 @@ export function SettingsDialog({ api, explain, onClose }: { api: AssistantApi; e
           />
           <span>Die KI darf Screenshots der Welt ansehen (kostet zusätzliche Tokens; die Bilder gehen an Anthropic)</span>
         </label>
+        <label className="ai-radio">
+          <input
+            type="checkbox"
+            data-testid="ai-image-search"
+            checked={settings.imageSearch}
+            onChange={(e) => {
+              api.setImageSearch(e.target.checked);
+              force((n) => n + 1);
+            }}
+          />
+          <span>Die KI darf im Internet nach freien Bildern suchen (Wikimedia Commons, Openverse; der Suchbegriff geht an diese Dienste, die Bilder werden verkleinert in der Welt gespeichert)</span>
+        </label>
         <div className="cp-label">Freigaben</div>
         <label className="ai-radio">
           <input

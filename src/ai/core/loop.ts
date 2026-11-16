@@ -29,6 +29,8 @@ export interface AssistantDeps {
   getHistory(): HistoryLike | null;
   /** Screenshot der Welt (Werkzeug look); fehlt es, sind Screenshots nicht verfügbar. */
   captureView?(req: import('./capture').ViewRequest): Promise<string | null>;
+  /** Lädt ein Bild und liefert eine verkleinerte JPEG-Daten-URL (Werkzeug use_image). */
+  fetchImage?(url: string): Promise<string | null>;
 }
 
 const TOOLS: ApiTool[] = AI_TOOLS.map(({ name, description, input_schema }) => ({ name, description, input_schema }));
@@ -94,7 +96,7 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
       }
     };
     // Freigabe-Modus einmal pro Auftrag lesen, damit eine Umstellung mitten im Auftrag nicht halb wirkt.
-    const toolCtx = { store, bus, getAvatar: deps.getAvatar, confirm, autoApprove: settings.getApproval() === 'auto', vision: settings.getVision(), captureView: deps.captureView };
+    const toolCtx = { store, bus, getAvatar: deps.getAvatar, confirm, autoApprove: settings.getApproval() === 'auto', vision: settings.getVision(), captureView: deps.captureView, imageSearch: settings.getImageSearch(), fetchImage: deps.fetchImage };
 
     try {
       let finished = false;
@@ -201,10 +203,11 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
   }
 
   return {
-    getSettings: () => ({ hasKey: settings.hasApiKey(), model: settings.getModel(), approval: settings.getApproval(), vision: settings.getVision(), ...settings.getTokenLimits() }),
+    getSettings: () => ({ hasKey: settings.hasApiKey(), model: settings.getModel(), approval: settings.getApproval(), vision: settings.getVision(), imageSearch: settings.getImageSearch(), ...settings.getTokenLimits() }),
     setTokenLimits: (limits) => settings.setTokenLimits(limits),
     setApproval: (mode) => settings.setApproval(mode),
     setVision: (on) => settings.setVision(on),
+    setImageSearch: (on) => settings.setImageSearch(on),
     setApiKey: (key) => settings.setApiKey(key),
     setModel: (model) => {
       if (AI_MODELS.some((m) => m.id === model)) settings.setModel(model);

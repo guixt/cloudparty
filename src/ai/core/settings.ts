@@ -81,6 +81,18 @@ export function setVision(on: boolean): void {
   }
 }
 
+/** Darf die KI im Internet nach Bildern suchen? Standard: nein. */
+export function getImageSearch(): boolean {
+  return read(AI_STORAGE_KEYS.imageSearch) === '1';
+}
+export function setImageSearch(on: boolean): void {
+  try {
+    storage()?.setItem(AI_STORAGE_KEYS.imageSearch, on ? '1' : '0');
+  } catch {
+    /* ignorieren */
+  }
+}
+
 type LimitRange = { min: number; max: number; step: number; default: number };
 function clampLimit(raw: string, range: LimitRange): number {
   const n = Number(raw);

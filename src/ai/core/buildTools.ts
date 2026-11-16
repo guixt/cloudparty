@@ -4,7 +4,8 @@
  */
 import { AI_LIMITS } from '../../../shared/aiTools';
 import { DEFAULT_ISLAND, newEntityId, type EntitySpec, type Quat, type Vec3 } from '../../../shared/types';
-import { createEntityFromPrefab, getPrefab, PREFABS } from '../../world/entities/prefabs';
+import { createEntityFromPrefab, getPrefab } from '../../world/entities/prefabs';
+import { baseEntityFor, isKnownRef, knownRefs } from './refs';
 import {
   GeometryError,
   arrayItems,
@@ -138,7 +139,7 @@ export const buildHandlers: Record<string, Handler> = {
 
   array(input, ctx, counters) {
     const ref = str(input.ref, 'ref', 100);
-    if (!getPrefab(ref)) fail(`Unbekannter ref "${ref.slice(0, 60)}". Gültige refs: ${PREFABS.map((p) => p.ref).join(', ')}`);
+    if (!isKnownRef(ref)) fail(`Unbekannter ref "${ref.slice(0, 60)}". Gültige refs: ${knownRefs().join(', ')}`);
     const pattern = input.pattern;
     let items;
     if (pattern === 'circle') {
@@ -168,7 +169,7 @@ export const buildHandlers: Record<string, Handler> = {
     const group = { id: newEntityId('grp'), name: label };
     const ids: string[] = [];
     items.forEach((item, i) => {
-      const base = createEntityFromPrefab(ref, [0, 0, 0]);
+      const base = baseEntityFor(ref);
       base.transform.pos = item.pos;
       const common: Record<string, unknown> = {};
       for (const key of ['material', 'physics', 'particles', 'state', 'scale', 'rotation_degrees'] as const) if (input[key] !== undefined) common[key] = input[key];

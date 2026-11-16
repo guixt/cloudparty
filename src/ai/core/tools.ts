@@ -31,6 +31,8 @@ import { graphHandlers } from './graphTools';
 import { planHandlers } from './planTools';
 import { visionHandlers } from './visionTools';
 import { buildHandlers } from './buildTools';
+import { imageHandlers } from './imageTools';
+import { baseEntityFor, isKnownRef, knownRefs } from './refs';
 
 export interface ToolContext {
   store: WorldStore;
@@ -41,6 +43,10 @@ export interface ToolContext {
   autoApprove?: boolean;
   /** true = der Nutzer erlaubt Screenshots (Einstellung), pro Auftrag gelesen. */
   vision?: boolean;
+  /** true = der Nutzer erlaubt die Bildsuche im Internet (Einstellung), pro Auftrag gelesen. */
+  imageSearch?: boolean;
+  /** Lädt ein Bild herunter, verkleinert es und liefert eine JPEG-Daten-URL (oder null). */
+  fetchImage?(url: string): Promise<string | null>;
   /** Rendert die Welt aus einer Kamera und liefert ein Base64-JPEG (ohne Präfix) oder null. */
   captureView?(req: import('./capture').ViewRequest): Promise<string | null>;
 }
@@ -53,6 +59,8 @@ export interface RunCounters {
   removalsApproved?: boolean;
   /** Bisher gemachte Screenshots in diesem Auftrag. */
   screenshots?: number;
+  imageSearches?: number;
+  imageDownloads?: number;
 }
 export interface ToolOutcome {
   ok: boolean;
@@ -239,11 +247,11 @@ const handlers: Record<string, Handler> = {
   add_entity(input, ctx, counters) {
     if (counters.newEntities >= AI_LIMITS.maxNewEntities) fail(`Limit erreicht: höchstens ${AI_LIMITS.maxNewEntities} neue Objekte pro Auftrag.`);
     const ref = str(input.ref, 'ref', 100);
-    if (!getPrefab(ref)) {
-      fail(`Unbekannter ref "${ref.slice(0, 60)}". Gültige refs: ${PREFABS.map((p) => p.ref).join(', ')}`);
+    if (!isKnownRef(ref)) {
+      fail(`Unbekannter ref "${ref.slice(0, 60)}". Gültige refs: ${knownRefs().join(', ')}`);
     }
     const position = coord(input.position, 'position');
-    const base = createEntityFromPrefab(ref, [0, 0, 0]);
+    const base = baseEntityFor(ref);
     // `position` ist der Ursprung der Entity (Mitte bei Grundformen, Boden bei Zusammengesetztem).
     base.transform.pos = position;
     const entity = applyCommon(base, input, base);
@@ -409,7 +417,7 @@ const handlers: Record<string, Handler> = {
 /** Führt ein Werkzeug aus. Wirft nie; Fehler kommen als `ok: false` zurück. */
 export async function executeTool(name: string, rawInput: unknown, ctx: ToolContext, counters: RunCounters): Promise<ToolOutcome> {
   const def = getToolDefinition(name);
-  const handler = def ? (handlers[name] ?? groupHandlers[name] ?? libraryHandlers[name] ?? graphHandlers[name] ?? planHandlers[name] ?? visionHandlers[name] ?? buildHandlers[name]) : undefined;
+  const handler = def ? (handlers[name] ?? groupHandlers[name] ?? libraryHandlers[name] ?? graphHandlers[name] ?? planHandlers[name] ?? visionHandlers[name] ?? buildHandlers[name] ?? imageHandlers[name]) : undefined;
   if (!def || !handler) {
     const msg = `Unbekanntes Werkzeug "${name.slice(0, 40)}".`;
     return { ok: false, content: msg, summary: msg, mutated: false };

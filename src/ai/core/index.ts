@@ -4,6 +4,7 @@
  */
 import type { GameModule } from '../../core/context';
 import { captureView } from './capture';
+import { fetchImageAsDataUrl } from './imageFetch';
 import { runtime as buildRuntime } from '../../build/runtime';
 import type { AskClaude, AssistantApi } from '../api';
 import { streamMessage } from './client';
@@ -48,6 +49,7 @@ const mod: GameModule = {
       getAvatar: () => ({ position: [...ctx.localAvatar.presence.position], yaw: ctx.localAvatar.presence.yaw }),
       getHistory: () => buildRuntime.history,
       captureView: (req) => captureView(ctx, req),
+      fetchImage: (url) => fetchImageAsDataUrl(url),
     });
     (globalThis as { __cloudpartyAi?: AssistantApi }).__cloudpartyAi = assistant;
   },

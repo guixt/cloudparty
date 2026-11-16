@@ -31,6 +31,8 @@ export interface AiSettings {
   approval: AiApprovalMode;
   /** true = die KI darf Screenshots der Welt ansehen (Werkzeug look). */
   vision: boolean;
+  /** true = die KI darf im Internet nach freien Bildern suchen (Werkzeuge search_images, use_image). */
+  imageSearch: boolean;
   /** Obergrenze der Eingabe pro Anfrage in Tokens (siehe AI_TOKEN_LIMITS). */
   maxInputTokens: number;
   /** Obergrenze der Antwortlänge pro Anfrage in Tokens. */
@@ -44,6 +46,7 @@ export interface AssistantApi {
   setModel(model: string): void;
   setApproval(mode: AiApprovalMode): void;
   setVision(on: boolean): void;
+  setImageSearch(on: boolean): void;
   /** Speichert die Längengrenzen (nur Browser); Werte werden auf den erlaubten Bereich begrenzt. */
   setTokenLimits(limits: { maxInputTokens?: number; maxOutputTokens?: number }): void;
   /** Führt einen Auftrag aus; Gesprächsverlauf bleibt zwischen Aufträgen erhalten. */

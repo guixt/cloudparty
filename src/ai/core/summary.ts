@@ -3,6 +3,7 @@ import { AI_LIMITS } from '../../../shared/aiTools';
 import { DEFAULT_ISLAND, type EntitySpec, type Vec3 } from '../../../shared/types';
 import type { WorldState } from '../../core/store';
 import { PREFABS } from '../../world/entities/prefabs';
+import { extraCatalog } from './refs';
 import { quatToEuler } from '../../scripting/runtime/commands';
 import { graphToCompact } from '../../../shared/graphCompact';
 
@@ -59,13 +60,17 @@ export function entitySummary(e: EntitySpec, includeGraph = false) {
 }
 
 export function prefabCatalog() {
-  return PREFABS.map((p) => ({
-    ref: p.ref,
-    bezeichnung: p.label,
-    kategorie: p.category,
-    standard_skalierung: p.defaults.transform?.scale ?? [1, 1, 1],
-    ursprung: (p.groundOffset ?? 0) > 0 ? 'Mitte' : 'Boden',
-  }));
+  return [
+    ...PREFABS.map((p) => ({
+      ref: p.ref,
+      bezeichnung: p.label,
+      kategorie: p.category,
+      standard_skalierung: p.defaults.transform?.scale ?? [1, 1, 1],
+      ursprung: (p.groundOffset ?? 0) > 0 ? 'Mitte' : 'Boden',
+    })),
+    // Bausteine des Bauen-Menüs ohne Prefab-Registrierung, z. B. die Medien-Tafeln.
+    ...extraCatalog(),
+  ];
 }
 
 export function buildWorldSummary(state: WorldState, avatar: { position: Vec3; yaw: number } | null) {
