@@ -74,12 +74,65 @@ export function prefabCatalog() {
   ];
 }
 
-export function buildWorldSummary(state: WorldState, avatar: { position: Vec3; yaw: number } | null) {
+/** Gruppen ab dieser Mitgliederzahl erscheinen in get_world als eine Zeile (spart bei Steinbauten sehr viele Tokens). */
+export const COLLAPSE_GROUP_AT = 3;
+
+/** Grober Rahmen aus Position ± halbe Skalierung (Näherung, ohne Drehung). */
+function roughBounds(members: EntitySpec[]): { min: Vec3; max: Vec3 } {
+  const min: Vec3 = [Infinity, Infinity, Infinity];
+  const max: Vec3 = [-Infinity, -Infinity, -Infinity];
+  for (const e of members) {
+    for (let i = 0; i < 3; i++) {
+      const half = Math.max(e.transform.scale[i], 0.1) / 2;
+      min[i] = Math.min(min[i], e.transform.pos[i] - half);
+      max[i] = Math.max(max[i], e.transform.pos[i] + half);
+    }
+  }
+  return { min: r3(min), max: r3(max) };
+}
+
+export function groupSummary(id: string, members: EntitySpec[]) {
+  const refs = [...new Set(members.map((m) => m.ref.replace(/^EntitySpec\./, '')))].slice(0, 6);
+  const colors = [...new Set(members.map((m) => m.material?.color).filter((c): c is string => !!c))].slice(0, 4);
+  return { gruppe: id, gruppenname: members[0].groupName ?? '', anzahl: members.length, typen: refs, farben: colors, ...roughBounds(members), naeherung: true };
+}
+
+export function buildWorldSummary(state: WorldState, avatar: { position: Vec3; yaw: number } | null, opts: { group?: string; nameContains?: string } = {}) {
   const island = state.world.island ?? DEFAULT_ISLAND;
   const all = state.order.map((id) => state.entities[id]).filter(Boolean);
-  const shown = all.slice(0, MAX_SUMMARY_ENTITIES);
   const env = state.world.environment;
   let graphCount = 0;
+
+  // Zeilen: lose Objekte einzeln, große Gruppen als eine Zeile (an der Stelle ihres ersten Mitglieds).
+  const byGroup = new Map<string, EntitySpec[]>();
+  for (const e of all) if (e.group) byGroup.set(e.group, [...(byGroup.get(e.group) ?? []), e]);
+  let rows: Record<string, unknown>[];
+  let hint: string | undefined;
+  if (opts.group) {
+    const members = byGroup.get(opts.group) ?? [];
+    rows = members.slice(0, MAX_SUMMARY_ENTITIES).map((e) => entitySummary(e, false));
+    hint = members.length === 0 ? `Keine Gruppe „${opts.group.slice(0, 40)}“.` : members.length > rows.length ? `Nur die ersten ${rows.length} von ${members.length} Mitgliedern gezeigt.` : undefined;
+  } else {
+    const needle = opts.nameContains?.toLowerCase();
+    const seen = new Set<string>();
+    const all2: Record<string, unknown>[] = [];
+    for (const e of all) {
+      if (e.group && (byGroup.get(e.group)?.length ?? 0) >= COLLAPSE_GROUP_AT) {
+        if (seen.has(e.group)) continue;
+        seen.add(e.group);
+        const members = byGroup.get(e.group) ?? [];
+        if (needle && !members.some((m) => `${m.name ?? ''} ${m.groupName ?? ''}`.toLowerCase().includes(needle))) continue;
+        all2.push(groupSummary(e.group, members));
+      } else {
+        if (needle && !`${e.name ?? ''} ${e.groupName ?? ''}`.toLowerCase().includes(needle)) continue;
+        all2.push(entitySummary(e, (graphCount += e.graph ? 1 : 0) <= MAX_GRAPH_OBJECTS));
+      }
+    }
+    // Bei Überlauf bleiben die neuesten Zeilen (dort wird gerade gebaut).
+    rows = all2.length > MAX_SUMMARY_ENTITIES ? all2.slice(-MAX_SUMMARY_ENTITIES) : all2;
+    if (all2.length > rows.length) hint = `Nur die letzten ${rows.length} von ${all2.length} Zeilen gezeigt (ältere weggelassen; filtere mit name_contains).`;
+    else if (byGroup.size > 0) hint = 'Gruppen mit mindestens 3 Teilen stehen als eine Zeile (Maße nur grob). Die Gruppen-id gilt für get_bounds, clone_group, use_texture, remove_entity und update_entity; get_world mit group=<id> listet die Mitglieder.';
+  }
   return {
     welt: state.world.metadata.name,
     insel: { radius: island.radius, tiefe: island.depth, oberseite_y: 0 },
@@ -89,8 +142,8 @@ export function buildWorldSummary(state: WorldState, avatar: { position: Vec3; y
     },
     avatar: avatar ? { position: r3(avatar.position), blickrichtung_yaw_grad: r(((avatar.yaw * 180) / Math.PI) % 360) } : null,
     anzahl_objekte: all.length,
-    ...(all.length > shown.length ? { hinweis: `Nur die ersten ${shown.length} von ${all.length} Objekten gezeigt.` } : {}),
-    objekte: shown.map((e) => entitySummary(e, (graphCount += e.graph ? 1 : 0) <= MAX_GRAPH_OBJECTS)),
+    ...(hint ? { hinweis: hint } : {}),
+    objekte: rows,
     katalog: prefabCatalog(),
     grenzen: { max_koordinate: AI_LIMITS.maxCoordinate, min_groesse: AI_LIMITS.minSize, max_groesse: AI_LIMITS.maxSize },
   };

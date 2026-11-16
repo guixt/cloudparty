@@ -100,7 +100,9 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
       }
     };
     // Freigabe-Modus einmal pro Auftrag lesen, damit eine Umstellung mitten im Auftrag nicht halb wirkt.
-    const toolCtx = { store, bus, getAvatar: deps.getAvatar, confirm, autoApprove: settings.getApproval() === 'auto', vision: settings.getVision(), captureView: deps.captureView, imageSearch: settings.getImageSearch(), fetchImage: deps.fetchImage };
+    const startIds = new Set(store.getState().order);
+    const createdSince = () => store.getState().order.filter((id) => !startIds.has(id));
+    const toolCtx = { store, bus, createdSince, getAvatar: deps.getAvatar, confirm, autoApprove: settings.getApproval() === 'auto', vision: settings.getVision(), captureView: deps.captureView, imageSearch: settings.getImageSearch(), fetchImage: deps.fetchImage };
 
     try {
       let finished = false;

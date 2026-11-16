@@ -28,12 +28,13 @@ interface Spec extends Footprint {
   rot90: boolean;
 }
 
-function place(specs: Spec[], origin: Vec3, name: string, ctx: ToolContext, counters: RunCounters): { ids: string[]; group: string } {
+function place(specs: Spec[], origin: Vec3, name: string, ctx: ToolContext, counters: RunCounters): { ids: string[]; group: string; bounds: string } {
   reserve(counters, specs.length, name);
   const { entities, order } = ctx.store.getState();
   const placed: PlacedBrick[] = order.map((id) => entities[id]).filter((e): e is EntitySpec => !!e).map((e) => placedFromEntity(e, origin)).filter((b): b is PlacedBrick => !!b);
   const group = { id: newEntityId('grp'), name };
   const ids: string[] = [];
+  const mine: PlacedBrick[] = [];
   specs.forEach((s, i) => {
     const st = brickState({ w: s.w, d: s.d, kind: s.kind });
     const plates = kindPlates(st.kind, st.d);
@@ -41,6 +42,7 @@ function place(specs: Spec[], origin: Vec3, name: string, ctx: ToolContext, coun
     const level = s.level ?? restLevel(fp, placed);
     const brick: PlacedBrick = { ...fp, level, plates };
     placed.push(brick);
+    mine.push(brick);
     const base = createEntityFromPrefab(BRICK_REF, [0, 0, 0]);
     // state.w/d sind die unrotierten Maße; die Drehung steckt in der Entity.
     const common: Record<string, unknown> = { state: { w: st.w, d: st.d, kind: st.kind }, ...(s.color ? { material: { color: s.color, preset: 'lack' } } : {}) };
@@ -54,7 +56,10 @@ function place(specs: Spec[], origin: Vec3, name: string, ctx: ToolContext, coun
     ids.push(entity.id);
   });
   counters.newEntities += specs.length;
-  return { ids, group: group.id };
+  const lo = [Math.min(...mine.map((b) => origin[0] + b.gx * STUD)), Math.min(...mine.map((b) => origin[1] + b.level * PLATE_H)), Math.min(...mine.map((b) => origin[2] + b.gz * STUD))];
+  const hi = [Math.max(...mine.map((b) => origin[0] + (b.gx + b.w) * STUD)), Math.max(...mine.map((b) => origin[1] + (b.level + b.plates) * PLATE_H)), Math.max(...mine.map((b) => origin[2] + (b.gz + b.d) * STUD))];
+  const f = (v: number[]) => v.map((n) => Math.round(n * 100) / 100).join(', ');
+  return { ids, group: group.id, bounds: `Maße: min [${f(lo)}], max [${f(hi)}] (m, Noppen ohne Höhe; Oberkante y = ${f([hi[1]])}).` };
 }
 
 function originOf(input: Record<string, unknown>): Vec3 {
@@ -104,8 +109,8 @@ export const brickHandlers: Record<string, Handler> = {
       };
     });
     const name = input.name === undefined ? 'Steine' : str(input.name, 'name', 80, true) || 'Steine';
-    const { ids, group } = place(specs, origin, name, ctx, counters);
-    return ok(`${ids.length} Steine gesetzt: group="${group}", ids: ${ids.join(', ')}.`, `${ids.length} Steine gesetzt`, true);
+    const { ids, group, bounds } = place(specs, origin, name, ctx, counters);
+    return ok(`${ids.length} Steine gesetzt: group="${group}"${ids.length <= 10 ? `, ids: ${ids.join(', ')}` : ''}. ${bounds}`, `${ids.length} Steine gesetzt`, true);
   },
 
   fill_bricks(input, ctx, counters) {
@@ -138,7 +143,7 @@ export const brickHandlers: Record<string, Handler> = {
     }
     if (specs.length === 0) fail('Es bleibt kein Stein übrig (Öffnungen füllen alles).');
     const name = input.name === undefined ? (mode === 'wall' ? 'Mauer' : 'Bodenplatte') : str(input.name, 'name', 80, true) || 'Mauer';
-    const { ids, group } = place(specs, origin, name, ctx, counters);
-    return ok(`${ids.length} Steine gemauert: group="${group}".`, `${name} gemauert (${ids.length} Steine)`, true);
+    const { ids, group, bounds } = place(specs, origin, name, ctx, counters);
+    return ok(`${ids.length} Steine gemauert: group="${group}". ${bounds}`, `${name} gemauert (${ids.length} Steine)`, true);
   },
 };

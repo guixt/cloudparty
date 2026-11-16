@@ -162,8 +162,8 @@ export const AI_TOOLS: AiToolDefinition[] = [
   {
     name: 'get_world',
     description:
-      'Liefert eine Zusammenfassung der Welt: Inselgröße, Himmel, alle Objekte (id, Name, Typ, Position, Größe, Farbe, ob Skript/Medien/Physik), Position des Nutzer-Avatars und den Katalog verfügbarer Bausteine. Rufe das zuerst auf, wenn du bestehende Objekte brauchst.',
-    input_schema: { type: 'object', properties: {} },
+      'Liefert eine Zusammenfassung der Welt: Inselgröße, Himmel, alle Objekte (id, Name, Typ, Position, Größe, Farbe, ob Skript/Medien/Physik), Position des Nutzer-Avatars und den Katalog verfügbarer Bausteine. Gruppen mit mindestens 3 Teilen (Mauern, Türme) stehen als EINE Zeile mit Gruppen-id, Anzahl und grobem Rahmen; `group` listet die Mitglieder einer Gruppe, `name_contains` filtert nach Namen. Das Ergebnis ist groß: rufe es selten auf (die Ergebnisse der Bauwerkzeuge nennen schon Gruppen-id und Maße).',
+    input_schema: { type: 'object', properties: { group: { type: 'string', description: 'Gruppen-id: nur deren Mitglieder auflisten' }, name_contains: { type: 'string', maxLength: 60 } } },
     mutates: false,
   },
   {

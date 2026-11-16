@@ -79,6 +79,18 @@ export function entityBox(e: EntitySpec): { box: Box; approx: boolean } {
   return { box: rotatedBox(center, [sx, sy, sz], e.transform.rot), approx: true };
 }
 
+/** Kurztext mit Rahmen (min, max, Mitte) für Werkzeugergebnisse; spart der KI spätere get_bounds-Aufrufe. */
+export function boundsText(entities: EntitySpec[]): string {
+  const box = unionBox(entities.map((e) => entityBox(e).box));
+  const mid = [0, 1, 2].map((i) => (box.min[i] + box.max[i]) / 2) as Vec3;
+  return `Maße: min [${roundVec(box.min)}], max [${roundVec(box.max)}], Mitte [${roundVec(mid)}] (m).`;
+}
+
+/** ids nur bei wenigen Teilen aufzählen; die Gruppen-id genügt für die weiteren Werkzeuge. */
+export function idsText(ids: string[]): string {
+  return ids.length <= 10 ? `, ids: ${ids.join(', ')}` : '';
+}
+
 function membersOf(ctx: ToolContext, e: EntitySpec): EntitySpec[] {
   const { entities, order } = ctx.store.getState();
   return e.group ? order.map((id) => entities[id]).filter((x): x is EntitySpec => !!x && x.group === e.group) : [e];
@@ -109,13 +121,15 @@ export const buildHandlers: Record<string, Handler> = {
     const name = input.name === undefined ? 'Wand' : str(input.name, 'name', 80, true) || 'Wand';
     const group = { id: newEntityId('grp'), name };
     const ids: string[] = [];
+    const made: EntitySpec[] = [];
     pieces.forEach((p, i) => {
       const entity = makePiece('EntitySpec.box', p.center, yawQuat(p.yawDeg), p.size, input, `${name} ${i + 1}`, group);
       ctx.store.getState().addEntity(entity, opts);
       ids.push(entity.id);
+      made.push(entity);
     });
     counters.newEntities += pieces.length;
-    return ok(`Wand angelegt: group="${group.id}", ${pieces.length} Teile, ids: ${ids.join(', ')}.`, `${name} gebaut (${pieces.length} Teile)`, true);
+    return ok(`Wand angelegt: group="${group.id}", ${pieces.length} Teile${idsText(ids)}. ${boundsText(made)}`, `${name} gebaut (${pieces.length} Teile)`, true);
   },
 
   add_beam(input, ctx, counters) {
@@ -168,6 +182,7 @@ export const buildHandlers: Record<string, Handler> = {
     const label = input.name === undefined ? getPrefab(ref)?.label ?? 'Objekt' : str(input.name, 'name', 80, true) || 'Objekt';
     const group = { id: newEntityId('grp'), name: label };
     const ids: string[] = [];
+    const made: EntitySpec[] = [];
     items.forEach((item, i) => {
       const base = baseEntityFor(ref);
       base.transform.pos = item.pos;
@@ -181,9 +196,10 @@ export const buildHandlers: Record<string, Handler> = {
       entity.groupName = group.name;
       ctx.store.getState().addEntity(entity, opts);
       ids.push(entity.id);
+      made.push(entity);
     });
     counters.newEntities += items.length;
-    return ok(`Angeordnet: group="${group.id}", ${items.length} Objekte, ids: ${ids.join(', ')}.`, `${items.length}× ${label} angeordnet`, true);
+    return ok(`Angeordnet: group="${group.id}", ${items.length} Objekte${idsText(ids)}. ${boundsText(made)}`, `${items.length}× ${label} angeordnet`, true);
   },
 
   clone_group(input, ctx, counters) {

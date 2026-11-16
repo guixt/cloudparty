@@ -65,6 +65,26 @@ describe('Plan-Werkzeuge', () => {
     expect(done.result?.entityIds).toEqual([id]);
   });
 
+  it('plan_complete_node: Gruppen-id wird aufgelöst, leere Liste nimmt neue Objekte, lange Summary wird gekürzt', async () => {
+    const t = setup();
+    await t.run('plan_create', house);
+    const [plan] = listPlans(t.ctx);
+    const startIds = new Set(t.store.getState().order);
+    t.ctx.createdSince = () => t.store.getState().order.filter((i) => !startIds.has(i));
+    const w = await t.run('add_wall', { from: [0, 0], to: [6, 0], height: 3, openings: [{ at: 2, width: 1, height: 2 }] });
+    const group = /group="(grp_[^"]+)"/.exec(w.content)![1];
+    const members = t.store.getState().order.filter((i) => t.store.getState().entities[i].group === group);
+    const a = await t.run('plan_complete_node', { plan: plan.id, node: plan.nodes[0].id, summary: 'x'.repeat(900), entity_ids: [group] });
+    expect(a.ok).toBe(true);
+    const n0 = listPlans(t.ctx)[0].nodes[0];
+    expect([...(n0.result?.entityIds ?? [])].sort()).toEqual([...members].sort());
+    expect(n0.result?.summary.length).toBeLessThanOrEqual(400);
+    expect(n0.result?.group).toBe(group);
+    const b = await t.run('plan_complete_node', { plan: plan.id, node: plan.nodes[1].id, summary: 'ohne ids' });
+    expect(b.ok).toBe(true);
+    expect(listPlans(t.ctx)[0].nodes[1].result?.entityIds.length).toBe(members.length);
+  });
+
   it('plan_update_node verbietet „done“ und „running“, erlaubt open/failed/disabled', async () => {
     const t = setup();
     await t.run('plan_create', house);

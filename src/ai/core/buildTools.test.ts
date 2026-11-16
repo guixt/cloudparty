@@ -185,3 +185,52 @@ describe('Gruppen-ids', () => {
     expect(bad.content).toContain('Gruppen-id');
   });
 });
+
+describe('Gruppen entfernen, ändern, Weltübersicht', () => {
+  async function wall(t: ReturnType<typeof setup>) {
+    const r = await t.run('add_wall', { from: [0, 0], to: [8, 0], height: 3, openings: [{ at: 3, width: 2, height: 2 }, { at: 6, width: 1, height: 1, sill: 1 }], name: 'W' });
+    return /group="(grp_[^"]+)"/.exec(r.content)![1];
+  }
+
+  it('Ergebnis nennt Maße', async () => {
+    const t = setup();
+    const r = await t.run('add_wall', { from: [0, 0], to: [8, 0], height: 3, name: 'W' });
+    expect(r.content).toContain('Maße: min');
+  });
+
+  it('remove_entity mit Gruppen-id entfernt alle Mitglieder als eine Aktion', async () => {
+    const t = setup();
+    const g = await wall(t);
+    const before = t.all().length;
+    const n = t.all().filter((e) => e.group === g).length;
+    expect(n).toBeGreaterThan(2);
+    const r = await t.run('remove_entity', { id: g });
+    expect(r.ok).toBe(true);
+    expect(t.all().length).toBe(before - n);
+    expect(t.counters.removals).toBe(1);
+  });
+
+  it('update_entity mit Gruppen-id: Material und move_by für alle, absolute Position abgelehnt', async () => {
+    const t = setup();
+    const g = await wall(t);
+    const y0 = t.all().filter((e) => e.group === g).map((e) => e.transform.pos[2]);
+    expect((await t.run('update_entity', { id: g, material: { color: '#112233' }, move_by: [0, 0, 2] })).ok).toBe(true);
+    const parts = t.all().filter((e) => e.group === g);
+    expect(parts.every((e) => e.material?.color === '#112233')).toBe(true);
+    expect(parts.map((e) => e.transform.pos[2])).toEqual(y0.map((z) => z + 2));
+    const bad = await t.run('update_entity', { id: g, position: [0, 0, 0] });
+    expect(bad.ok).toBe(false);
+    expect(bad.content).toContain('move_by');
+  });
+
+  it('get_world fasst Gruppen zusammen und filtert', async () => {
+    const t = setup();
+    const g = await wall(t);
+    const w = JSON.parse(/<welt_daten>\n([\s\S]*)\n<\/welt_daten>/.exec((await t.run('get_world', {})).content)![1]);
+    const row = w.objekte.find((o: { gruppe?: string }) => o.gruppe === g);
+    expect(row.anzahl).toBeGreaterThan(2);
+    expect(w.objekte.filter((o: { gruppe?: string }) => o.gruppe === g)).toHaveLength(1);
+    const detail = JSON.parse(/<welt_daten>\n([\s\S]*)\n<\/welt_daten>/.exec((await t.run('get_world', { group: g })).content)![1]);
+    expect(detail.objekte).toHaveLength(row.anzahl);
+  });
+});

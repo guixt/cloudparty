@@ -50,6 +50,8 @@ export interface ToolContext {
   fetchImage?(url: string): Promise<{ dataUrl: string; width: number; height: number } | null>;
   /** Rendert die Welt aus einer Kamera und liefert ein Base64-JPEG (ohne Präfix) oder null. */
   captureView?(req: import('./capture').ViewRequest): Promise<string | null>;
+  /** Ids der Objekte, die seit Start des Auftrags neu entstanden und noch vorhanden sind. */
+  createdSince?(): string[];
 }
 /** Zähler pro Auftrag. */
 export interface RunCounters {
@@ -211,11 +213,21 @@ export function getEntity(ctx: ToolContext, id: unknown): EntitySpec {
   if (!entity) {
     const members = groupMembers(ctx, sid);
     if (members.length > 0) {
-      return fail(`"${sid.slice(0, 60)}" ist eine Gruppen-id, kein Objekt. Nimm die id eines Mitglieds (z. B. "${members[0].id}"); get_bounds, clone_group und use_texture akzeptieren auch Gruppen-ids.`);
+      return fail(`"${sid.slice(0, 60)}" ist eine Gruppen-id, kein Objekt. Nimm die id eines Mitglieds (z. B. "${members[0].id}"); get_bounds, clone_group, use_texture, remove_entity und update_entity (material, physics, particles, move_by) akzeptieren auch Gruppen-ids.`);
     }
     return fail(`Kein Objekt mit der id "${sid.slice(0, 60)}" gefunden. Rufe get_world auf, um gültige ids zu sehen.`);
   }
   return entity;
+}
+
+/** Ziel eines Werkzeugs: ein Objekt oder (bei einer Gruppen-id) alle Mitglieder der Gruppe. */
+export function resolveTargets(ctx: ToolContext, id: unknown): { targets: EntitySpec[]; isGroup: boolean } {
+  const sid = str(id, 'id', 200);
+  const entity = ctx.store.getState().entities[sid];
+  if (entity) return { targets: [entity], isGroup: false };
+  const members = groupMembers(ctx, sid);
+  if (members.length > 0) return { targets: members, isGroup: true };
+  return { targets: [getEntity(ctx, id)], isGroup: false };
 }
 
 /** Wie getEntity, akzeptiert aber auch eine Gruppen-id (liefert dann das erste Mitglied). */
@@ -270,7 +282,10 @@ export function applyCommon(entity: EntitySpec, input: Record<string, unknown>, 
 
 const handlers: Record<string, Handler> = {
   get_world(_input, ctx) {
-    const summary = buildWorldSummary(ctx.store.getState(), ctx.getAvatar());
+    const summary = buildWorldSummary(ctx.store.getState(), ctx.getAvatar(), {
+      ...(typeof _input.group === 'string' ? { group: _input.group.slice(0, 100) } : {}),
+      ...(typeof _input.name_contains === 'string' ? { nameContains: _input.name_contains.slice(0, 60) } : {}),
+    });
     return ok(wrapData(JSON.stringify(summary)), 'Welt angesehen', false);
   },
 
@@ -292,31 +307,41 @@ const handlers: Record<string, Handler> = {
   },
 
   update_entity(input, ctx) {
-    const entity = getEntity(ctx, input.id);
-    let next = applyCommon(entity, input, entity);
-    if (input.move_by !== undefined) {
-      const d = vec(input.move_by, 'move_by', -2 * AI_LIMITS.maxCoordinate, 2 * AI_LIMITS.maxCoordinate);
-      const p = next.transform.pos;
-      next = { ...next, transform: { ...next.transform, pos: coord([p[0] + d[0], p[1] + d[1], p[2] + d[2]], 'neue Position') } };
+    const { targets, isGroup } = resolveTargets(ctx, input.id);
+    if (isGroup) {
+      const bad = ['position', 'rotation_degrees', 'scale', 'state'].filter((k) => input[k] !== undefined);
+      if (bad.length > 0) fail(`Bei einer Gruppen-id sind ${bad.join(', ')} nicht erlaubt (jedes Teil hat eine eigene Lage). Nutze move_by, material, physics, particles oder name, oder clone_group zum Drehen/Spiegeln.`);
     }
     const changed = ['name', 'position', 'rotation_degrees', 'scale', 'material', 'physics', 'particles', 'state', 'move_by'].some((k) => input[k] !== undefined);
     if (!changed) fail('update_entity: keine Änderung angegeben.');
-    const { id: _id, ...patch } = next;
-    void _id;
-    ctx.store.getState().updateEntity(entity.id, patch, opts);
-    return ok('Objekt geändert.', `${entity.name || 'Objekt'} geändert`, true);
+    targets.forEach((entity, i) => {
+      const own = isGroup && input.name !== undefined ? { ...input, name: `${str(input.name, 'name', 80, true)} ${i + 1}` } : input;
+      let next = applyCommon(entity, own, entity);
+      if (input.move_by !== undefined) {
+        const d = vec(input.move_by, 'move_by', -2 * AI_LIMITS.maxCoordinate, 2 * AI_LIMITS.maxCoordinate);
+        const p = next.transform.pos;
+        next = { ...next, transform: { ...next.transform, pos: coord([p[0] + d[0], p[1] + d[1], p[2] + d[2]], 'neue Position') } };
+      }
+      const { id: _id, ...patch } = next;
+      void _id;
+      ctx.store.getState().updateEntity(entity.id, patch, opts);
+    });
+    return ok(isGroup ? `${targets.length} Objekte der Gruppe geändert.` : 'Objekt geändert.', isGroup ? `Gruppe (${targets.length} Objekte) geändert` : `${targets[0].name || 'Objekt'} geändert`, true);
   },
 
   async remove_entity(input, ctx, counters) {
-    const entity = getEntity(ctx, input.id);
+    const { targets, isGroup } = resolveTargets(ctx, input.id);
+    const first = targets[0];
     if (!ctx.autoApprove && !counters.removalsApproved && counters.removals + 1 >= AI_LIMITS.confirmRemovalsAt) {
-      const yes = await ctx.confirm(`Die KI möchte ein weiteres Objekt entfernen (das ${counters.removals + 1}. in diesem Auftrag). Erlauben?`, entity.name || entity.ref);
+      const what = isGroup ? `die Gruppe „${(first.groupName || 'Gruppe').slice(0, 40)}“ mit ${targets.length} Objekten` : 'ein weiteres Objekt';
+      const yes = await ctx.confirm(`Die KI möchte ${what} entfernen (Aktion ${counters.removals + 1} in diesem Auftrag). Erlauben?`, first.name || first.ref);
       if (!yes) fail('Nutzer hat abgelehnt');
       counters.removalsApproved = true;
     }
-    ctx.store.getState().removeEntity(entity.id, opts);
+    for (const e of targets) ctx.store.getState().removeEntity(e.id, opts);
     counters.removals += 1;
-    return ok('Objekt entfernt.', `${entity.name || 'Objekt'} entfernt`, true);
+    if (isGroup) return ok(`Gruppe entfernt (${targets.length} Objekte).`, `${first.groupName || 'Gruppe'} entfernt (${targets.length} Objekte)`, true);
+    return ok('Objekt entfernt.', `${first.name || 'Objekt'} entfernt`, true);
   },
 
   set_environment(input, ctx) {

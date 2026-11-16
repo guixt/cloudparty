@@ -105,14 +105,36 @@ export const planHandlers: Record<string, Handler> = {
   plan_complete_node(input, ctx) {
     const plan = needPlan(ctx, input.plan);
     const node = needNode(plan, input.node);
-    const summary = str(input.summary, 'summary', PLAN_LIMITS.summary);
-    const wanted = stringList(input.entity_ids, 'entity_ids', PLAN_LIMITS.resultEntities);
-    const existing = ctx.store.getState().entities;
-    const entityIds = [...new Set(wanted)].filter((id) => !!existing[id]);
-    const dropped = new Set(wanted).size - entityIds.length;
-    const group = input.group === undefined ? undefined : str(input.group, 'group', 100);
+    // Zu lange Zusammenfassungen kürzen statt ablehnen (spart eine Runde).
+    const rawSummary = str(input.summary, 'summary', 5000, true);
+    const summary = rawSummary.length > PLAN_LIMITS.summary ? `${rawSummary.slice(0, PLAN_LIMITS.summary - 1)}…` : rawSummary;
+    if (summary.trim() === '') fail('summary darf nicht leer sein.');
+    const wanted = stringList(input.entity_ids, 'entity_ids', PLAN_LIMITS.resultEntities * 4);
+    const { entities, order } = ctx.store.getState();
+    const ids: string[] = [];
+    let dropped = 0;
+    for (const id of wanted) {
+      if (entities[id]) ids.push(id);
+      else {
+        const members = order.filter((eid) => entities[eid]?.group === id);
+        if (members.length > 0) ids.push(...members);
+        else dropped += 1;
+      }
+    }
+    // Keine (gültigen) ids genannt: nimm, was in diesem Auftrag neu entstanden ist.
+    let fromRun = false;
+    if (ids.length === 0 && ctx.createdSince) {
+      ids.push(...ctx.createdSince());
+      fromRun = ids.length > 0;
+    }
+    const entityIds = [...new Set(ids)].slice(0, PLAN_LIMITS.resultEntities);
+    let group = input.group === undefined ? undefined : str(input.group, 'group', 100);
+    if (!group) {
+      const groups = new Set(entityIds.map((id) => entities[id]?.group));
+      if (groups.size === 1) group = [...groups][0];
+    }
     guard(() => updateNode(pctx(ctx), plan.id, node, { status: 'done', result: { entityIds, summary, ...(group ? { group } : {}) } }));
-    const note = dropped > 0 ? ` (${dropped} unbekannte ids ignoriert)` : '';
+    const note = (dropped > 0 ? ` (${dropped} unbekannte ids ignoriert)` : '') + (fromRun ? ' (die in diesem Auftrag neu gebauten Objekte wurden automatisch zugeordnet)' : '');
     return ok(`Knoten als fertig gespeichert mit ${entityIds.length} Objekten${note}.`, `Knoten fertig (${entityIds.length} Objekte)`, true);
   },
 };
