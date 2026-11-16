@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { createStore } from 'zustand/vanilla';
 import { useStore } from 'zustand';
 import type { PanelProps } from '../core/ui';
@@ -8,6 +8,13 @@ import { buildState } from './state';
 
 function swatch(item: CatalogItem): string {
   return item.defaults.material?.color ?? '#9aa7bd';
+}
+
+/** Vorschaubild aus public/previews (erzeugt mit `npm run previews`); fehlt es, bleibt eine Farbfläche. */
+function PreviewImg({ itemKey, fallback }: { itemKey: string; fallback: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <span className="cpb-swatch" style={{ background: fallback }} />;
+  return <img className="cpb-preview" alt="" loading="lazy" src={`${import.meta.env.BASE_URL}previews/${itemKey}.webp`} onError={() => setFailed(true)} />;
 }
 
 const COLLAPSED_KEY = 'cloudparty.build.paletteCollapsed';
@@ -47,7 +54,6 @@ export function Palette({ ctx }: PanelProps) {
     placeItem(ctx, item);
     buildState.setState({ armed: shift ? item.key : null });
     // Normaler Klick: Liste einklappen, damit die Sicht frei bleibt (Shift+Klick lässt sie offen).
-    if (!shift) setPaletteCollapsed(true);
   };
 
   return (
@@ -81,7 +87,7 @@ export function Palette({ ctx }: PanelProps) {
                   title={item.label}
                   onClick={(e) => choose(item, e.shiftKey)}
                 >
-                  <span className="cpb-swatch" style={{ background: swatch(item) }} />
+                  <PreviewImg itemKey={item.key} fallback={swatch(item)} />
                   <span className="cpb-item-label">{item.label}</span>
                 </button>
               ))}

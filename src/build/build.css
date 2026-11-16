@@ -5,12 +5,13 @@
 .cpb-hint { font-size: 11px; margin: 6px 0 2px; line-height: 1.35; }
 .cpb-group { margin: 10px 0 6px; font-size: 12px; color: var(--cp-muted); font-weight: 700; }
 .cpb-palette-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.cpb-item { display: flex; align-items: center; gap: 8px; font: inherit; font-size: 13px; color: var(--cp-text); text-align: left;
+.cpb-item { display: flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; color: var(--cp-text); text-align: left;
   background: rgba(255, 255, 255, 0.07); border: 1px solid var(--cp-border); border-radius: 8px; padding: 6px 8px; cursor: pointer; min-width: 0; }
 .cpb-item:hover { background: rgba(255, 255, 255, 0.16); }
 .cpb-item-armed { outline: 2px solid var(--cp-accent); }
-.cpb-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cpb-item-label { overflow: hidden; font-size: 12px; line-height: 1.15; word-break: break-word; }
 .cpb-swatch { flex: none; width: 16px; height: 16px; border-radius: 5px; border: 1px solid rgba(255, 255, 255, 0.4); }
+.cpb-preview { flex: none; width: 36px; height: 36px; border-radius: 6px; background: #dfe6f5; object-fit: cover; }
 
 .cpb-section { border-top: 1px solid var(--cp-border); margin-top: 8px; padding-top: 6px; }
 .cpb-section > summary { cursor: pointer; font-weight: 700; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--cp-muted); padding: 2px 0; }
