@@ -35,14 +35,15 @@ function place(specs: Spec[], origin: Vec3, name: string, ctx: ToolContext, coun
   const group = { id: newEntityId('grp'), name };
   const ids: string[] = [];
   specs.forEach((s, i) => {
-    const plates = kindPlates(s.kind);
-    const fp: Footprint = { gx: s.gx, gz: s.gz, w: s.rot90 ? s.d : s.w, d: s.rot90 ? s.w : s.d };
+    const st = brickState({ w: s.w, d: s.d, kind: s.kind });
+    const plates = kindPlates(st.kind, st.d);
+    const fp: Footprint = { gx: s.gx, gz: s.gz, w: s.rot90 ? st.d : st.w, d: s.rot90 ? st.w : st.d };
     const level = s.level ?? restLevel(fp, placed);
     const brick: PlacedBrick = { ...fp, level, plates };
     placed.push(brick);
     const base = createEntityFromPrefab(BRICK_REF, [0, 0, 0]);
     // state.w/d sind die unrotierten Maße; die Drehung steckt in der Entity.
-    const common: Record<string, unknown> = { state: { w: s.w, d: s.d, kind: s.kind }, ...(s.color ? { material: { color: s.color, preset: 'lack' } } : {}) };
+    const common: Record<string, unknown> = { state: { w: st.w, d: st.d, kind: st.kind }, ...(s.color ? { material: { color: s.color, preset: 'lack' } } : {}) };
     const entity = applyCommon(base, common, base);
     entity.transform.pos = brickWorldPos(brick, origin);
     if (s.rot90) entity.transform.rot = [0, Math.SQRT1_2, 0, Math.SQRT1_2];

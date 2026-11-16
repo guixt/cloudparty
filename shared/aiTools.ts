@@ -573,7 +573,7 @@ export const AI_TOOLS: AiToolDefinition[] = [
   {
     name: 'add_bricks',
     description:
-      'Setzt Klemmbausteine (Noppensteine) in ein Raster. Maße: 1 Noppe = 0,25 m, Stein = 3 Platten (0,3 m) hoch, Platte/Fliese = 1 Platte (0,1 m). Jeder Eintrag: `x`, `z` = Ecke des Steins in Noppen (ganze Zahlen, ab `origin`), `w` × `d` = Größe in Noppen (1–16, `rot90` vertauscht sie), `kind` = stein | platte | fliese (ohne Noppen), `color`. `y` = Unterkante in Platten ab `origin` (weglassen = automatisch auf dem Stein darunter, sonst auf dem Boden). `origin` [x, y, z] in Metern (Standard [0, 0, 0]). Bis zu 100 Steine pro Aufruf, als Gruppe.',
+      'Setzt Klemmbausteine (Noppensteine) in ein Raster. Maße: 1 Noppe = 0,25 m, Stein = 3 Platten (0,3 m) hoch, Platte/Fliese = 1 Platte (0,1 m). Jeder Eintrag: `x`, `z` = Ecke des Steins in Noppen (ganze Zahlen, ab `origin`), `w` × `d` = Größe in Noppen (1–16, `rot90` vertauscht sie), `kind` = stein | platte | fliese (glatt, ohne Noppen) | schraeg (Schrägstein/Dachstein: Noppen nur hinten, die Schräge zeigt nach +z, mindestens 2 tief) | rund (Rundstein, Breite = Tiefe, eine Noppe) | rad (Rad: Achse längs x, `w` wird 1, `d` = gerader Durchmesser in Noppen 2–8, rot90 dreht die Achse nach z), `color`. `y` = Unterkante in Platten ab `origin` (weglassen = automatisch auf dem Stein darunter, sonst auf dem Boden). `origin` [x, y, z] in Metern (Standard [0, 0, 0]). Bis zu 100 Steine pro Aufruf, als Gruppe.',
     input_schema: {
       type: 'object',
       properties: {
@@ -591,7 +591,7 @@ export const AI_TOOLS: AiToolDefinition[] = [
               y: { type: 'integer', minimum: 0 },
               w: { type: 'integer', minimum: 1, maximum: 16 },
               d: { type: 'integer', minimum: 1, maximum: 16 },
-              kind: { enum: ['stein', 'platte', 'fliese'] },
+              kind: { enum: ['stein', 'platte', 'fliese', 'schraeg', 'rund', 'rad'] },
               rot90: { type: 'boolean' },
               color,
             },

@@ -10,15 +10,17 @@ export const STUD_HEIGHT = 0.06;
 export const BRICK_REF = 'EntitySpec.brick';
 export const MAX_BRICK_STUDS = 16;
 
-export type BrickKind = 'stein' | 'platte' | 'fliese';
-export const BRICK_KINDS: readonly BrickKind[] = ['stein', 'platte', 'fliese'];
+/** stein, platte, fliese (ohne Noppen), schraeg (Dachstein: Noppen nur in der hinteren Reihe), rund (Rundstein, w = d, eine Noppe in der Mitte), rad (Rad: Achse längs x, Breite 1 Noppe, Durchmesser d Noppen). */
+export type BrickKind = 'stein' | 'platte' | 'fliese' | 'schraeg' | 'rund' | 'rad';
+export const BRICK_KINDS: readonly BrickKind[] = ['stein', 'platte', 'fliese', 'schraeg', 'rund', 'rad'];
 
 /** Höhe in Platten (Stein 3, Platte und Fliese 1). */
-export function kindPlates(kind: BrickKind): number {
-  return kind === 'stein' ? 3 : 1;
+export function kindPlates(kind: BrickKind, d = 2): number {
+  if (kind === 'rad') return Math.round(d * (STUD / PLATE_H)); // Durchmesser d Noppen
+  return kind === 'platte' || kind === 'fliese' ? 1 : 3;
 }
 export function kindHasStuds(kind: BrickKind): boolean {
-  return kind !== 'fliese';
+  return kind !== 'fliese' && kind !== 'rad';
 }
 
 export interface BrickState {
@@ -35,12 +37,20 @@ function clampInt(v: unknown, min: number, max: number, fallback: number): numbe
 /** Liest `w`, `d`, `kind` aus einem freien `state`-Objekt (ungültiges wird zu Standardwerten). */
 export function brickState(state: Record<string, unknown> | undefined): BrickState {
   const kind = BRICK_KINDS.includes(state?.kind as BrickKind) ? (state!.kind as BrickKind) : 'stein';
-  return { w: clampInt(state?.w, 1, MAX_BRICK_STUDS, 2), d: clampInt(state?.d, 1, MAX_BRICK_STUDS, 4), kind };
+  let w = clampInt(state?.w, 1, MAX_BRICK_STUDS, 2);
+  let d = clampInt(state?.d, 1, MAX_BRICK_STUDS, 4);
+  if (kind === 'rund') d = w;
+  if (kind === 'schraeg') d = Math.max(2, d);
+  if (kind === 'rad') {
+    w = 1;
+    d = Math.min(8, Math.max(2, d - (d % 2))); // gerader Durchmesser, damit die Höhe auf das Plattenraster passt
+  }
+  return { w, d, kind };
 }
 
 /** Maße in Metern (ohne Noppen). */
 export function brickSize(s: BrickState): [number, number, number] {
-  return [s.w * STUD, kindPlates(s.kind) * PLATE_H, s.d * STUD];
+  return [s.w * STUD, kindPlates(s.kind, s.d) * PLATE_H, s.d * STUD];
 }
 
 /** Grundfläche im Noppenraster: Ecke (gx, gz) und Ausdehnung (w, d), schon um 90° gedreht. */
@@ -127,6 +137,6 @@ export function placedFromEntity(e: { ref: string; state?: Record<string, unknow
   const d = swap ? st.w : st.d;
   const gx = Math.round((e.transform.pos[0] - origin[0]) / STUD - w / 2);
   const gz = Math.round((e.transform.pos[2] - origin[2]) / STUD - d / 2);
-  return { gx, gz, w, d, level: Math.round((e.transform.pos[1] - origin[1]) / PLATE_H), plates: kindPlates(st.kind) };
+  return { gx, gz, w, d, level: Math.round((e.transform.pos[1] - origin[1]) / PLATE_H), plates: kindPlates(st.kind, st.d) };
 }
 

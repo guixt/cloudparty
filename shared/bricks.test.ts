@@ -46,3 +46,14 @@ describe('Klemmbaustein-Maße', () => {
     expect(floor.reduce((a, f) => a + f.w * f.d, 0)).toBe(30);
   });
 });
+
+describe('Sonderformen', () => {
+  it('Rundstein ist quadratisch, Schrägstein mindestens 2 tief, Rad 1 breit mit geradem Durchmesser', () => {
+    expect(brickState({ w: 3, d: 1, kind: 'rund' })).toEqual({ w: 3, d: 3, kind: 'rund' });
+    expect(brickState({ w: 2, d: 1, kind: 'schraeg' }).d).toBe(2);
+    expect(brickState({ w: 5, d: 3, kind: 'rad' })).toEqual({ w: 1, d: 2, kind: 'rad' });
+    const rad = brickSize(brickState({ w: 1, d: 4, kind: 'rad' }));
+    expect(rad[1]).toBeCloseTo(1); // Durchmesser = Höhe
+    expect(brickSize(brickState({ w: 2, d: 2, kind: 'schraeg' }))[1]).toBeCloseTo(0.3);
+  });
+});
