@@ -96,3 +96,7 @@ Aufbau und Verträge zwischen den Modulen stehen in [`docs/architecture.md`](doc
 - **Web-Tafeln:** Viele Webseiten verbieten das Einbetten. Eine Web-Tafel kann außerdem nicht von 3D-Objekten davor verdeckt werden.
 - **Avatare:** Der Avatar ist prozedural gebaut (keine fertigen 3D-Modelle); er ist so angelegt, dass später ein glTF-Modell eingesetzt werden kann.
 - **Nicht enthalten:** Marktplatz mit Währung, Voice-Chat, Avatar-Kleidungseditor, eigenständige KI-Bewohner (die KI arbeitet nur auf deinen Auftrag, auch beim Plan-Board).
+
+## Klemmbausteine
+
+Neue Kategorie „Klemmbausteine“ in der Bau-Palette (Stein 2×4/2×2/1×2, Platte 4×8/2×4, Fliese 2×2). Maße: 1 Noppe = 0,25 m, Stein 0,3 m, Platte/Fliese 0,1 m hoch. Beim Platzieren rasten Steine auf dem Noppenraster ein und setzen sich auf den Stein darunter; Größe und Art (`w`, `d`, `kind`) stehen im Zustand des Objekts. Die KI baut mit `add_bricks` (Raster-Koordinaten in Noppen, Auto-Stapeln) und `fill_bricks` (Wände mit Türen/Fenstern und Böden mit versetzten Fugen). Noch nicht enthalten: ein eigener Modus, der die anderen Grundformen ausblendet, Schrägsteine, Klemm-Physik.

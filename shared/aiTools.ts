@@ -99,6 +99,8 @@ export type AiToolName =
   | 'get_bounds'
   | 'surface_height_at'
   | 'search_images'
+  | 'add_bricks'
+  | 'fill_bricks'
   | 'use_image';
 
 export interface AiToolDefinition {
@@ -566,6 +568,75 @@ export const AI_TOOLS: AiToolDefinition[] = [
       required: ['query'],
     },
     mutates: false,
+  },
+  {
+    name: 'add_bricks',
+    description:
+      'Setzt Klemmbausteine (Noppensteine) in ein Raster. Maße: 1 Noppe = 0,25 m, Stein = 3 Platten (0,3 m) hoch, Platte/Fliese = 1 Platte (0,1 m). Jeder Eintrag: `x`, `z` = Ecke des Steins in Noppen (ganze Zahlen, ab `origin`), `w` × `d` = Größe in Noppen (1–16, `rot90` vertauscht sie), `kind` = stein | platte | fliese (ohne Noppen), `color`. `y` = Unterkante in Platten ab `origin` (weglassen = automatisch auf dem Stein darunter, sonst auf dem Boden). `origin` [x, y, z] in Metern (Standard [0, 0, 0]). Bis zu 100 Steine pro Aufruf, als Gruppe.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        origin: vec3,
+        name: { type: 'string', maxLength: 80 },
+        bricks: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 100,
+          items: {
+            type: 'object',
+            properties: {
+              x: { type: 'integer' },
+              z: { type: 'integer' },
+              y: { type: 'integer', minimum: 0 },
+              w: { type: 'integer', minimum: 1, maximum: 16 },
+              d: { type: 'integer', minimum: 1, maximum: 16 },
+              kind: { enum: ['stein', 'platte', 'fliese'] },
+              rot90: { type: 'boolean' },
+              color,
+            },
+            required: ['x', 'z', 'w', 'd'],
+          },
+        },
+      },
+      required: ['bricks'],
+    },
+    mutates: true,
+  },
+  {
+    name: 'fill_bricks',
+    description:
+      'Mauert ein Rechteck aus Klemmbausteinen mit versetzten Fugen (wie echtes Mauerwerk). `mode` = wall (einreihiger Rand: Hauswand, Turm) oder floor (volle Fläche aus Platten). `x`, `z` = Ecke in Noppen, `cols` × `rows` = Größe in Noppen (Wand: ≥ 3 × 3), `layers` = Anzahl Schichten (Wand: Stein hoch, Boden: Platten), `origin` [x, y, z] in Metern, `color`, `openings` (nur Wand): [{ side: north|south|east|west, at (Noppen vom Wandanfang), width (Noppen), layers (Höhe in Schichten) }] für Türen und Fenster; mit `sill_layers` Brüstung. Bis zu 100 Steine pro Aufruf.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        mode: { enum: ['wall', 'floor'] },
+        x: { type: 'integer' },
+        z: { type: 'integer' },
+        cols: { type: 'integer', minimum: 1, maximum: 64 },
+        rows: { type: 'integer', minimum: 1, maximum: 64 },
+        layers: { type: 'integer', minimum: 1, maximum: 40 },
+        origin: vec3,
+        color,
+        name: { type: 'string', maxLength: 80 },
+        openings: {
+          type: 'array',
+          maxItems: 8,
+          items: {
+            type: 'object',
+            properties: {
+              side: { enum: ['north', 'south', 'east', 'west'] },
+              at: { type: 'integer', minimum: 0 },
+              width: { type: 'integer', minimum: 1 },
+              layers: { type: 'integer', minimum: 1 },
+              sill_layers: { type: 'integer', minimum: 0 },
+            },
+            required: ['side', 'at', 'width', 'layers'],
+          },
+        },
+      },
+      required: ['mode', 'x', 'z', 'cols', 'rows', 'layers'],
+    },
+    mutates: true,
   },
   {
     name: 'use_image',

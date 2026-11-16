@@ -217,6 +217,7 @@ export const PREFAB_REFS = [
   'EntitySpec.water',
   'EntitySpec.mirror',
   'EntitySpec.waterfall',
+  'EntitySpec.brick',
 ] as const;
 export type PrefabRef = (typeof PREFAB_REFS)[number];
 

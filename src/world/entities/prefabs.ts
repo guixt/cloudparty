@@ -22,9 +22,10 @@ import { IDENTITY_TRANSFORM, newEntityId, type EntitySpec, type MaterialSpec, ty
 import type { GameContext } from '../../core/context';
 import { createFixedMaterial, createMainMaterial, lightColor, updateMainMaterials } from './materials';
 import { buildModel } from './model';
+import { BRICK_REF, STUD, STUD_DIAMETER, STUD_HEIGHT, brickSize, brickState, kindHasStuds } from '../../../shared/bricks';
 import { markBuildOnly, place, post, slab } from './parts';
 
-export type PrefabCategory = 'Grundformen' | 'Möbel' | 'Natur' | 'Licht' | 'Technik' | 'Medien';
+export type PrefabCategory = 'Grundformen' | 'Klemmbausteine' | 'Möbel' | 'Natur' | 'Licht' | 'Technik' | 'Medien';
 
 export interface PrefabDef {
   /** z. B. "EntitySpec.bench". */
@@ -414,6 +415,31 @@ const BUILTIN: PrefabDef[] = [
         mesh.refreshBoundingInfo();
       }
       place(mesh, root, mainMat(ctx, entity, '#8d8f93', { roughness: 0.95 }));
+    },
+  },
+  {
+    ref: BRICK_REF,
+    label: 'Klemmbaustein',
+    category: 'Klemmbausteine',
+    icon: '🧱',
+    groundOffset: 0,
+    stateKeys: ['w', 'd', 'kind'],
+    defaults: { material: { color: '#d93a2f', preset: 'lack' }, state: { w: 2, d: 4, kind: 'stein' }, physics: solid },
+    build(ctx, entity, root) {
+      const st = brickState(entity.state);
+      const [bw, bh, bd] = brickSize(st);
+      const mat = mainMat(ctx, entity, '#d93a2f', { roughness: 0.35 });
+      slab(ctx.scene, root, mat, bw, bh, bd, 0, 0, 0);
+      if (!kindHasStuds(st.kind)) return;
+      const at = (i: number, j: number): [number, number, number] => [(i + 0.5 - st.w / 2) * STUD, bh + STUD_HEIGHT / 2, (j + 0.5 - st.d / 2) * STUD];
+      const master = CreateCylinder('stud', { diameter: STUD_DIAMETER, height: STUD_HEIGHT, tessellation: 12 }, ctx.scene);
+      place(master, root, mat, ...at(0, 0));
+      for (let i = 0; i < st.w; i++) {
+        for (let j = 0; j < st.d; j++) {
+          if (i === 0 && j === 0) continue;
+          place(master.createInstance('stud') as unknown as Mesh, root, null, ...at(i, j));
+        }
+      }
     },
   },
   {

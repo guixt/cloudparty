@@ -5,6 +5,7 @@ import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { newEntityId, type EntitySpec, type Vec3 } from '../../shared/types';
 import { entityIdOf, type GameContext } from '../core/context';
 import { createFromItem, type CatalogItem } from './catalog';
+import { BRICK_REF, STUD, brickState, brickWorldPos, placedFromEntity, restLevel, type PlacedBrick } from '../../shared/bricks';
 import { fallbackPoint, placementY, snapValue, SNAP_POSITION } from './logic';
 import { alignDeltas, boxFromTransform, cloneEntities, distributeDeltas, groupPatches, nextGroupName, ungroupPatches, type AlignMode, type Box, type Patches } from './multi';
 import { buildState } from './state';
@@ -35,6 +36,7 @@ export function placeItem(ctx: GameContext, item: CatalogItem, surface?: Vec3): 
   const z = snap ? snapValue(point[2], SNAP_POSITION) : point[2];
   const y = placementY(point[1], item.anchor, item.scale[1], item.baseHeight) + (item.lift ?? 0);
   const entity = createFromItem(item, [x, point[1], z], y);
+  if (item.ref === BRICK_REF) snapBrickToStuds(ctx, entity);
   ctx.store.getState().addEntity(entity, { source: 'local' });
   ctx.store.getState().select(entity.id);
   return entity;
@@ -172,4 +174,16 @@ export function dropToGround(ctx: GameContext, id: string): void {
   if (Math.abs(dy) < 1e-4) return;
   const pos = entity.transform.pos;
   ctx.store.getState().updateEntity(id, { transform: { ...entity.transform, pos: [pos[0], pos[1] + dy, pos[2]] } }, { source: 'local' });
+}
+
+/** Klemmbausteine rasten auf dem Noppenraster ein und setzen sich auf den Stein darunter. */
+function snapBrickToStuds(ctx: GameContext, entity: EntitySpec): void {
+  const st = brickState(entity.state);
+  const gx = Math.round(entity.transform.pos[0] / STUD - st.w / 2);
+  const gz = Math.round(entity.transform.pos[2] / STUD - st.d / 2);
+  const { entities, order } = ctx.store.getState();
+  const others = order.map((id) => entities[id]).filter((e): e is EntitySpec => !!e).map((e) => placedFromEntity(e, [0, 0, 0])).filter((b): b is PlacedBrick => !!b);
+  const level = restLevel({ gx, gz, w: st.w, d: st.d }, others);
+  const p = brickWorldPos({ gx, gz, w: st.w, d: st.d, level, plates: 1 }, [0, 0, 0]);
+  entity.transform.pos = [p[0], Math.max(p[1], entity.transform.pos[1] - 0.001), p[2]];
 }

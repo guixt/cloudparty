@@ -12,8 +12,8 @@
 import { newEntityId, type EntitySpec, type Vec3 } from '../../shared/types';
 import type { PlacementAnchor } from './logic';
 
-export type CatalogCategory = 'Grundformen' | 'Möbel' | 'Natur' | 'Licht' | 'Technik' | 'Medien';
-export const CATEGORIES: CatalogCategory[] = ['Grundformen', 'Möbel', 'Natur', 'Licht', 'Technik', 'Medien'];
+export type CatalogCategory = 'Grundformen' | 'Klemmbausteine' | 'Möbel' | 'Natur' | 'Licht' | 'Technik' | 'Medien';
+export const CATEGORIES: CatalogCategory[] = ['Grundformen', 'Klemmbausteine', 'Möbel', 'Natur', 'Licht', 'Technik', 'Medien'];
 
 export interface CatalogItem {
   /** Eindeutiger Schlüssel (mehrere Einträge dürfen dieselbe ref nutzen). */
@@ -51,6 +51,19 @@ export const CATALOG: CatalogItem[] = [
     defaults: { name: 'Kiste', material: { color: '#c98a4b' }, physics: { mode: 'dynamic', mass: 1, friction: 0.6, restitution: 0.1 } } },
   { key: 'ball-bouncy', ref: 'EntitySpec.sphere', label: 'Hüpfball', category: 'Grundformen', anchor: 'center', scale: [0.8, 0.8, 0.8],
     defaults: { name: 'Hüpfball', material: { color: '#ff5d73' }, physics: { mode: 'dynamic', mass: 0.5, friction: 0.4, restitution: 0.85 } } },
+
+  { key: 'brick-2x4', ref: 'EntitySpec.brick', label: 'Stein 2×4', category: 'Klemmbausteine', anchor: 'ground', scale: [1, 1, 1],
+    defaults: { name: 'Stein 2×4', material: { color: '#d93a2f', preset: 'lack' }, physics: solid, state: { w: 2, d: 4, kind: 'stein' } } },
+  { key: 'brick-2x2', ref: 'EntitySpec.brick', label: 'Stein 2×2', category: 'Klemmbausteine', anchor: 'ground', scale: [1, 1, 1],
+    defaults: { name: 'Stein 2×2', material: { color: '#2f6fd9', preset: 'lack' }, physics: solid, state: { w: 2, d: 2, kind: 'stein' } } },
+  { key: 'brick-1x2', ref: 'EntitySpec.brick', label: 'Stein 1×2', category: 'Klemmbausteine', anchor: 'ground', scale: [1, 1, 1],
+    defaults: { name: 'Stein 1×2', material: { color: '#f2c230', preset: 'lack' }, physics: solid, state: { w: 1, d: 2, kind: 'stein' } } },
+  { key: 'plate-4x8', ref: 'EntitySpec.brick', label: 'Platte 4×8', category: 'Klemmbausteine', anchor: 'ground', scale: [1, 1, 1],
+    defaults: { name: 'Platte 4×8', material: { color: '#3aa655', preset: 'lack' }, physics: solid, state: { w: 4, d: 8, kind: 'platte' } } },
+  { key: 'plate-2x4', ref: 'EntitySpec.brick', label: 'Platte 2×4', category: 'Klemmbausteine', anchor: 'ground', scale: [1, 1, 1],
+    defaults: { name: 'Platte 2×4', material: { color: '#f2f2f2', preset: 'lack' }, physics: solid, state: { w: 2, d: 4, kind: 'platte' } } },
+  { key: 'tile-2x2', ref: 'EntitySpec.brick', label: 'Fliese 2×2', category: 'Klemmbausteine', anchor: 'ground', scale: [1, 1, 1],
+    defaults: { name: 'Fliese 2×2', material: { color: '#222222', preset: 'lack' }, physics: solid, state: { w: 2, d: 2, kind: 'fliese' } } },
 
   { key: 'bench', ref: 'EntitySpec.bench', label: 'Bank', category: 'Möbel', anchor: 'ground', scale: [1, 1, 1],
     defaults: { material: { color: '#a8743f' }, physics: solid, state: { seats: 3 } } },

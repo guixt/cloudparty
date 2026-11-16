@@ -31,6 +31,7 @@ import { graphHandlers } from './graphTools';
 import { planHandlers } from './planTools';
 import { visionHandlers } from './visionTools';
 import { buildHandlers } from './buildTools';
+import { brickHandlers } from './brickTools';
 import { imageHandlers } from './imageTools';
 import { baseEntityFor, isKnownRef, knownRefs } from './refs';
 
@@ -113,6 +114,13 @@ function oneOf<T extends string>(v: unknown, label: string, options: readonly T[
   if (typeof v !== 'string' || !options.includes(v as T)) return fail(`${label} muss eines von ${options.join(', ')} sein.`);
   return v as T;
 }
+/** Ganze Zahl in [min, max]. */
+export function int(v: unknown, label: string, min: number, max: number): number {
+  const n = num(v, label, min, max);
+  if (!Number.isInteger(n)) fail(`${label} muss eine ganze Zahl sein.`);
+  return n;
+}
+
 export function obj(v: unknown, label: string): Record<string, unknown> {
   return isObj(v) ? v : fail(`${label} muss ein Objekt sein.`);
 }
@@ -417,7 +425,7 @@ const handlers: Record<string, Handler> = {
 /** Führt ein Werkzeug aus. Wirft nie; Fehler kommen als `ok: false` zurück. */
 export async function executeTool(name: string, rawInput: unknown, ctx: ToolContext, counters: RunCounters): Promise<ToolOutcome> {
   const def = getToolDefinition(name);
-  const handler = def ? (handlers[name] ?? groupHandlers[name] ?? libraryHandlers[name] ?? graphHandlers[name] ?? planHandlers[name] ?? visionHandlers[name] ?? buildHandlers[name] ?? imageHandlers[name]) : undefined;
+  const handler = def ? (handlers[name] ?? groupHandlers[name] ?? libraryHandlers[name] ?? graphHandlers[name] ?? planHandlers[name] ?? visionHandlers[name] ?? buildHandlers[name] ?? brickHandlers[name] ?? imageHandlers[name]) : undefined;
   if (!def || !handler) {
     const msg = `Unbekanntes Werkzeug "${name.slice(0, 40)}".`;
     return { ok: false, content: msg, summary: msg, mutated: false };
