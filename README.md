@@ -112,3 +112,9 @@ Im Inspector (Material) lässt sich ein Bild als Textur hochladen („Bild hochl
 ### Plan-Knoten und die Ausgabelänge
 
 Jeder Plan-Knoten läuft als eigener Auftrag und muss in die eingestellte Ausgabegrenze (KI-Einstellungen, Standard 4096 Tokens) passen. Die KI bekommt dazu bei jedem Knoten die Grenze und eine Faustzahl für Werkzeugaufrufe genannt, soll große Knoten mit `plan_add_node` selbst in kleinere teilen, Notizen kurz halten und Sammelwerkzeuge (`add_wall`, `array`, `fill_bricks`, `clone_group`) bevorzugen. Wird eine Antwort trotzdem abgeschnitten, macht sie in kleineren Schritten weiter (bis zu 4 Mal). Wer oft Abbrüche sieht, kann die Ausgabegrenze erhöhen: bezahlt werden nur tatsächlich erzeugte Tokens.
+
+## KI-Protokoll
+
+In den KI-Einstellungen (Abschnitt „Protokoll“) schreibt der Assistent ein lokales Protokoll: je Auftrag Start und Ende, je Modellrunde Tokens, Cache-Treffer und Abbruchgrund, je Werkzeugaufruf Name, Erfolg, Dauer und Kurzergebnis, dazu abgeschnittene Antworten und Fehler. Stufen: Aus, Normal (Standard) und Ausführlich (zusätzlich Auftragstext, Werkzeug-Eingaben, Ergebnisse und Antworten, auf 1500 Zeichen gekürzt). „Protokoll exportieren“ lädt eine `.jsonl`-Datei (ein JSON-Objekt je Zeile). Gespeichert wird nur im Browser (höchstens die letzten 1000 Einträge, ca. 300 kB), der API-Key wird nie protokolliert.
+
+Gruppen-ids (`grp_…`) aus den Ergebnissen von `add_wall`, `array`, `fill_bricks` usw. akzeptieren `get_bounds`, `clone_group` und `use_texture`; bei anderen Werkzeugen nennt die Fehlermeldung eine Mitglieds-id.

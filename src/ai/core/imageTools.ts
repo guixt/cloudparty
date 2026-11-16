@@ -4,7 +4,7 @@ import type { MediaSpec } from '../../../shared/types';
 import { aspectForImage } from '../../world/media/helpers';
 import { getHit, searchImages, type ImageSource } from './imageSearch';
 import { wrapData } from './summary';
-import { fail, getEntity, num, ok, opts, str, type Handler } from './tools';
+import { fail, getEntity, getEntityOrGroup, num, ok, opts, str, type Handler } from './tools';
 
 const MAX_SLIDES = 50;
 const off = (): never =>
@@ -17,7 +17,7 @@ export const imageHandlers: Record<string, Handler> = {
     if ((counters.imageDownloads ?? 0) >= AI_LIMITS.maxImageDownloads) {
       return { ok: false, content: `Limit erreicht: höchstens ${AI_LIMITS.maxImageDownloads} Bilder pro Auftrag.`, summary: 'Bild-Limit erreicht', mutated: false };
     }
-    const entity = getEntity(ctx, input.id);
+    const entity = getEntityOrGroup(ctx, input.id);
     const uv = input.uv_scale === undefined ? 1 : num(input.uv_scale, 'uv_scale', 0.1, 50);
     const hitId = str(input.result_id, 'result_id', 40);
     const hit = getHit(hitId) ?? fail(`Unbekannter Treffer „${hitId.slice(0, 30)}“. Suche zuerst mit search_images.`);

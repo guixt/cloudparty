@@ -170,3 +170,18 @@ describe('get_bounds und surface_height_at', () => {
     expect((await t.run('surface_height_at', { x: 0, z: 0 })).ok).toBe(true);
   });
 });
+
+describe('Gruppen-ids', () => {
+  it('get_bounds und clone_group akzeptieren die group-id aus dem Ergebnis von add_wall', async () => {
+    const t = setup();
+    const r = await t.run('add_wall', { from: [0, 0], to: [4, 0], height: 3, name: 'W' });
+    const group = /group="(grp_[^"]+)"/.exec(r.content)![1];
+    const b = await t.run('get_bounds', { id: group });
+    expect(b.ok).toBe(true);
+    expect((await t.run('clone_group', { id: group, offset: [0, 0, 5] })).ok).toBe(true);
+    // update_entity mit Gruppen-id: verständliche Meldung statt „nicht gefunden“
+    const bad = await t.run('update_entity', { id: group, position: [0, 0, 0] });
+    expect(bad.ok).toBe(false);
+    expect(bad.content).toContain('Gruppen-id');
+  });
+});

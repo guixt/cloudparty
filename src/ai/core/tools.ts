@@ -199,11 +199,33 @@ const fmt = (n: number) => {
 const fmtPos = (p: Vec3) => `(${fmt(p[0])}, ${fmt(p[1])}, ${fmt(p[2])})`;
 export const opts = { source: 'local' as const };
 
+/** Mitglieder einer Gruppe (in Weltreihenfolge); leer, wenn es die Gruppe nicht gibt. */
+export function groupMembers(ctx: ToolContext, groupId: string): EntitySpec[] {
+  const { entities, order } = ctx.store.getState();
+  return order.map((eid) => entities[eid]).filter((e): e is EntitySpec => !!e && e.group === groupId);
+}
+
 export function getEntity(ctx: ToolContext, id: unknown): EntitySpec {
   const sid = str(id, 'id', 200);
   const entity = ctx.store.getState().entities[sid];
-  if (!entity) return fail(`Kein Objekt mit der id "${sid.slice(0, 60)}" gefunden. Rufe get_world auf, um gültige ids zu sehen.`);
+  if (!entity) {
+    const members = groupMembers(ctx, sid);
+    if (members.length > 0) {
+      return fail(`"${sid.slice(0, 60)}" ist eine Gruppen-id, kein Objekt. Nimm die id eines Mitglieds (z. B. "${members[0].id}"); get_bounds, clone_group und use_texture akzeptieren auch Gruppen-ids.`);
+    }
+    return fail(`Kein Objekt mit der id "${sid.slice(0, 60)}" gefunden. Rufe get_world auf, um gültige ids zu sehen.`);
+  }
   return entity;
+}
+
+/** Wie getEntity, akzeptiert aber auch eine Gruppen-id (liefert dann das erste Mitglied). */
+export function getEntityOrGroup(ctx: ToolContext, id: unknown): EntitySpec {
+  const sid = str(id, 'id', 200);
+  if (!ctx.store.getState().entities[sid]) {
+    const members = groupMembers(ctx, sid);
+    if (members.length > 0) return members[0];
+  }
+  return getEntity(ctx, id);
 }
 
 export function ok(content: string, summary: string, mutated: boolean): ToolOutcome {

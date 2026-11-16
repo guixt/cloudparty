@@ -45,6 +45,8 @@ export const AI_STORAGE_KEYS = {
   approval: 'cloudparty.ai.approval',
   maxInput: 'cloudparty.ai.maxInputTokens',
   maxOutput: 'cloudparty.ai.maxOutputTokens',
+  logLevel: 'cloudparty.ai.logLevel',
+  log: 'cloudparty.ai.log',
   vision: 'cloudparty.ai.vision',
   imageSearch: 'cloudparty.ai.imageSearch',
 } as const;
@@ -528,7 +530,7 @@ export const AI_TOOLS: AiToolDefinition[] = [
   {
     name: 'clone_group',
     description:
-      'Kopiert ein Objekt oder eine ganze Gruppe als neue Gruppe: verschoben (`offset`), um die Senkrechte gedreht (`rotate_y_degrees`, um den Mittelpunkt der Gruppe oder `pivot` [x, z]) und/oder gespiegelt (`mirror`: x spiegelt links/rechts, z vorne/hinten). `count` (bis 10) macht mehrere Kopien, jede weiter verschoben/gedreht als die vorige (Eckturm → vier Ecktürme). Mindestens eines von offset, rotate_y_degrees, mirror angeben.',
+      'Kopiert ein Objekt oder eine ganze Gruppe (id = Objekt-id oder Gruppen-id „grp_…“) als neue Gruppe: verschoben (`offset`), um die Senkrechte gedreht (`rotate_y_degrees`, um den Mittelpunkt der Gruppe oder `pivot` [x, z]) und/oder gespiegelt (`mirror`: x spiegelt links/rechts, z vorne/hinten). `count` (bis 10) macht mehrere Kopien, jede weiter verschoben/gedreht als die vorige (Eckturm → vier Ecktürme). Mindestens eines von offset, rotate_y_degrees, mirror angeben.',
     input_schema: {
       type: 'object',
       properties: {
@@ -545,7 +547,7 @@ export const AI_TOOLS: AiToolDefinition[] = [
   },
   {
     name: 'get_bounds',
-    description: 'Liest Maße: Minimum, Maximum, Mitte und Größe eines Objekts oder (wenn es zu einer Gruppe gehört) der ganzen Gruppe, in Metern. Bei zusammengesetzten Bausteinen (Bank, Baum …) nur geschätzt. Nutze es, bevor du etwas auf oder neben ein anderes Teil setzt.',
+    description: 'Liest Maße (id = Objekt-id oder Gruppen-id „grp_…“): Minimum, Maximum, Mitte und Größe eines Objekts oder (wenn es zu einer Gruppe gehört) der ganzen Gruppe, in Metern. Bei zusammengesetzten Bausteinen (Bank, Baum …) nur geschätzt. Nutze es, bevor du etwas auf oder neben ein anderes Teil setzt.',
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
     mutates: false,
   },

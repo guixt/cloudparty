@@ -22,7 +22,7 @@ import {
   type Opening,
 } from './buildGeometry';
 import { wrapData } from './summary';
-import { applyCommon, coord, fail, getEntity, num, obj, ok, opts, str, vec, type Handler, type RunCounters, type ToolContext } from './tools';
+import { applyCommon, coord, fail, getEntityOrGroup, num, obj, ok, opts, str, vec, type Handler, type RunCounters, type ToolContext } from './tools';
 
 const MAX_WALL_PIECES = 40;
 const MAX_ARRAY_ITEMS = 100;
@@ -187,7 +187,7 @@ export const buildHandlers: Record<string, Handler> = {
   },
 
   clone_group(input, ctx, counters) {
-    const source = getEntity(ctx, input.id);
+    const source = getEntityOrGroup(ctx, input.id);
     const members = membersOf(ctx, source);
     const count = input.count === undefined ? 1 : Math.round(num(input.count, 'count', 1, MAX_CLONES));
     reserve(counters, members.length * count, 'dieses Klonen');
@@ -225,7 +225,7 @@ export const buildHandlers: Record<string, Handler> = {
   },
 
   get_bounds(input, ctx) {
-    const entity = getEntity(ctx, input.id);
+    const entity = getEntityOrGroup(ctx, input.id);
     const members = membersOf(ctx, entity);
     const boxes = members.map(entityBox);
     const box = unionBox(boxes.map((b) => b.box));

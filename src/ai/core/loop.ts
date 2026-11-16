@@ -6,6 +6,7 @@ import type { EventBus } from '../../core/events';
 import type { WorldStore } from '../../core/store';
 import { AiError, streamMessage, type ApiMessage, type ApiTool, type ContentBlock } from './client';
 import { dropImages, fitToBudget } from './budget';
+import { clip, logEvent } from './log';
 import { buildSystemPrompt } from './prompt';
 import * as settings from './settings';
 import { executeTool, type RunCounters } from './tools';
@@ -80,6 +81,9 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
     // Längengrenzen einmal pro Auftrag lesen (wie der Freigabe-Modus).
     const limits = settings.getTokenLimits();
     const currentFrom = conversation.length;
+    const runStart = Date.now();
+    const runId = `r${runStart.toString(36)}`;
+    logEvent('run.start', { run: runId, model: settings.getModel(), maxOutput: limits.maxOutputTokens, maxInput: limits.maxInputTokens, entities: store.getState().order.length }, { prompt: clip(text) });
     let answer = '';
     let changed = false;
     let stopped = false;
@@ -117,6 +121,7 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
             emit({ type: 'text', delta });
           },
         });
+        logEvent('round', { run: runId, round, stop: result.stopReason, inTokens: result.inputTokens, outTokens: result.outputTokens, cacheRead: result.cacheReadTokens, cacheWrite: result.cacheWriteTokens, toolUses: result.content.filter((b) => b.type === 'tool_use').length });
         emit({ type: 'usage', inputTokens: result.inputTokens, outputTokens: result.outputTokens, cacheReadTokens: result.cacheReadTokens });
         const toolUses = result.content.filter((b): b is Extract<ContentBlock, { type: 'tool_use' }> => b.type === 'tool_use');
         if (result.content.length > 0) messages.push({ role: 'assistant', content: result.content });
@@ -124,6 +129,7 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
         const truncated = result.stopReason === 'max_tokens';
         if (truncated) {
           truncations += 1;
+          logEvent('truncated', { run: runId, round, count: truncations });
           if (truncations > MAX_TRUNCATIONS) {
             emit({ type: 'error', message: 'Die Antwort der KI wurde mehrfach abgeschnitten, weil die maximale Ausgabelänge erreicht ist. Erhöhe sie in den KI-Einstellungen oder gib einen kleineren Auftrag.' });
             finished = true;
@@ -162,7 +168,9 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
               grouped = true;
               bus.emit('history.group.begin', {});
             }
+            const t0 = Date.now();
             outcome = await executeTool(use.name, use.input, toolCtx, counters);
+            logEvent('tool', { run: runId, name: use.name, ok: outcome.ok, ms: Date.now() - t0, summary: clip(outcome.summary, 200), toolCalls: counters.toolCalls, newEntities: counters.newEntities }, { input: clip(use.input), result: clip(outcome.content) });
           }
           if (outcome.mutated) changed = true;
           emit({ type: 'tool', name: use.name, summary: outcome.summary, ok: outcome.ok });
@@ -192,12 +200,14 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
       if (!(error instanceof AiError && error.aborted)) {
         const message = error instanceof AiError ? error.message : 'Unerwarteter Fehler im KI-Assistenten.';
         emit({ type: 'error', message });
+        logEvent('error', { run: runId, message: clip(message, 400) });
       }
     } finally {
       if (grouped) bus.emit('history.group.end', {});
       running = false;
     }
     if (changed) lastGroupUndoCount = deps.getHistory()?.undoCount ?? null;
+    logEvent('run.end', { run: runId, ms: Date.now() - runStart, stopped, changed, toolCalls: counters.toolCalls, newEntities: counters.newEntities, truncations }, { answer: clip(answer.trim()) });
     remember(text, answer.trim());
     emit({ type: 'done', stopped, changed });
   }

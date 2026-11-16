@@ -1,6 +1,19 @@
 import { useState, type KeyboardEvent } from 'react';
 import { AI_MODELS, AI_TOKEN_LIMITS } from '../../../shared/aiTools';
 import type { AssistantApi } from '../api';
+import { LOG_LEVELS, clearLog, exportLog, getLogEntries, getLogLevel, setLogLevel, type LogLevel } from '../core/log';
+
+const LOG_LABELS: Record<LogLevel, string> = { off: 'Aus', normal: 'Normal (Werkzeuge, Tokens, Fehler)', detail: 'Ausführlich (auch Aufträge, Eingaben und Ergebnisse)' };
+
+function downloadLog(): void {
+  const blob = new Blob([exportLog()], { type: 'application/x-ndjson' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `cloudparty-ki-protokoll-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.jsonl`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 /** Lockere Prüfung: nicht leer, keine Leerzeichen, nicht absurd kurz. Gibt eine Fehlermeldung oder null zurück. */
 export function validateApiKey(raw: string): string | null {
@@ -224,6 +237,39 @@ export function SettingsDialog({ api, explain, onClose }: { api: AssistantApi; e
           />
           <span>Die KI darf im Internet nach freien Bildern suchen (Wikimedia Commons, Openverse; der Suchbegriff geht an diese Dienste, die Bilder werden verkleinert in der Welt gespeichert)</span>
         </label>
+        <div className="cp-label">Protokoll</div>
+        <select
+          className="cp-select"
+          data-testid="ai-log-level"
+          value={getLogLevel()}
+          onChange={(e) => {
+            setLogLevel(e.target.value as LogLevel);
+            force((n) => n + 1);
+          }}
+        >
+          {LOG_LEVELS.map((l) => (
+            <option key={l} value={l}>
+              {LOG_LABELS[l]}
+            </option>
+          ))}
+        </select>
+        <p className="cp-muted">Bleibt nur in diesem Browser (der API-Key wird nie protokolliert). Im Ausführlich-Modus stehen auch deine Aufträge und die Antworten der KI darin; gib die Datei nur weiter, wenn du das möchtest. {getLogEntries().length} Einträge.</p>
+        <div className="cp-row">
+          <button type="button" className="cp-button" data-testid="ai-log-export" disabled={getLogEntries().length === 0} onClick={downloadLog}>
+            Protokoll exportieren
+          </button>
+          <button
+            type="button"
+            className="cp-button cp-button-danger"
+            data-testid="ai-log-clear"
+            onClick={() => {
+              clearLog();
+              force((n) => n + 1);
+            }}
+          >
+            Löschen
+          </button>
+        </div>
         <div className="cp-label">Freigaben</div>
         <label className="ai-radio">
           <input
