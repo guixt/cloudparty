@@ -113,7 +113,7 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
             emit({ type: 'text', delta });
           },
         });
-        emit({ type: 'usage', inputTokens: result.inputTokens, outputTokens: result.outputTokens });
+        emit({ type: 'usage', inputTokens: result.inputTokens, outputTokens: result.outputTokens, cacheReadTokens: result.cacheReadTokens });
         const toolUses = result.content.filter((b): b is Extract<ContentBlock, { type: 'tool_use' }> => b.type === 'tool_use');
         if (result.content.length > 0) messages.push({ role: 'assistant', content: result.content });
         // Abgeschnittene Antwort (Ausgabegrenze): wie ein Agent in kleineren Schritten weitermachen, statt abzubrechen.

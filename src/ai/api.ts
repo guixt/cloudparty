@@ -13,7 +13,7 @@ export type AssistantEvent =
   | { type: 'tool'; name: string; summary: string; ok: boolean }
   /** Der Nutzer soll bestätigen (z. B. viele Löschungen oder ein Skript); `resolve(true)` führt aus. */
   | { type: 'confirm'; id: string; question: string; detail?: string }
-  | { type: 'usage'; inputTokens: number; outputTokens: number }
+  | { type: 'usage'; inputTokens: number; outputTokens: number; cacheReadTokens?: number }
   | { type: 'error'; message: string }
   | { type: 'done'; stopped: boolean; changed: boolean };
 

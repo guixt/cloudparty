@@ -33,6 +33,10 @@ export interface MessageResult {
   stopReason: string;
   inputTokens: number;
   outputTokens: number;
+  /** Aus dem Prompt-Cache gelesene Eingabe-Tokens (ca. 10 % der Kosten). */
+  cacheReadTokens: number;
+  /** In den Prompt-Cache geschriebene Tokens (ca. 125 % der Kosten, einmalig). */
+  cacheWriteTokens: number;
 }
 
 /** Fehler mit deutscher, für Nutzer bestimmter Meldung. */
@@ -129,6 +133,32 @@ interface PartialBlock {
   json?: string;
 }
 
+const CACHE = { type: 'ephemeral' } as const;
+
+/**
+ * Prompt-Caching: Werkzeugliste, Systemprompt und der bisherige Gesprächsverlauf sind bei jeder
+ * Runde eines Auftrags gleich und werden als Präfix gecacht (Lesen kostet ca. 10 %). Drei
+ * Haltepunkte (von maximal vier): letztes Werkzeug, Systemprompt, letzter Block der letzten Nachricht.
+ * Zu kurze Präfixe werden von der API still ohne Cache verarbeitet.
+ */
+export function withPromptCache(req: Pick<MessageRequest, 'system' | 'messages' | 'tools'>): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    system: [{ type: 'text', text: req.system, cache_control: CACHE }],
+  };
+  if (req.tools && req.tools.length > 0) {
+    out.tools = req.tools.map((tool, i) => (i === req.tools!.length - 1 ? { ...tool, cache_control: CACHE } : tool));
+  }
+  out.messages = req.messages.map((m, i) => {
+    if (i !== req.messages.length - 1) return m;
+    const blocks: unknown[] = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : [...m.content];
+    if (blocks.length === 0) return m;
+    const last = blocks[blocks.length - 1] as Record<string, unknown>;
+    blocks[blocks.length - 1] = { ...last, cache_control: CACHE };
+    return { ...m, content: blocks };
+  });
+  return out;
+}
+
 /** Sendet eine Anfrage und liest den Stream bis zum Ende. Wirft AiError. */
 export async function streamMessage(req: MessageRequest): Promise<MessageResult> {
   const key = getApiKey();
@@ -137,10 +167,8 @@ export async function streamMessage(req: MessageRequest): Promise<MessageResult>
     model: getModel(),
     max_tokens: req.maxTokens,
     stream: true,
-    system: req.system,
-    messages: req.messages,
+    ...withPromptCache(req),
   };
-  if (req.tools && req.tools.length > 0) body.tools = req.tools;
 
   let response: Response;
   try {
@@ -176,6 +204,8 @@ export async function streamMessage(req: MessageRequest): Promise<MessageResult>
   let stopReason = 'end_turn';
   let inputTokens = 0;
   let outputTokens = 0;
+  let cacheReadTokens = 0;
+  let cacheWriteTokens = 0;
   try {
     for await (const { event, data } of parseSse(response.body)) {
       if (req.signal?.aborted) throw new AiError('Abgebrochen.', true);
@@ -189,6 +219,8 @@ export async function streamMessage(req: MessageRequest): Promise<MessageResult>
       if (type === 'message_start') {
         inputTokens = Number(payload.message?.usage?.input_tokens) || 0;
         outputTokens = Number(payload.message?.usage?.output_tokens) || 0;
+        cacheReadTokens = Number(payload.message?.usage?.cache_read_input_tokens) || 0;
+        cacheWriteTokens = Number(payload.message?.usage?.cache_creation_input_tokens) || 0;
       } else if (type === 'content_block_start') {
         const cb = payload.content_block ?? {};
         blocks[payload.index] = { type: cb.type, text: cb.text ?? '', id: cb.id, name: cb.name, json: '' };
@@ -239,5 +271,5 @@ export async function streamMessage(req: MessageRequest): Promise<MessageResult>
       content.push({ type: 'tool_use', id: block.id ?? '', name: block.name ?? '', input });
     }
   }
-  return { content, stopReason, inputTokens, outputTokens };
+  return { content, stopReason, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens };
 }

@@ -119,3 +119,26 @@ describe('askClaude', () => {
     await expect(askClaude({ system: 's', prompt: 'p' })).rejects.toThrow('ungültig');
   });
 });
+
+describe('Prompt-Caching', () => {
+  it('setzt Haltepunkte auf Systemprompt, letztes Werkzeug und letzte Nachricht, ohne die Eingabe zu ändern', async () => {
+    const { withPromptCache } = await import('./client');
+    const tools = [
+      { name: 'a', description: 'a', input_schema: {} },
+      { name: 'b', description: 'b', input_schema: {} },
+    ];
+    const messages = [
+      { role: 'user' as const, content: 'Hallo' },
+      { role: 'assistant' as const, content: [{ type: 'text' as const, text: 'Hi' }] },
+      { role: 'user' as const, content: 'Weiter' },
+    ];
+    const out = withPromptCache({ system: 'SYS', tools, messages }) as any;
+    expect(out.system).toEqual([{ type: 'text', text: 'SYS', cache_control: { type: 'ephemeral' } }]);
+    expect(out.tools[0].cache_control).toBeUndefined();
+    expect(out.tools[1].cache_control).toEqual({ type: 'ephemeral' });
+    expect(out.messages[0]).toBe(messages[0]);
+    expect(out.messages[2].content).toEqual([{ type: 'text', text: 'Weiter', cache_control: { type: 'ephemeral' } }]);
+    expect(messages[2].content).toBe('Weiter');
+    expect(tools[1]).not.toHaveProperty('cache_control');
+  });
+});

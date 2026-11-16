@@ -15,6 +15,8 @@ export type Message =
 export interface Usage {
   inputTokens: number;
   outputTokens: number;
+  /** Aus dem Prompt-Cache gelesene Tokens (günstiger abgerechnet). */
+  cacheReadTokens?: number;
 }
 
 export interface QueuedPrompt {
@@ -69,7 +71,14 @@ export function applyEvent(state: AiView, event: AssistantEvent): AiView {
     }
     case 'usage': {
       const u = state.usage ?? { inputTokens: 0, outputTokens: 0 };
-      return { ...state, usage: { inputTokens: u.inputTokens + event.inputTokens, outputTokens: u.outputTokens + event.outputTokens } };
+      return {
+        ...state,
+        usage: {
+          inputTokens: u.inputTokens + event.inputTokens,
+          outputTokens: u.outputTokens + event.outputTokens,
+          cacheReadTokens: (u.cacheReadTokens ?? 0) + (event.cacheReadTokens ?? 0),
+        },
+      };
     }
     case 'error':
       return push(state, (id) => ({ id, kind: 'error', message: event.message }));
@@ -87,7 +96,8 @@ export function formatTokens(n: number): string {
   return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
 export function usageLine(u: Usage): string {
-  return `${formatTokens(u.inputTokens)} Tokens ein / ${formatTokens(u.outputTokens)} aus`;
+  const cached = u.cacheReadTokens ? `, davon ${formatTokens(u.cacheReadTokens)} aus dem Cache` : '';
+  return `${formatTokens(u.inputTokens)} Tokens ein${cached} / ${formatTokens(u.outputTokens)} aus`;
 }
 
 export const SUGGESTIONS = [

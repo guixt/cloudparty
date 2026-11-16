@@ -201,7 +201,8 @@ describe('Schleife', () => {
     await s.assistant.run('erste', s.makeOptions());
     requests = mockFetch([textResponse('zwei')]);
     await s.assistant.run('zweite', s.makeOptions());
-    expect(requests[0].body.messages.map((m: { content: string }) => m.content)).toEqual(['erste', 'eins', 'zweite']);
+    const texts = requests[0].body.messages.map((m: { content: string | { text: string }[] }) => (typeof m.content === 'string' ? m.content : m.content[0].text));
+    expect(texts).toEqual(['erste', 'eins', 'zweite']);
     s.assistant.resetConversation();
     requests = mockFetch([textResponse('drei')]);
     await s.assistant.run('dritte', s.makeOptions());
@@ -421,7 +422,7 @@ describe('Abgeschnittene Antworten', () => {
     await s.assistant.run('baue', s.makeOptions());
     const last = requests[1].body.messages.at(-1);
     expect(last.role).toBe('user');
-    expect(String(last.content)).toContain('abgeschnitten');
+    expect(JSON.stringify(last.content)).toContain('abgeschnitten');
     expect(s.events.some((e) => e.type === 'error')).toBe(false);
   });
 
