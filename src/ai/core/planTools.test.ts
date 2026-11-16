@@ -1,0 +1,109 @@
+import { describe, expect, it } from 'vitest';
+import { EventBus } from '../../core/events';
+import { createWorldStore } from '../../core/store';
+import { listPlans } from '../../plan/core/api';
+import { buildSystemPrompt } from './prompt';
+import { executeTool, type RunCounters, type ToolContext } from './tools';
+
+function setup(canBuild = true) {
+  const bus = new EventBus();
+  const store = createWorldStore(bus);
+  store.getState().setCanBuild(canBuild);
+  const opened: (string | undefined)[] = [];
+  bus.on('ui.openPlan', ({ planId }) => opened.push(planId));
+  const ctx: ToolContext = { store, bus, getAvatar: () => null, confirm: async () => true };
+  const counters: RunCounters = { toolCalls: 0, newEntities: 0, removals: 0 };
+  const run = (name: string, input: unknown) => executeTool(name, input, ctx, counters);
+  return { store, bus, ctx, run, opened };
+}
+
+const house = {
+  title: 'Haus',
+  nodes: [
+    { id: 'f', title: 'Fundament', notes: '10 x 8 m' },
+    { id: 'w', title: 'Wände', after: ['f'] },
+  ],
+};
+
+describe('Plan-Werkzeuge', () => {
+  it('plan_create legt den Plan an, öffnet das Fenster und nennt die Knoten-ids', async () => {
+    const t = setup();
+    const r = await t.run('plan_create', house);
+    expect(r.ok).toBe(true);
+    const [plan] = listPlans(t.ctx);
+    expect(plan.nodes).toHaveLength(2);
+    expect(r.content).toContain(plan.id);
+    expect(r.content).toContain(plan.nodes[1].id);
+    expect(t.opened).toEqual([plan.id]);
+  });
+
+  it('plan_get: Übersicht, ganzer Plan, einzelner Knoten – alles als Daten umrahmt', async () => {
+    const t = setup();
+    await t.run('plan_create', house);
+    const [plan] = listPlans(t.ctx);
+    const list = await t.run('plan_get', {});
+    expect(list.content).toContain('welt_daten');
+    expect(list.content).toContain('0/2 fertig');
+    const one = await t.run('plan_get', { plan: plan.id, node: plan.nodes[1].id });
+    expect(one.content).toContain('Fundament');
+    expect(one.content).toContain('Wände');
+    expect((await t.run('plan_get', { plan: 'nix' })).ok).toBe(false);
+    expect((await t.run('plan_get', { plan: plan.id, node: 'nix' })).ok).toBe(false);
+  });
+
+  it('plan_complete_node verknüpft nur vorhandene Objekte und setzt den Status', async () => {
+    const t = setup();
+    await t.run('plan_create', house);
+    const [plan] = listPlans(t.ctx);
+    const add = await t.run('add_entity', { ref: 'EntitySpec.box', position: [0, 0.5, 0] });
+    const id = /id="([^"]+)"/.exec(add.content)?.[1] ?? Object.keys(t.store.getState().entities).at(-1)!;
+    const r = await t.run('plan_complete_node', { plan: plan.id, node: plan.nodes[0].id, summary: 'Platte 10 x 8', entity_ids: [id, 'gibt-es-nicht'] });
+    expect(r.ok).toBe(true);
+    expect(r.content).toContain('1 unbekannte');
+    const done = listPlans(t.ctx)[0].nodes[0];
+    expect(done.status).toBe('done');
+    expect(done.result?.entityIds).toEqual([id]);
+  });
+
+  it('plan_update_node verbietet „done“ und „running“, erlaubt open/failed/disabled', async () => {
+    const t = setup();
+    await t.run('plan_create', house);
+    const [plan] = listPlans(t.ctx);
+    const node = plan.nodes[0].id;
+    expect((await t.run('plan_update_node', { plan: plan.id, node, status: 'done' })).ok).toBe(false);
+    expect((await t.run('plan_update_node', { plan: plan.id, node, status: 'running' })).ok).toBe(false);
+    expect((await t.run('plan_update_node', { plan: plan.id, node, status: 'disabled', title: 'Neu' })).ok).toBe(true);
+    expect(listPlans(t.ctx)[0].nodes[0]).toMatchObject({ status: 'disabled', title: 'Neu' });
+  });
+
+  it('plan_add_node und plan_remove_node, Kreise werden gemeldet', async () => {
+    const t = setup();
+    await t.run('plan_create', house);
+    const [plan] = listPlans(t.ctx);
+    const add = await t.run('plan_add_node', { plan: plan.id, title: 'Dach', after: [plan.nodes[1].id] });
+    expect(add.ok).toBe(true);
+    expect(listPlans(t.ctx)[0].nodes).toHaveLength(3);
+    expect((await t.run('plan_add_node', { plan: plan.id, title: 'X', after: ['nix'] })).ok).toBe(false);
+    const cyc = await t.run('plan_create', { title: 'K', nodes: [{ id: 'a', title: 'A', after: ['b'] }, { id: 'b', title: 'B', after: ['a'] }] });
+    expect(cyc.ok).toBe(false);
+    expect(cyc.content).toContain('Kreis');
+    expect((await t.run('plan_remove_node', { plan: plan.id, node: plan.nodes[0].id })).ok).toBe(true);
+    expect(listPlans(t.ctx)[0].nodes).toHaveLength(2);
+  });
+
+  it('ohne Baurecht ändern Plan-Werkzeuge nichts, lesen geht', async () => {
+    const t = setup(false);
+    const r = await t.run('plan_create', house);
+    expect(r.ok).toBe(false);
+    expect(listPlans(t.ctx)).toHaveLength(0);
+    expect((await t.run('plan_get', {})).ok).toBe(true);
+  });
+
+  it('ungültige Argumente werden abgewiesen, der Systemprompt kennt den Plan-Ablauf', async () => {
+    const t = setup();
+    expect((await t.run('plan_create', { title: 'x', nodes: 'kaputt' })).ok).toBe(false);
+    expect((await t.run('plan_create', { title: 'x', nodes: [{ title: 5 }] })).ok).toBe(false);
+    expect((await t.run('plan_complete_node', { plan: 'a', node: 'b' })).ok).toBe(false);
+    expect(buildSystemPrompt(t.store.getState())).toContain('plan_create');
+  });
+});

@@ -36,6 +36,8 @@ export interface WorldState {
   removeEntity(id: string, options?: ChangeOptions): void;
   setEnvironment(environment: EnvironmentSpec, options?: ChangeOptions): void;
   setMetadata(patch: Partial<WorldSpec['metadata']>): void;
+  /** Setzt oder löscht (`undefined`) einen Eintrag in `world.extensions` und zählt eine dauerhafte Änderung. */
+  setExtension(key: string, value: unknown): void;
   select(id: string | null): void;
   /** Wählt mehrere Objekte (nicht vorhandene IDs werden ignoriert); das letzte wird primär. */
   selectMany(ids: string[]): void;
@@ -139,6 +141,14 @@ export function createWorldStore(bus: EventBus): WorldStore {
     setMetadata(patch) {
       const state = get();
       set({ world: { ...state.world, metadata: { ...state.world.metadata, ...patch } }, revision: state.revision + 1 });
+    },
+
+    setExtension(key, value) {
+      const state = get();
+      const extensions = { ...(state.world.extensions ?? {}) };
+      if (value === undefined) delete extensions[key];
+      else extensions[key] = value;
+      set({ world: { ...state.world, extensions }, revision: state.revision + 1 });
     },
 
     select(id) {

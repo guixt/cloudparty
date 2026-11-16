@@ -87,6 +87,14 @@ export interface GameEvents {
   'render.shadowCaster.added': { mesh: AbstractMesh };
   'ui.toast': { text: string; kind?: 'info' | 'error' };
 
+  // --- Plan-Board ---
+  /** Ein Plan wurde angelegt, geändert oder gelöscht (planId leer = Pläne neu geladen). */
+  'plan.changed': { planId: string };
+  /** Öffnet das Plan-Fenster (optional mit gewähltem Plan). */
+  'ui.openPlan': { planId?: string };
+  /** Der Nutzer möchte einen Knoten (oder alle offenen Knoten) ausführen lassen. */
+  'plan.run.request': { planId: string; nodeId?: string };
+
   // --- Undo-Gruppierung (Build-Paket hört zu; z. B. für KI-Aufträge) ---
   /** Alle folgenden lokalen Änderungen bis `history.group.end` werden ein Undo-Schritt. */
   'history.group.begin': Record<string, never>;

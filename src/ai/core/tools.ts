@@ -28,6 +28,7 @@ import { buildWorldSummary, wrapData } from './summary';
 import { groupHandlers } from './groupTools';
 import { libraryHandlers } from './libraryTools';
 import { graphHandlers } from './graphTools';
+import { planHandlers } from './planTools';
 
 export interface ToolContext {
   store: WorldStore;
@@ -398,7 +399,7 @@ const handlers: Record<string, Handler> = {
 /** Führt ein Werkzeug aus. Wirft nie; Fehler kommen als `ok: false` zurück. */
 export async function executeTool(name: string, rawInput: unknown, ctx: ToolContext, counters: RunCounters): Promise<ToolOutcome> {
   const def = getToolDefinition(name);
-  const handler = def ? (handlers[name] ?? groupHandlers[name] ?? libraryHandlers[name] ?? graphHandlers[name]) : undefined;
+  const handler = def ? (handlers[name] ?? groupHandlers[name] ?? libraryHandlers[name] ?? graphHandlers[name] ?? planHandlers[name]) : undefined;
   if (!def || !handler) {
     const msg = `Unbekanntes Werkzeug "${name.slice(0, 40)}".`;
     return { ok: false, content: msg, summary: msg, mutated: false };
