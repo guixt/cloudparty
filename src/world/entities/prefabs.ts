@@ -429,7 +429,8 @@ const BUILTIN: PrefabDef[] = [
       const wood = createFixedMaterial(scene, 'postWood', WOOD_DARK, { roughness: 0.85 });
       const boardColor = entity.material?.color ?? '#f0e2b0';
       const board = mainMat(ctx, entity, '#f0e2b0', { roughness: 0.8 });
-      slab(scene, root, wood, 0.12, 1.5, 0.1, 0, 0, 0.09);
+      // Pfosten reicht nur bis zur Unterkante des Schildes (y = 1.0) und steht mittig: er ragt weder vorn noch hinten ins Schild.
+      slab(scene, root, wood, 0.12, 1.0, 0.08, 0, 0, 0);
       slab(scene, root, board, 1.5, 0.85, 0.08, 0, 1.0, 0);
       const text = String(entity.state?.text ?? '');
       const dark = Color3.FromHexString(/^#[0-9a-fA-F]{6}$/.test(boardColor) ? boardColor : '#f0e2b0');
