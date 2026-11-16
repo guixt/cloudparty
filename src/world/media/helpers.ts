@@ -192,6 +192,15 @@ export function boardSize(kind: MediaKind, aspectOverride?: unknown): BoardSize 
   return { width: height * a, height };
 }
 
+/** Seitenverhältnis einer Tafel, die zu einem Bild passt: auf sinnvolle Grenzen begrenzt (nicht zu schmal/breit), auf 2 Stellen gerundet. */
+export const BOARD_ASPECT_MIN = 0.35;
+export const BOARD_ASPECT_MAX = 3.5;
+export function aspectForImage(width: number, height: number): number | null {
+  if (!(width > 0) || !(height > 0) || !Number.isFinite(width) || !Number.isFinite(height)) return null;
+  const a = width / height;
+  return Math.round(Math.min(BOARD_ASPECT_MAX, Math.max(BOARD_ASPECT_MIN, a)) * 100) / 100;
+}
+
 // ---------------------------------------------------------------- Text
 
 export type MeasureFn = (text: string, fontSize: number) => number;

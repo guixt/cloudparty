@@ -171,3 +171,15 @@ describe('referrerPolicyFor', () => {
     }
   });
 });
+
+describe('aspectForImage', () => {
+  it('passt das Seitenverhältnis an, begrenzt und rundet', async () => {
+    const { aspectForImage } = await import('./helpers');
+    expect(aspectForImage(1600, 900)).toBe(1.78);
+    expect(aspectForImage(3000, 1000)).toBe(3);
+    expect(aspectForImage(9000, 1000)).toBe(3.5); // zu breit → begrenzt
+    expect(aspectForImage(100, 1000)).toBe(0.35); // zu schmal → begrenzt
+    expect(aspectForImage(0, 100)).toBeNull();
+    expect(aspectForImage(NaN, 100)).toBeNull();
+  });
+});

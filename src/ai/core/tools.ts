@@ -46,7 +46,7 @@ export interface ToolContext {
   /** true = der Nutzer erlaubt die Bildsuche im Internet (Einstellung), pro Auftrag gelesen. */
   imageSearch?: boolean;
   /** Lädt ein Bild herunter, verkleinert es und liefert eine JPEG-Daten-URL (oder null). */
-  fetchImage?(url: string): Promise<string | null>;
+  fetchImage?(url: string): Promise<{ dataUrl: string; width: number; height: number } | null>;
   /** Rendert die Welt aus einer Kamera und liefert ein Base64-JPEG (ohne Präfix) oder null. */
   captureView?(req: import('./capture').ViewRequest): Promise<string | null>;
 }

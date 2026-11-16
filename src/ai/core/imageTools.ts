@@ -1,6 +1,7 @@
 /** Werkzeuge search_images und use_image: Bilder suchen und auf einer Bild- oder Folien-Tafel anzeigen. */
 import { AI_LIMITS } from '../../../shared/aiTools';
 import type { MediaSpec } from '../../../shared/types';
+import { aspectForImage } from '../../world/media/helpers';
 import { getHit, searchImages, type ImageSource } from './imageSearch';
 import { wrapData } from './summary';
 import { fail, getEntity, num, ok, opts, str, type Handler } from './tools';
@@ -43,19 +44,23 @@ export const imageHandlers: Record<string, Handler> = {
     const hitId = str(input.result_id, 'result_id', 40);
     const hit = getHit(hitId) ?? fail(`Unbekannter Treffer „${hitId.slice(0, 30)}“. Suche zuerst mit search_images.`);
     counters.imageDownloads = (counters.imageDownloads ?? 0) + 1;
-    const dataUrl = await (ctx.fetchImage as NonNullable<typeof ctx.fetchImage>)(hit.fetchUrl);
-    if (!dataUrl) return { ok: false, content: 'Das Bild konnte nicht geladen werden (der Anbieter erlaubt den Abruf nicht oder es ist zu groß). Nimm einen anderen Treffer.', summary: 'Bild konnte nicht geladen werden', mutated: false };
+    const fetched = await (ctx.fetchImage as NonNullable<typeof ctx.fetchImage>)(hit.fetchUrl);
+    if (!fetched) return { ok: false, content: 'Das Bild konnte nicht geladen werden (der Anbieter erlaubt den Abruf nicht oder es ist zu groß). Nimm einen anderen Treffer.', summary: 'Bild konnte nicht geladen werden', mutated: false };
 
     const credit = `${hit.title} – ${hit.author}, ${hit.license} (${hit.source === 'wikimedia' ? 'Wikimedia Commons' : 'Openverse'})`;
     const media: MediaSpec = { ...(entity.media ?? {}), kind: kind as 'image' | 'slides' };
     let state = { ...(entity.state ?? {}) };
+    const aspect = aspectForImage(fetched.width, fetched.height);
     if (kind === 'image') {
-      media.url = dataUrl;
+      media.url = fetched.dataUrl;
       state.credit = credit.slice(0, 300);
+      // Tafel an das Bild anpassen, damit es ohne schwarze Balken gezeigt wird.
+      if (aspect !== null) state.aspect = aspect;
     } else {
       const urls = [...(media.urls ?? [])];
       if (urls.length >= MAX_SLIDES) fail(`Eine Folien-Tafel hat höchstens ${MAX_SLIDES} Folien.`);
-      urls.push(dataUrl);
+      if (urls.length === 0 && aspect !== null) state.aspect = aspect; // die erste Folie bestimmt das Format der Tafel
+      urls.push(fetched.dataUrl);
       media.urls = urls;
       media.slide = urls.length - 1;
       const credits = Array.isArray(state.credits) ? [...(state.credits as unknown[]).map(String)] : [];
@@ -63,6 +68,6 @@ export const imageHandlers: Record<string, Handler> = {
       state = { ...state, credits: credits.slice(-20) };
     }
     ctx.store.getState().updateEntity(entity.id, { media, state }, opts);
-    return ok(`Bild gesetzt: ${credit}`, `Bild „${hit.title.slice(0, 40)}“ gesetzt`, true);
+    return ok(`Bild gesetzt: ${credit}.${aspect !== null && (kind === 'image' || media.urls?.length === 1) ? ` Die Tafel hat jetzt das Seitenverhältnis des Bildes (${aspect}).` : ''}`, `Bild „${hit.title.slice(0, 40)}“ gesetzt`, true);
   },
 };

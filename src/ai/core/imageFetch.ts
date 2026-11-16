@@ -16,7 +16,14 @@ export const FIT_STEPS: { width: number; quality: number }[] = [
 /** Ungefähre Größe der Daten-URL in Bytes (Base64-Anteil). */
 export const dataUrlBytes = (url: string): number => Math.floor(((url.length - url.indexOf(',') - 1) * 3) / 4);
 
-export async function fetchImageAsDataUrl(url: string, maxBytes = MAX_IMAGE_BYTES, signal?: AbortSignal): Promise<string | null> {
+export interface FetchedImage {
+  dataUrl: string;
+  /** Maße des Originals (für das Seitenverhältnis der Tafel). */
+  width: number;
+  height: number;
+}
+
+export async function fetchImageAsDataUrl(url: string, maxBytes = MAX_IMAGE_BYTES, signal?: AbortSignal): Promise<FetchedImage | null> {
   try {
     const res = await fetch(url, { mode: 'cors', signal });
     if (!res.ok) return null;
@@ -35,7 +42,7 @@ export async function fetchImageAsDataUrl(url: string, maxBytes = MAX_IMAGE_BYTE
         c.fillRect(0, 0, canvas.width, canvas.height);
         c.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
         const out = canvas.toDataURL('image/jpeg', step.quality);
-        if (dataUrlBytes(out) <= maxBytes) return out;
+        if (dataUrlBytes(out) <= maxBytes) return { dataUrl: out, width: bitmap.width, height: bitmap.height };
       }
       return null;
     } finally {

@@ -570,7 +570,7 @@ export const AI_TOOLS: AiToolDefinition[] = [
   {
     name: 'use_image',
     description:
-      'Lädt den Treffer `result_id` (aus search_images) herunter, verkleinert ihn und zeigt ihn auf der Bild-Tafel (EntitySpec.media-image) bzw. hängt ihn als weitere Folie an eine Folien-Tafel (EntitySpec.media-slides) mit der Objekt-id `id`. Autor und Lizenz werden am Objekt gespeichert (state.credit). Höchstens 6 Bilder pro Auftrag. Schlägt der Abruf fehl, nimm einen anderen Treffer.',
+      'Lädt den Treffer `result_id` (aus search_images) herunter, verkleinert ihn und zeigt ihn auf der Bild-Tafel (EntitySpec.media-image) bzw. hängt ihn als weitere Folie an eine Folien-Tafel (EntitySpec.media-slides) mit der Objekt-id `id`. Die Bild-Tafel passt ihr Seitenverhältnis automatisch an das Bild an (bei Folien-Tafeln bestimmt die erste Folie das Format). Autor und Lizenz werden am Objekt gespeichert (state.credit). Höchstens 6 Bilder pro Auftrag. Schlägt der Abruf fehl, nimm einen anderen Treffer.',
     input_schema: { type: 'object', properties: { id: { type: 'string' }, result_id: { type: 'string' } }, required: ['id', 'result_id'] },
     mutates: true,
   },

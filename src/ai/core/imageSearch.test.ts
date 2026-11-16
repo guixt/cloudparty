@@ -94,7 +94,7 @@ describe('searchImages', () => {
 function setup(opts: { imageSearch?: boolean; fetched?: string | null } = {}) {
   const bus = new EventBus();
   const store = createWorldStore(bus);
-  const fetchImage = vi.fn(async () => (opts.fetched === undefined ? 'data:image/jpeg;base64,AAAA' : opts.fetched));
+  const fetchImage = vi.fn(async () => (opts.fetched === undefined ? { dataUrl: 'data:image/jpeg;base64,AAAA', width: 3000, height: 1000 } : opts.fetched === null ? null : { dataUrl: opts.fetched, width: 100, height: 100 }));
   const ctx: ToolContext = { store, bus, getAvatar: () => null, confirm: async () => true, imageSearch: opts.imageSearch ?? true, fetchImage };
   const counters: RunCounters = { toolCalls: 0, newEntities: 0, removals: 0 };
   const run = (name: string, input: unknown) => executeTool(name, input, ctx, counters);
@@ -142,6 +142,8 @@ describe('Werkzeuge search_images / use_image', () => {
     expect(r.ok).toBe(true);
     const e = t.store.getState().entities[board.id];
     expect(e.media).toMatchObject({ kind: 'image', url: 'data:image/jpeg;base64,AAAA' });
+    expect(e.state?.aspect).toBe(3); // 3000 × 1000: die Tafel wird breit
+    expect(r.content).toContain('Seitenverhältnis');
     expect(String(e.state?.credit)).toContain('Erster Wald');
     expect(t.fetchImage).toHaveBeenCalledWith('https://upload.wikimedia.org/thumb/1.png');
   });
@@ -156,6 +158,7 @@ describe('Werkzeuge search_images / use_image', () => {
     const e = t.store.getState().entities[board.id];
     expect(e.media?.urls).toHaveLength(2);
     expect(e.media?.slide).toBe(1);
+    expect(e.state?.aspect).toBe(3); // erste Folie bestimmt das Format
     expect((e.state?.credits as string[]).length).toBe(2);
   });
 

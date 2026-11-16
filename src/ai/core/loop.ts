@@ -30,7 +30,7 @@ export interface AssistantDeps {
   /** Screenshot der Welt (Werkzeug look); fehlt es, sind Screenshots nicht verfügbar. */
   captureView?(req: import('./capture').ViewRequest): Promise<string | null>;
   /** Lädt ein Bild und liefert eine verkleinerte JPEG-Daten-URL (Werkzeug use_image). */
-  fetchImage?(url: string): Promise<string | null>;
+  fetchImage?(url: string): Promise<{ dataUrl: string; width: number; height: number } | null>;
 }
 
 const TOOLS: ApiTool[] = AI_TOOLS.map(({ name, description, input_schema }) => ({ name, description, input_schema }));

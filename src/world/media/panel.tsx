@@ -4,10 +4,20 @@ import { useStore } from 'zustand';
 import type { EntitySpec, MediaKind, MediaSpec } from '../../../shared/types';
 import type { PanelProps } from '../../core/ui';
 import { EMBED_HINT } from './overlay';
-import { KIND_LABELS, mediaKindOfRef, shortUrl, wrapSlide } from './helpers';
+import { KIND_LABELS, aspectForImage, mediaKindOfRef, shortUrl, wrapSlide } from './helpers';
 import { fileToDataUrl } from './upload';
 
 const KINDS: MediaKind[] = ['image', 'slides', 'web', 'video', 'text'];
+
+/** Misst die Pixelgröße eines Bildes (auch ohne CORS möglich, da nur geladen und nicht gelesen wird). */
+function imageSize(url: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => reject(new Error('Das Bild konnte nicht geladen werden.'));
+    img.src = url;
+  });
+}
 
 function UrlField({ value, placeholder, onCommit, testId }: { value: string; placeholder: string; onCommit: (v: string) => void; testId: string }) {
   const [draft, setDraft] = useState(value);
@@ -43,6 +53,23 @@ function MediaEditor({ ctx, entity }: { ctx: PanelProps['ctx']; entity: EntitySp
   const fail = (e: unknown) => ctx.bus.emit('ui.toast', { text: e instanceof Error ? e.message : 'Upload fehlgeschlagen', kind: 'error' });
   const urls = media.urls ?? [];
 
+  /** Stellt die Tafel auf das Seitenverhältnis des Bildes (ohne schwarze Balken); null entfernt die Vorgabe (16:9). */
+  const fitBoard = async (url: string | undefined) => {
+    try {
+      if (!url) return;
+      const { w, h } = await imageSize(url);
+      const aspect = aspectForImage(w, h);
+      if (aspect !== null) setState({ aspect });
+    } catch (e) {
+      fail(e);
+    }
+  };
+  const resetFormat = () => {
+    const { aspect: _a, ...rest } = (entity.state ?? {}) as Record<string, unknown>;
+    void _a;
+    ctx.store.getState().updateEntity(entity.id, { state: rest });
+  };
+
   const upload = async (files: FileList | null, many: boolean) => {
     if (!files || files.length === 0) return;
     try {
@@ -50,7 +77,10 @@ function MediaEditor({ ctx, entity }: { ctx: PanelProps['ctx']; entity: EntitySp
       const results: string[] = [];
       for (const file of list) results.push(await fileToDataUrl(file));
       if (many) update({ urls: [...urls, ...results] });
-      else update({ url: results[0] });
+      else {
+        update({ url: results[0] });
+        void fitBoard(results[0]); // Tafel gleich ans neue Bild anpassen
+      }
     } catch (e) {
       fail(e);
     }
@@ -89,6 +119,18 @@ function MediaEditor({ ctx, entity }: { ctx: PanelProps['ctx']; entity: EntitySp
               </button>
             )}
           </div>
+          {media.url && (
+            <div className="cp-row cp-media-row">
+              <button className="cp-button" data-testid="media-fit" title="Die Tafel bekommt das Seitenverhältnis des Bildes" onClick={() => void fitBoard(media.url)}>
+                Tafel ans Bild anpassen
+              </button>
+              {entity.state?.aspect !== undefined && (
+                <button className="cp-button" data-testid="media-fit-reset" title="Zurück zum Standardformat (16:9)" onClick={resetFormat}>
+                  Standardformat
+                </button>
+              )}
+            </div>
+          )}
           <input ref={fileRef} type="file" accept="image/*" hidden data-testid="media-file" onChange={(e) => void upload(e.target.files, false).then(() => (e.target.value = ''))} />
         </>
       )}
@@ -121,6 +163,18 @@ function MediaEditor({ ctx, entity }: { ctx: PanelProps['ctx']; entity: EntitySp
               </li>
             ))}
           </ol>
+          {urls.length > 0 && (
+            <div className="cp-row cp-media-row">
+              <button className="cp-button" data-testid="media-fit" title="Die Tafel bekommt das Seitenverhältnis der ersten Folie" onClick={() => void fitBoard(urls[0])}>
+                Tafel an erste Folie anpassen
+              </button>
+              {entity.state?.aspect !== undefined && (
+                <button className="cp-button" data-testid="media-fit-reset" title="Zurück zum Standardformat (16:9)" onClick={resetFormat}>
+                  Standardformat
+                </button>
+              )}
+            </div>
+          )}
           <div className="cp-row cp-media-row">
             <input
               className="cp-input"
