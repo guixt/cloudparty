@@ -34,7 +34,7 @@ function browserDownload(fileName: string, text: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export const MAX_IMPORT_BYTES = 25 * 1024 * 1024;
+export const MAX_IMPORT_BYTES = 100 * 1024 * 1024;
 
 export function createLibrary(ctx: GameContext, options: ServiceOptions = {}): LibraryService {
   const listeners = new Set<() => void>();

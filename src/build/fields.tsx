@@ -107,10 +107,13 @@ export function TextField({ value, onChange, placeholder, testId, multiline }: {
   );
 }
 
-export function readFileAsDataUrl(file: File, maxBytes = 12 * 1024 * 1024): Promise<string> {
+/** Obergrenze für Datei-Uploads (Modelle, Bilder) im Browser. */
+export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+
+export function readFileAsDataUrl(file: File, maxBytes = MAX_UPLOAD_BYTES): Promise<string> {
   return new Promise((resolve, reject) => {
     if (file.size > maxBytes) {
-      reject(new Error('Datei ist zu groß (max. 12 MB).'));
+      reject(new Error(`Datei ist zu groß (max. ${Math.round(maxBytes / 1024 / 1024)} MB).`));
       return;
     }
     const reader = new FileReader();

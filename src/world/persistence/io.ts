@@ -3,7 +3,7 @@ import { parseWorldSpec, serializeWorldSpec, type ValidationResult } from '../..
 import type { WorldSpec } from '../../../shared/types';
 
 /** Größtes erlaubtes Importvolumen (Bytes). */
-export const MAX_IMPORT_BYTES = 25 * 1024 * 1024;
+export const MAX_IMPORT_BYTES = 100 * 1024 * 1024;
 
 /** Dateiname `<name>.cloudparty.json` ohne unzulässige Zeichen. */
 export function worldFileName(world: WorldSpec): string {
