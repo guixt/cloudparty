@@ -40,6 +40,8 @@ export interface PlanNode {
   /** Freier Text: Maße, Farben, Stil, Referenzpunkte – spätere Knoten lesen ihn. */
   notes: string;
   status: PlanStatus;
+  /** Eigene Kurzkennung der KI (z. B. „n07“), damit sie sich später darauf beziehen kann. */
+  key?: string;
   /** Position im Editor (Pixel, ungezoomt). */
   x: number;
   y: number;
@@ -153,6 +155,7 @@ export function normalizePlans(raw: unknown, options: { resetTransient?: boolean
         status: options.resetTransient && (status === 'running' || status === 'queued') ? 'open' : status,
         x: num(n.x, 0),
         y: num(n.y, 0),
+        ...(typeof n.key === 'string' && n.key ? { key: n.key.slice(0, 40) } : {}),
       };
       if (isObj(n.result)) {
         node.result = {

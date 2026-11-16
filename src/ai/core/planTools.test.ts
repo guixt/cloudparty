@@ -127,3 +127,36 @@ describe('Plan-Werkzeuge', () => {
     expect(buildSystemPrompt(t.store.getState())).toContain('plan_create');
   });
 });
+
+describe('Plan: eigene Kennungen und aktuelle Gruppen', () => {
+  it('plan_add_node(after=["n07"]) findet Knoten über key, Nummer oder Titel; Fehler nennt die Liste', async () => {
+    const t = setup();
+    await t.run('plan_create', { title: 'T', nodes: [{ id: 'n01', title: '1 Start' }, { id: 'n02', title: '2 Boden', after: ['n01'] }] });
+    const [plan] = listPlans(t.ctx);
+    const a = await t.run('plan_add_node', { plan: plan.id, title: '3 Wände', key: 'n03', after: ['n02'] });
+    expect(a.ok).toBe(true);
+    const b = await t.run('plan_add_node', { plan: plan.id, title: '4 Dach', after: ['n03'] }); // über key
+    expect(b.ok).toBe(true);
+    const c = await t.run('plan_add_node', { plan: plan.id, title: '5 Tür', after: ['4'] }); // über Nummer im Titel
+    expect(c.ok).toBe(true);
+    const bad = await t.run('plan_add_node', { plan: plan.id, title: 'x', after: ['n99'] });
+    expect(bad.ok).toBe(false);
+    expect(bad.content).toContain('Vorhandene Knoten');
+    expect(listPlans(t.ctx)[0].nodes).toHaveLength(5);
+  });
+  it('plan_get zeigt die aktuelle Gruppen-id, auch nach group_entities', async () => {
+    const t = setup();
+    await t.run('plan_create', { title: 'T', nodes: [{ id: 'a', title: 'A' }] });
+    const [plan] = listPlans(t.ctx);
+    const w = await t.run('add_wall', { from: [0, 0], to: [6, 0], height: 3, name: 'Q', openings: [{ at: 2, width: 1, height: 2 }] });
+    const oldGroup = /group="(grp_[^"]+)"/.exec(w.content)![1];
+    const ids = t.store.getState().order.filter((i) => t.store.getState().entities[i].group === oldGroup);
+    await t.run('plan_complete_node', { plan: plan.id, node: plan.nodes[0].id, summary: 's', entity_ids: ids, group: oldGroup });
+    await t.run('group_entities', { ids, name: 'Neu' });
+    const got = await t.run('plan_get', { plan: plan.id });
+    const newGroup = t.store.getState().entities[ids[0]].group!;
+    expect(newGroup).not.toBe(oldGroup);
+    expect(got.content).toContain(newGroup);
+    expect(got.content).not.toContain(oldGroup);
+  });
+});

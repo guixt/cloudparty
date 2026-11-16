@@ -133,6 +133,15 @@ export function buildWorldSummary(state: WorldState, avatar: { position: Vec3; y
     if (all2.length > rows.length) hint = `Nur die letzten ${rows.length} von ${all2.length} Zeilen gezeigt (ältere weggelassen; filtere mit name_contains).`;
     else if (byGroup.size > 0) hint = 'Gruppen mit mindestens 3 Teilen stehen als eine Zeile (Maße nur grob). Die Gruppen-id gilt für get_bounds, clone_group, use_texture, remove_entity und update_entity; get_world mit group=<id> listet die Mitglieder.';
   }
+  if (opts.group || opts.nameContains) {
+    // Gefilterte Abfrage: ohne Katalog, Umgebung und Grenzen (spart Tokens und Cache-Schreiben).
+    return {
+      welt: state.world.metadata.name,
+      anzahl_objekte: all.length,
+      ...(hint ? { hinweis: hint } : {}),
+      objekte: rows,
+    };
+  }
   return {
     welt: state.world.metadata.name,
     insel: { radius: island.radius, tiefe: island.depth, oberseite_y: 0 },

@@ -234,3 +234,30 @@ describe('Gruppen entfernen, ändern, Weltübersicht', () => {
     expect(detail.objekte).toHaveLength(row.anzahl);
   });
 });
+
+describe('Namen als Ziel', () => {
+  it('get_bounds und look-Auflösung akzeptieren eindeutige Namen, mehrdeutige werden gemeldet', async () => {
+    const t = setup();
+    await t.run('add_entity', { ref: 'EntitySpec.box', position: [0, 0.5, 0], name: 'Kiste Alpha' });
+    expect((await t.run('get_bounds', { id: 'kiste alpha' })).ok).toBe(true);
+    await t.run('add_entity', { ref: 'EntitySpec.box', position: [3, 0.5, 0], name: 'Doppelt' });
+    await t.run('add_entity', { ref: 'EntitySpec.box', position: [6, 0.5, 0], name: 'Doppelt' });
+    const r = await t.run('get_bounds', { id: 'Doppelt' });
+    expect(r.ok).toBe(false);
+    expect(r.content).toContain('nicht eindeutig');
+    const w = await t.run('add_wall', { from: [0, 5], to: [4, 5], height: 2, name: 'Mauer Nord' });
+    expect(w.ok).toBe(true);
+    expect((await t.run('get_bounds', { id: 'Mauer Nord' })).ok).toBe(true);
+  });
+  it('group_entities und library_save nehmen Gruppen-ids', async () => {
+    const t = setup();
+    const w = await t.run('add_wall', { from: [0, 5], to: [4, 5], height: 2, name: 'Q', openings: [{ at: 1, width: 1, height: 1 }] });
+    const g = /group="(grp_[^"]+)"/.exec(w.content)![1];
+    const b = await t.run('add_entity', { ref: 'EntitySpec.box', position: [9, 0.5, 9] });
+    const bid = /id="([^"]+)"/.exec(b.content)![1];
+    const r = await t.run('group_entities', { ids: [g, bid], name: 'Alles' });
+    expect(r.ok).toBe(true);
+    const members = t.all().filter((e) => e.groupName === 'Alles');
+    expect(members.length).toBeGreaterThan(3);
+  });
+});

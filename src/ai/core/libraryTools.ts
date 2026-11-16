@@ -3,7 +3,7 @@ import { AI_LIMITS } from '../../../shared/aiTools';
 import { LIBRARY_LIMITS } from '../../../shared/library';
 import { getLibrary } from '../../library';
 import type { LibraryApi } from '../../library/api';
-import { coord, fail, getEntity, num, obj, ok, str, type Handler } from './tools';
+import { coord, expandTargets, fail, getEntity, num, obj, ok, str, type Handler } from './tools';
 import { wrapData } from './summary';
 
 function lib(): LibraryApi {
@@ -54,7 +54,7 @@ export const libraryHandlers: Record<string, Handler> = {
     if (!Array.isArray(input.ids) || input.ids.length < 1) fail('ids muss eine nicht leere Liste von Objekt-ids sein.');
     const rawIds = input.ids as unknown[];
     if (rawIds.length > LIBRARY_LIMITS.maxEntitiesPerItem) fail(`Zu viele Objekte: höchstens ${LIBRARY_LIMITS.maxEntitiesPerItem} pro Baustein.`);
-    const ids = [...new Set(rawIds.map((v, i) => getEntity(ctx, str(v, `ids[${i}]`, 200)).id))];
+    const ids = expandTargets(ctx, rawIds).map((e) => e.id);
     obj(input, 'Argumente');
     const meta = await api.save({ name, ...(description !== undefined ? { description } : {}), ...(tags ? { tags } : {}), ids });
     return ok(`Baustein gespeichert, id="${meta.id}".`, `Baustein „${name.slice(0, 40)}“ gespeichert`, false);

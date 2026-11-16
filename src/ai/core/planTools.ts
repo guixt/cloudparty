@@ -22,10 +22,18 @@ function needPlan(ctx: ToolContext, id: unknown): PlanSpec {
   const planId = str(id, 'plan', 100);
   return getPlan(pctx(ctx), planId) ?? fail(`Den Plan „${planId.slice(0, 40)}“ gibt es nicht. Rufe plan_get ohne Argumente auf.`);
 }
+/** Knoten über echte id, eigene Kennung (`key`) oder Titel-Anfang („8“, „n08“ ↔ „8 Hauswand …“); sonst Fehler mit der Knotenliste. */
 function needNode(plan: PlanSpec, id: unknown): string {
-  const nodeId = str(id, 'node', 100);
-  if (!plan.nodes.some((n) => n.id === nodeId)) fail(`Den Knoten „${nodeId.slice(0, 40)}“ gibt es in diesem Plan nicht.`);
-  return nodeId;
+  const nodeId = str(id, 'node', 100).trim();
+  const exact = plan.nodes.find((n) => n.id === nodeId) ?? plan.nodes.find((n) => n.key === nodeId);
+  if (exact) return exact.id;
+  const digits = /^n?0*(\d+)$/i.exec(nodeId)?.[1];
+  if (digits) {
+    const byTitle = plan.nodes.filter((n) => new RegExp(`^0*${digits}(\\D|$)`).test(n.title.trim()));
+    if (byTitle.length === 1) return byTitle[0].id;
+  }
+  const list = plan.nodes.slice(0, 30).map((n) => `${n.id}${n.key ? ` (${n.key})` : ''} = ${n.title.slice(0, 40)}`).join('; ');
+  return fail(`Den Knoten „${nodeId.slice(0, 40)}“ gibt es in diesem Plan nicht. Vorhandene Knoten: ${list}.`);
 }
 function stringList(v: unknown, label: string, max: number): string[] {
   if (v === undefined) return [];
@@ -65,7 +73,17 @@ export const planHandlers: Record<string, Handler> = {
     }
     const plan = needPlan(ctx, input.plan);
     const only = input.node === undefined ? undefined : needNode(plan, input.node);
-    return ok(wrapData(JSON.stringify(compactPlan(plan, only))), only ? 'Knoten gelesen' : `Plan „${plan.title}“ gelesen`, false);
+    // Gruppen-ids aus alten Ergebnissen können veraltet sein (group_entities vergibt neue): aktuelle aus den Objekten ableiten.
+    const compact = compactPlan(plan, only) as { knoten: { ergebnis?: { gruppe?: string; ids: string[]; objekte: number } }[] };
+    const { entities } = ctx.store.getState();
+    for (const k of compact.knoten) {
+      if (!k.ergebnis) continue;
+      const alive = k.ergebnis.ids.map((i) => entities[i]).filter((e) => !!e);
+      const groups = new Set(alive.map((e) => e.group));
+      k.ergebnis.gruppe = groups.size === 1 ? ([...groups][0] ?? undefined) : undefined;
+      k.ergebnis.ids = alive.map((e) => e.id);
+    }
+    return ok(wrapData(JSON.stringify(compact)), only ? 'Knoten gelesen' : `Plan „${plan.title}“ gelesen`, false);
   },
 
   plan_update_node(input, ctx) {
@@ -89,10 +107,11 @@ export const planHandlers: Record<string, Handler> = {
       addNode(pctx(ctx), plan.id, {
         title: str(input.title, 'title', PLAN_LIMITS.title),
         notes: input.notes === undefined ? undefined : str(input.notes, 'notes', PLAN_LIMITS.notes, true),
+        ...(input.key === undefined ? {} : { key: str(input.key, 'key', 40) }),
         afterIds,
       }),
     );
-    return ok(`Knoten angelegt: node="${created.id}".`, `Knoten „${created.title}“ hinzugefügt`, true);
+    return ok(`Knoten angelegt: node="${created.id}"${created.key ? ` (key ${created.key})` : ''}.`, `Knoten „${created.title}“ hinzugefügt`, true);
   },
 
   plan_remove_node(input, ctx) {

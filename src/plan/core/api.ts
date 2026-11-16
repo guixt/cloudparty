@@ -106,7 +106,7 @@ export function createPlan(ctx: PlanCtx, title: string, inputs: NodeInput[]): Pl
       if (names.has(input.id)) throw new PlanError(`Die Kennung „${input.id}“ kommt doppelt vor.`);
       names.set(input.id, id);
     }
-    plan.nodes.push({ id, title: checkTitle(input.title), notes: checkNotes(input.notes), status: 'open', x: 0, y: 0 });
+    plan.nodes.push({ id, title: checkTitle(input.title), notes: checkNotes(input.notes), status: 'open', x: 0, y: 0, ...(input.id ? { key: input.id.slice(0, 40) } : {}) });
   }
   inputs.forEach((input, i) => {
     for (const ref of input.after ?? []) {
@@ -135,10 +135,10 @@ export function deletePlan(ctx: PlanCtx, planId: string): void {
   save(ctx, plans.filter((p) => p.id !== planId), planId);
 }
 
-export function addNode(ctx: PlanCtx, planId: string, input: Omit<NodeInput, 'id'> & { afterIds?: string[]; x?: number; y?: number }): PlanNode {
+export function addNode(ctx: PlanCtx, planId: string, input: Omit<NodeInput, 'id'> & { key?: string; afterIds?: string[]; x?: number; y?: number }): PlanNode {
   return mutate(ctx, planId, (plan) => {
     if (plan.nodes.length >= PLAN_LIMITS.nodes) throw new PlanError(`Zu viele Knoten (max. ${PLAN_LIMITS.nodes}).`);
-    const n: PlanNode = { id: newEntityId('pk'), title: checkTitle(input.title), notes: checkNotes(input.notes), status: 'open', x: input.x ?? 0, y: input.y ?? 0 };
+    const n: PlanNode = { id: newEntityId('pk'), title: checkTitle(input.title), notes: checkNotes(input.notes), status: 'open', x: input.x ?? 0, y: input.y ?? 0, ...(input.key ? { key: input.key.slice(0, 40) } : {}) };
     for (const from of input.afterIds ?? []) node(plan, from);
     plan.nodes.push(n);
     for (const from of input.afterIds ?? []) plan.edges.push({ from, to: n.id });

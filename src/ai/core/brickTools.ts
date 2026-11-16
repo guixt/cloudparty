@@ -3,12 +3,12 @@
  * Die Rechnung steckt in shared/bricks.ts.
  */
 import { AI_LIMITS } from '../../../shared/aiTools';
-import { BRICK_KINDS, placedFromEntity, BRICK_REF, MAX_BRICK_STUDS, STUD, PLATE_H, brickState, brickWorldPos, kindPlates, layerFootprints, restLevel, type BrickKind, type Footprint, type PlacedBrick } from '../../../shared/bricks';
+import { BRICK_KINDS, placedFromEntity, BRICK_REF, MAX_BRICK_STUDS, STUD, PLATE_H, brickState, brickWorldPos, kindPlates, floorFootprints, layerFootprints, restLevel, type BrickKind, type Footprint, type PlacedBrick } from '../../../shared/bricks';
 import { newEntityId, type EntitySpec, type Vec3 } from '../../../shared/types';
 import { createEntityFromPrefab } from '../../world/entities/prefabs';
 import { applyCommon, coord, fail, int, obj, ok, opts, str, type Handler, type RunCounters, type ToolContext } from './tools';
 
-const MAX_BRICKS = 100;
+const MAX_BRICKS = 200;
 
 function reserve(counters: RunCounters, count: number, what: string): void {
   if (counters.newEntities + count > AI_LIMITS.maxNewEntities) fail(`Limit: höchstens ${AI_LIMITS.maxNewEntities} neue Objekte pro Auftrag (${what} braucht ${count}, schon neu: ${counters.newEntities}).`);
@@ -133,7 +133,7 @@ export const brickHandlers: Record<string, Handler> = {
     });
     const specs: Spec[] = [];
     for (let layer = 0; layer < layers; layer++) {
-      for (const fp of layerFootprints(cols, rows, layer, mode === 'wall')) {
+      for (const fp of mode === 'wall' ? layerFootprints(cols, rows, layer, true) : floorFootprints(cols, rows)) {
         if (mode === 'wall' && inOpening(fp, layer, cols, rows, openings)) continue;
         // Mauerwerk: Schicht n steht auf Schicht n-1 (Stein 3 Platten); Boden aus Platten.
         const plates = mode === 'wall' ? 3 : 1;

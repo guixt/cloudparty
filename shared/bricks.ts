@@ -140,3 +140,28 @@ export function placedFromEntity(e: { ref: string; state?: Record<string, unknow
   return { gx, gz, w, d, level: Math.round((e.transform.pos[1] - origin[1]) / PLATE_H), plates: kindPlates(st.kind, st.d) };
 }
 
+
+/** Boden aus möglichst großen Platten (bis 16 × 16 Noppen): wenige Teile statt Mauerverband. */
+export function floorFootprints(cols: number, rows: number, maxSide = MAX_BRICK_STUDS): Footprint[] {
+  const split = (len: number): number[] => {
+    const out: number[] = [];
+    let rest = Math.max(0, Math.floor(len));
+    while (rest > 0) {
+      const n = Math.min(maxSide, rest);
+      out.push(rest - n === 1 && n > 2 ? n - 1 : n);
+      rest -= out[out.length - 1];
+    }
+    return out;
+  };
+  const out: Footprint[] = [];
+  let z = 0;
+  for (const d of split(rows)) {
+    let x = 0;
+    for (const w of split(cols)) {
+      out.push({ gx: x, gz: z, w, d });
+      x += w;
+    }
+    z += d;
+  }
+  return out;
+}

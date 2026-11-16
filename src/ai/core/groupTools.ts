@@ -1,6 +1,6 @@
 /** Werkzeuge für Gruppen (group_entities, ungroup). */
 import { newEntityId } from '../../../shared/types';
-import { fail, getEntity, isObj, ok, opts, str, type Handler, type ToolContext } from './tools';
+import { expandTargets, fail, getEntityOrGroup, isObj, ok, opts, str, type Handler, type ToolContext } from './tools';
 
 function groupMembers(ctx: ToolContext, group: string): string[] {
   const { entities, order } = ctx.store.getState();
@@ -11,10 +11,11 @@ export const groupHandlers: Record<string, Handler> = {
   group_entities(input, ctx) {
     if (!Array.isArray(input.ids)) fail('ids muss eine Liste von Objekt-ids sein.');
     const raw = input.ids as unknown[];
-    const ids = [...new Set(raw.map((v, i) => str(v, `ids[${i}]`, 200)))];
+    if (raw.length > 150) fail('Zu viele Objekte: höchstens 150 pro Gruppe.');
+    const entities = expandTargets(ctx, raw);
+    const ids = entities.map((e) => e.id);
     if (ids.length < 2) fail('Zum Gruppieren braucht es mindestens 2 verschiedene Objekte.');
     if (ids.length > 150) fail('Zu viele Objekte: höchstens 150 pro Gruppe.');
-    const entities = ids.map((id) => getEntity(ctx, id));
     const name = input.name === undefined ? 'Gruppe' : str(input.name, 'name', 80).trim() || 'Gruppe';
     const oldGroups = new Set(entities.map((e) => e.group).filter((g): g is string => !!g));
     const group = newEntityId('grp');
@@ -30,7 +31,7 @@ export const groupHandlers: Record<string, Handler> = {
 
   ungroup(input, ctx) {
     if (!isObj(input)) fail('Ungültige Argumente.');
-    const entity = getEntity(ctx, input.id);
+    const entity = getEntityOrGroup(ctx, input.id);
     if (!entity.group) fail('Dieses Objekt gehört zu keiner Gruppe.');
     const members = groupMembers(ctx, entity.group as string);
     for (const id of members) ctx.store.getState().updateEntity(id, { group: undefined, groupName: undefined }, opts);

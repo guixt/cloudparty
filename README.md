@@ -122,3 +122,9 @@ Gruppen-ids (`grp_…`) aus den Ergebnissen von `add_wall`, `array`, `fill_brick
 ### Gruppen-ids und kompaktes `get_world`
 
 Gruppen-ids (`grp_…`) gelten jetzt auch für `remove_entity` (ganze Gruppe, zählt als eine Aktion für die Rückfrage) und `update_entity` (`material`, `physics`, `particles`, `name`, `move_by` auf alle Mitglieder; absolute Position/Drehung/Größe werden abgelehnt). `get_world` fasst Gruppen mit mindestens 3 Teilen zu einer Zeile zusammen (bei 500 Steinen statt ca. 27 000 nur wenige tausend Tokens), `group` listet die Mitglieder, `name_contains` filtert. Die Bauwerkzeuge nennen im Ergebnis Gruppen-id, Anzahl und Maße (min/max/Mitte). `plan_complete_node` löst Gruppen-ids auf, nimmt ohne ids die im Auftrag neu gebauten Objekte und kürzt zu lange Zusammenfassungen, statt sie abzulehnen. Tipp aus dem Protokoll: Das Eingabelimit (Standard 40 000) ist mit dem 28 k Tokens großen Grundprompt knapp; ca. 80 000 schneidet den Verlauf seltener und erhält den Prompt-Cache.
+
+### Plan-Kennungen, Namen als Ziel, große Böden
+
+- `plan_add_node` kennt ein optionales `key` (z. B. „n08“); `after` löst echte id, `key` und Titelnummer („8“, „n08“ ↔ „8 Hauswand …“) auf, und der Fehler nennt die vorhandenen Knoten. `plan_get` zeigt die aktuelle Gruppen-id eines Knoten-Ergebnisses, auch wenn die Objekte später neu gruppiert wurden.
+- Werkzeuge nehmen als Ziel zusätzlich eindeutige **Objekt- oder Gruppennamen**; mehrdeutige Namen werden mit den ersten ids gemeldet. `look`, `library_save` und `group_entities` akzeptieren Gruppen-ids.
+- `fill_bricks` mauert Böden aus großen Platten (bis 16 × 16 Noppen) und erlaubt bis 200 Steine je Aufruf. `get_world` mit `group` oder `name_contains` liefert ohne Katalog und Umgebung (spart Tokens).

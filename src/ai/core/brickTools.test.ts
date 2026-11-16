@@ -61,6 +61,18 @@ describe('fill_bricks', () => {
     expect((await t.run('fill_bricks', { mode: 'wall', x: 0, z: 0, cols: 2, rows: 6, layers: 2 })).ok).toBe(false);
     expect((await t.run('fill_bricks', { mode: 'wall', x: 0, z: 0, cols: 40, rows: 40, layers: 20 })).ok).toBe(false);
     t.counters.newEntities = AI_LIMITS.maxNewEntities - 1;
-    expect((await t.run('fill_bricks', { mode: 'floor', x: 0, z: 0, cols: 8, rows: 8, layers: 1 })).ok).toBe(false);
+    expect((await t.run('fill_bricks', { mode: 'floor', x: 0, z: 0, cols: 40, rows: 40, layers: 1 })).ok).toBe(false);
+  });
+});
+
+describe('Großer Boden', () => {
+  it('40 × 40 Noppen sind wenige große Platten', async () => {
+    const t = setup();
+    const r = await t.run('fill_bricks', { mode: 'floor', x: -20, z: -20, cols: 40, rows: 40, layers: 1 });
+    expect(r.ok).toBe(true);
+    const bricks = t.all().filter((e) => e.ref === 'EntitySpec.brick');
+    expect(bricks.length).toBeLessThanOrEqual(9);
+    const area = bricks.reduce((a, e) => a + Number(e.state?.w) * Number(e.state?.d), 0);
+    expect(area).toBe(1600);
   });
 });

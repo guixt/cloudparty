@@ -2,11 +2,11 @@
 import { AI_LIMITS } from '../../../shared/aiTools';
 import type { Vec3 } from '../../../shared/types';
 import { VIEW_NAMES, type ViewName } from './capture';
-import { fail, getEntity, num, ok, type Handler, type ToolContext } from './tools';
+import { fail, getEntityOrGroup, num, ok, type Handler, type ToolContext } from './tools';
 
 /** Mittelpunkt und Radius um ein Objekt (bei Gruppen: um alle Mitglieder). */
 export function boundsFor(ctx: ToolContext, id: unknown): { center: Vec3; radius: number } {
-  const entity = getEntity(ctx, id);
+  const entity = getEntityOrGroup(ctx, id);
   const { entities, order } = ctx.store.getState();
   const members = entity.group ? order.map((i) => entities[i]).filter((e) => e?.group === entity.group) : [entity];
   const min: Vec3 = [Infinity, Infinity, Infinity];

@@ -397,12 +397,13 @@ export const AI_TOOLS: AiToolDefinition[] = [
   },
   {
     name: 'plan_add_node',
-    description: 'Fügt einem Plan einen Knoten hinzu; `after` = ids bestehender Knoten, von denen er abhängt.',
+    description: 'Fügt einem Plan einen Knoten hinzu; `after` = ids oder `key`-Kennungen bestehender Knoten, von denen er abhängt. `key` = eigene Kurzkennung (z. B. "n08"), auf die sich spätere Knoten in `after` beziehen können, auch im selben Schritt. Lege lange Pläne in Blöcken von höchstens etwa 8 Knoten an und halte Notizen kurz (unter 300 Zeichen).',
     input_schema: {
       type: 'object',
       properties: {
         plan: { type: 'string' },
         title: { type: 'string', maxLength: 80 },
+        key: { type: 'string', maxLength: 40 },
         notes: { type: 'string', maxLength: 2000 },
         after: { type: 'array', items: { type: 'string' }, maxItems: 20 },
       },
@@ -575,7 +576,7 @@ export const AI_TOOLS: AiToolDefinition[] = [
   {
     name: 'add_bricks',
     description:
-      'Setzt Klemmbausteine (Noppensteine) in ein Raster. Maße: 1 Noppe = 0,25 m, Stein = 3 Platten (0,3 m) hoch, Platte/Fliese = 1 Platte (0,1 m). Jeder Eintrag: `x`, `z` = Ecke des Steins in Noppen (ganze Zahlen, ab `origin`), `w` × `d` = Größe in Noppen (1–16, `rot90` vertauscht sie), `kind` = stein | platte | fliese (glatt, ohne Noppen) | schraeg (Schrägstein/Dachstein: Noppen nur hinten, die Schräge zeigt nach +z, mindestens 2 tief) | rund (Rundstein, Breite = Tiefe, eine Noppe) | rad (Rad: Achse längs x, `w` wird 1, `d` = gerader Durchmesser in Noppen 2–8, rot90 dreht die Achse nach z), `color`. `y` = Unterkante in Platten ab `origin` (weglassen = automatisch auf dem Stein darunter, sonst auf dem Boden). `origin` [x, y, z] in Metern (Standard [0, 0, 0]). Bis zu 100 Steine pro Aufruf, als Gruppe.',
+      'Setzt Klemmbausteine (Noppensteine) in ein Raster. Maße: 1 Noppe = 0,25 m, Stein = 3 Platten (0,3 m) hoch, Platte/Fliese = 1 Platte (0,1 m). Jeder Eintrag: `x`, `z` = Ecke des Steins in Noppen (ganze Zahlen, ab `origin`), `w` × `d` = Größe in Noppen (1–16, `rot90` vertauscht sie), `kind` = stein | platte | fliese (glatt, ohne Noppen) | schraeg (Schrägstein/Dachstein: Noppen nur hinten, die Schräge zeigt nach +z, mindestens 2 tief) | rund (Rundstein, Breite = Tiefe, eine Noppe) | rad (Rad: Achse längs x, `w` wird 1, `d` = gerader Durchmesser in Noppen 2–8, rot90 dreht die Achse nach z), `color`. `y` = Unterkante in Platten ab `origin` (weglassen = automatisch auf dem Stein darunter, sonst auf dem Boden). `origin` [x, y, z] in Metern (Standard [0, 0, 0]). Bis zu 200 Steine pro Aufruf, als Gruppe.',
     input_schema: {
       type: 'object',
       properties: {
@@ -584,7 +585,7 @@ export const AI_TOOLS: AiToolDefinition[] = [
         bricks: {
           type: 'array',
           minItems: 1,
-          maxItems: 100,
+          maxItems: 200,
           items: {
             type: 'object',
             properties: {
@@ -608,7 +609,7 @@ export const AI_TOOLS: AiToolDefinition[] = [
   {
     name: 'fill_bricks',
     description:
-      'Mauert ein Rechteck aus Klemmbausteinen mit versetzten Fugen (wie echtes Mauerwerk). `mode` = wall (einreihiger Rand: Hauswand, Turm) oder floor (volle Fläche aus Platten). `x`, `z` = Ecke in Noppen, `cols` × `rows` = Größe in Noppen (Wand: ≥ 3 × 3), `layers` = Anzahl Schichten (Wand: Stein hoch, Boden: Platten), `origin` [x, y, z] in Metern, `color`, `openings` (nur Wand): [{ side: north|south|east|west, at (Noppen vom Wandanfang), width (Noppen), layers (Höhe in Schichten) }] für Türen und Fenster; mit `sill_layers` Brüstung. Bis zu 100 Steine pro Aufruf.',
+      'Mauert ein Rechteck aus Klemmbausteinen mit versetzten Fugen (wie echtes Mauerwerk). `mode` = wall (einreihiger Rand: Hauswand, Turm) oder floor (volle Fläche aus Platten). `x`, `z` = Ecke in Noppen, `cols` × `rows` = Größe in Noppen (Wand: ≥ 3 × 3), `layers` = Anzahl Schichten (Wand: Stein hoch, Boden: Platten; Böden bestehen aus großen Platten bis 16 × 16 Noppen), `origin` [x, y, z] in Metern, `color`, `openings` (nur Wand): [{ side: north|south|east|west, at (Noppen vom Wandanfang), width (Noppen), layers (Höhe in Schichten) }] für Türen und Fenster; mit `sill_layers` Brüstung. Bis zu 200 Steine pro Aufruf.',
     input_schema: {
       type: 'object',
       properties: {
