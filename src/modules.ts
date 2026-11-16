@@ -16,6 +16,7 @@ import net from './net';
 import shell from './ui/shell';
 import library from './library';
 import graphEditor from './graph/editor';
+import planEditor from './plan/editor';
 import water from './world/water';
 import materials from './world/materials';
 import graphics from './ui/graphics';
@@ -40,6 +41,7 @@ export const modules: GameModule[] = [
   graphics, // 26
   library, // 17
   graphEditor, // 19
+  planEditor, // 28
   aiCore, // 13
   aiUi, // 14
   planRun, // 29
