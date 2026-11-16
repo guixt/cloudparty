@@ -108,3 +108,7 @@ Die Bau-Palette zeigt zu jedem Baustein ein Vorschaubild (`public/previews/<key>
 ## Bild-Texturen für Materialien
 
 Im Inspector (Material) lässt sich ein Bild als Textur hochladen („Bild hochladen“, auf höchstens 1024 px und ca. 170 kB verkleinert) oder wieder entfernen; „Textur-Wiederholung“ steuert die Kachelung. Die KI sucht mit `search_images` und belegt mit `use_texture` ein Objekt oder eine ganze Gruppe (Grundfarbe und Muster entfallen dabei, damit das Bild unverfälscht erscheint). Es gelten dieselben Schalter und Limits wie bei Bild-Tafeln (Bildsuche in den KI-Einstellungen, 4 Suchen, 6 Bilder je Auftrag). Texturen werden als Daten gespeichert, die KI kann keine fremden Adressen als Textur setzen. Fotos sind nicht nahtlos kachelbar; bei hoher Wiederholung sieht man Nähte, am besten nach „seamless texture“ suchen.
+
+### Plan-Knoten und die Ausgabelänge
+
+Jeder Plan-Knoten läuft als eigener Auftrag und muss in die eingestellte Ausgabegrenze (KI-Einstellungen, Standard 4096 Tokens) passen. Die KI bekommt dazu bei jedem Knoten die Grenze und eine Faustzahl für Werkzeugaufrufe genannt, soll große Knoten mit `plan_add_node` selbst in kleinere teilen, Notizen kurz halten und Sammelwerkzeuge (`add_wall`, `array`, `fill_bricks`, `clone_group`) bevorzugen. Wird eine Antwort trotzdem abgeschnitten, macht sie in kleineren Schritten weiter (bis zu 4 Mal). Wer oft Abbrüche sieht, kann die Ausgabegrenze erhöhen: bezahlt werden nur tatsächlich erzeugte Tokens.

@@ -15,7 +15,7 @@ export const MAX_HISTORY_MESSAGES = 40;
 
 /** So oft darf die Antwort in einem Auftrag abgeschnitten werden, bevor der Assistent aufgibt. */
 export const MAX_TRUNCATIONS = 4;
-const CONTINUE_TEXT = 'Deine letzte Antwort wurde wegen der Ausgabegrenze abgeschnitten. Mache genau dort weiter, wo du aufgehört hast, und fasse dich kürzer.';
+const CONTINUE_TEXT = 'Deine letzte Antwort wurde wegen der Ausgabegrenze abgeschnitten. Mache genau dort weiter, wo du aufgehört hast, und fasse dich kürzer: höchstens wenige Werkzeugaufrufe pro Antwort, lieber mehrere kleine Schritte. Ist ein Plan-Knoten zu groß, teile ihn mit plan_add_node in kleinere Knoten und baue nur den ersten Teil.';
 const TRUNCATED_CALL_TEXT = 'Dein Werkzeugaufruf wurde wegen der Ausgabegrenze abgeschnitten und NICHT ausgeführt. Wiederhole genau diesen Schritt in kleineren Teilen (weniger Objekte pro Antwort bzw. ein kürzeres Skript) und fahre dann fort.';
 
 export interface HistoryLike {

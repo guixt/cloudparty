@@ -205,3 +205,12 @@ describe('Plan-Ausführung', () => {
     expect(t.prompts).toHaveLength(0);
   });
 });
+
+describe('Längenhinweis im Knoten-Auftrag', () => {
+  it('nennt die Ausgabegrenze und rät zum Teilen großer Knoten', () => {
+    const prompt = buildNodePrompt('p1', 'n1', 4096);
+    expect(prompt).toContain('4096 Tokens');
+    expect(prompt).toContain('plan_add_node');
+    expect(buildNodePrompt('p1', 'n1', 8000)).toContain('8000 Tokens');
+  });
+});

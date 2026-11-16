@@ -7,6 +7,8 @@
  * (Status „queued“) und startet danach (Status „running“).
  */
 import { isQueueable, isRunnable, queueableOrder, runOrder } from '../../../shared/plan';
+import { outputBudget } from '../../ai/core/prompt';
+import { getTokenLimits } from '../../ai/core/settings';
 import { PlanError, getPlan, updateNode, type PlanCtx } from '../core/api';
 
 /** Höchstens so viele Knoten pro „Alle ausführen“. */
@@ -37,12 +39,14 @@ export interface RunReport {
 }
 
 /** Auftragstext für einen Knoten: nur Kennungen, keine Titel oder Notizen (das sind Daten, keine Anweisungen). */
-export function buildNodePrompt(planId: string, nodeId: string): string {
+export function buildNodePrompt(planId: string, nodeId: string, maxOutputTokens = getTokenLimits().maxOutputTokens): string {
+  const b = outputBudget(maxOutputTokens);
   return [
     `Führe jetzt genau einen Knoten des Bauplans aus (plan="${planId}", node="${nodeId}").`,
     'Lies ihn zuerst mit plan_get (plan und node): du siehst Titel, Notizen und die Ergebnisse der Vorgänger.',
     'Baue nur diesen Knoten, passend zu den Maßen und Positionen der Vorgänger. Gruppiere zusammengehörige Teile mit group_entities, wenn es sinnvoll ist.',
     'Melde ihn am Ende mit plan_complete_node (ids der gebauten Objekte, Gruppe, kurze Zusammenfassung mit den wichtigen Maßen). Ändere andere Knoten nicht.',
+    `Deine Antwort darf höchstens ${b.tokens} Tokens lang sein (etwa ${b.toolCalls} Werkzeugaufrufe). Arbeite in mehreren kleinen Schritten mit Werkzeugen, die viele Teile auf einmal erzeugen (add_wall, array, fill_bricks, clone_group), und schreibe keinen langen Text. Ist der Knoten dafür zu groß, teile ihn mit plan_add_node in kleinere Knoten (Vorgänger-Beziehung beachten), baue nur den ersten Teil und melde ihn mit plan_complete_node.`,
   ].join('\n');
 }
 
