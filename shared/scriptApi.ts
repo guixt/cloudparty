@@ -59,6 +59,9 @@ export const SCRIPT_SELF_API: ScriptApiDoc[] = [
   { name: 'setText', signature: 'self.setText(text)', description: 'Text einer Text-Fläche setzen.' },
   { name: 'nextSlide', signature: 'self.nextSlide()', description: 'Nächste Folie einer Folien-Fläche.' },
   { name: 'prevSlide', signature: 'self.prevSlide()', description: 'Vorherige Folie.' },
+  { name: 'moveTo', signature: "self.moveTo(x, y, z, sekunden = 1, kurve = 'inOut')", description: "Sanft zu einer Position bewegen (kurve: 'linear' | 'inOut' | 'out'); die Position ist sofort gesetzt, nur die Darstellung gleitet." },
+  { name: 'rotateTo', signature: "self.rotateTo(xGrad, yGrad, zGrad, sekunden = 1, kurve = 'inOut')", description: 'Sanft zu einer Drehung (Grad) drehen.' },
+  { name: 'scaleTo', signature: "self.scaleTo(x, y, z, sekunden = 1, kurve = 'inOut')", description: 'Sanft auf eine Größe skalieren.' },
 ];
 
 /** Methoden des globalen Objekts `world` im Skript. */
@@ -69,6 +72,12 @@ export const SCRIPT_WORLD_API: ScriptApiDoc[] = [
   { name: 'playTone', signature: 'world.playTone(frequenzHz, dauerSek)', description: 'Sinuston abspielen.' },
   { name: 'teleportAvatar', signature: 'world.teleportAvatar(avatarId, x, y, z)', description: 'Avatar versetzen (wirkt nur auf den lokalen Avatar).' },
   { name: 'time', signature: 'world.time() → Sekunden', description: 'Sekunden seit Skriptstart.' },
+  { name: 'group', signature: "world.group('Name')", description: "Ganze Gruppe steuern (Name oder Gruppen-id): .moveBy(dx,dy,dz,sek?,kurve?), .rotateBy(xGrad,yGrad,zGrad,sek?,kurve?,pivot?) dreht um die Mitte der Gruppe (pivot = [x,y,z] optional; 360 Grad = einmal im Kreis), .setColor('#rrggbb'), .setEmissive('#rrggbb'), .setAlpha(0..1); Lesen: .count, .center() → {x,y,z}, .ids." },
+  { name: 'find', signature: 'world.find(nameOderId) → {id, name, group, ref, x, y, z} | null', description: 'Anderes Objekt finden (Position vom letzten Abgleich, ca. 4-mal pro Sekunde).' },
+  { name: 'findAll', signature: 'world.findAll(gruppeOderNamensanfang) → Liste', description: 'Mehrere Objekte finden (höchstens 200), z. B. alle Teile einer Gruppe.' },
+  { name: 'avatars', signature: 'world.avatars() → [{id, name, x, y, z}]', description: 'Avatare mit Position (ca. 4-mal pro Sekunde aktualisiert; derzeit der lokale Avatar).' },
+  { name: 'spawn', signature: "world.spawn(ref, {x, y, z, scale?, color?, name?, physics?, mass?, lifetime?}) → id", description: "Objekt erzeugen (ref z. B. 'EntitySpec.sphere'); lifetime = Sekunden bis zum Verschwinden; erzeugte Objekte verschwinden beim Verlassen des Spielmodus." },
+  { name: 'destroy', signature: 'world.destroy(id)', description: 'Ein mit world.spawn erzeugtes Objekt entfernen.' },
   { name: 'log', signature: 'log(...werte)', description: 'In die Skript-Konsole schreiben (auch console.log).' },
   { name: 'setTimeout', signature: 'setTimeout(fn, ms) / setInterval(fn, ms)', description: 'Timer wie im Browser; clearTimeout/clearInterval ebenso.' },
 ];
@@ -78,3 +87,16 @@ export const SCRIPT_SOUND_NAMES = ['click', 'ding', 'pop', 'whoosh', 'error'] as
 /** Maximale Laufzeit eines einzelnen Ereignisaufrufs, danach wird das Skript beendet. */
 export const SCRIPT_EVENT_TIMEOUT_MS = 250;
 export const SCRIPT_TICK_HZ = 20;
+
+/** Erlaubte Bausteine für world.spawn. */
+export const SCRIPT_SPAWN_REFS = ['EntitySpec.box', 'EntitySpec.sphere', 'EntitySpec.cylinder', 'EntitySpec.cone', 'EntitySpec.torus', 'EntitySpec.plane', 'EntitySpec.brick'] as const;
+export const SCRIPT_SPAWN_LIMIT_PER_SCRIPT = 100;
+export const SCRIPT_SPAWN_LIMIT_WORLD = 300;
+export const SCRIPT_SPAWN_RATE_PER_SEC = 20;
+export const SCRIPT_TWEEN_MAX_SECONDS = 120;
+export const SCRIPT_TWEEN_EASES = ['linear', 'inOut', 'out'] as const;
+export type ScriptEase = (typeof SCRIPT_TWEEN_EASES)[number];
+/** Obergrenze der Objekte, die der Skript-Index (world.find …) enthält. */
+export const SCRIPT_INDEX_MAX = 1500;
+/** Höchste Zahl Objekte, die ein Gruppenbefehl auf einmal ändert. */
+export const SCRIPT_GROUP_MAX = 1000;

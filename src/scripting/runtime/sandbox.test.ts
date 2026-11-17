@@ -158,3 +158,86 @@ describe('sandbox', () => {
     expect(g.keep).toBe(1);
   });
 });
+
+describe('sandbox: sanfte Bewegung, Gruppen, Weltsicht, Spawn', () => {
+  it('moveTo/rotateTo/scaleTo senden Bewegungsbefehle mit Dauer und Kurve und merken die Zielposition', () => {
+    const { sandbox, cmds } = make(`function onClick() { self.moveTo(5, 0, 1, 2, 'out'); self.rotateTo(0, 180, 0); self.scaleTo(2, 2, 2, 0.5, 'linear'); const p = self.getPosition(); self.say(p.x + ',' + p.z); }`);
+    sandbox.dispatch('onClick', []);
+    expect(cmds).toEqual([
+      { c: 'tween', op: 'move', v: [5, 0, 1], seconds: 2, ease: 'out' },
+      { c: 'tween', op: 'rotate', v: [0, 180, 0], seconds: 1, ease: 'inOut' },
+      { c: 'tween', op: 'scale', v: [2, 2, 2], seconds: 0.5, ease: 'linear' },
+      { c: 'say', text: '5,1' },
+    ]);
+  });
+
+  it('unbekannte Kurve ist ein Fehler im Skript, kein Befehl', () => {
+    const { sandbox, cmds, logs } = make(`function onClick() { self.moveTo(1, 1, 1, 1, 'wild'); }`);
+    sandbox.dispatch('onClick', []);
+    expect(cmds).toEqual([]);
+    expect(logs[0].message).toContain('Kurve');
+  });
+
+  it('world.group steuert die Gruppe; Lesen aus der Weltsicht', () => {
+    const { sandbox, cmds, logs } = make(`
+      function onClick() {
+        const g = world.group('Rad');
+        log(g.count, JSON.stringify(g.center()));
+        g.rotateBy(0, 0, 360, 20, 'linear');
+        g.moveBy(0, 1, 0, 2);
+        g.setColor('#ff0000');
+      }
+    `);
+    sandbox.updateWorld({
+      objects: [
+        { id: 'a', name: 'R1', group: 'g1', groupName: 'Rad', ref: 'EntitySpec.box', p: [0, 0, 0] },
+        { id: 'b', name: 'R2', group: 'g1', groupName: 'Rad', ref: 'EntitySpec.box', p: [4, 2, 0] },
+        { id: 'c', name: 'Tür', ref: 'EntitySpec.box', p: [9, 9, 9] },
+      ],
+      avatars: [{ id: 'me', name: 'Ich', p: [1, 0, 2] }],
+    });
+    sandbox.dispatch('onClick', []);
+    expect(logs[0].message).toBe('2 {"x":2,"y":1,"z":0}');
+    expect(cmds).toEqual([
+      { c: 'group', name: 'Rad', op: 'rotate', v: [0, 0, 360], seconds: 20, ease: 'linear' },
+      { c: 'group', name: 'Rad', op: 'move', v: [0, 1, 0], seconds: 2, ease: 'inOut' },
+      { c: 'group', name: 'Rad', op: 'color', color: '#ff0000', seconds: 0, ease: 'inOut' },
+    ]);
+  });
+
+  it('world.find, findAll und avatars lesen die Weltsicht', () => {
+    const { sandbox, logs } = make(`
+      function onClick() {
+        log(JSON.stringify(world.find('tür')), world.find('gibtsnicht'));
+        log(world.findAll('Rad').length, world.findAll('R').length);
+        log(JSON.stringify(world.avatars()));
+      }
+    `);
+    sandbox.updateWorld({
+      objects: [
+        { id: 'a', name: 'R1', group: 'g1', groupName: 'Rad', ref: 'EntitySpec.box', p: [0, 0, 0] },
+        { id: 'c', name: 'Tür', ref: 'EntitySpec.box', p: [9, 9, 9] },
+      ],
+      avatars: [{ id: 'me', name: 'Ich', p: [1, 0, 2] }],
+    });
+    sandbox.dispatch('onClick', []);
+    expect(logs[0].message).toContain('"x":9');
+    expect(logs[0].message).toContain('null');
+    expect(logs[1].message).toBe('1 1');
+    expect(logs[2].message).toBe('[{"id":"me","name":"Ich","x":1,"y":0,"z":2}]');
+    // Teilaktualisierung ersetzt nur, was mitkommt
+    sandbox.updateWorld({ avatars: [] });
+    sandbox.dispatch('onClick', []);
+    expect(logs[5].message).toBe('[]');
+    expect(logs[3].message).toContain('"x":9');
+  });
+
+  it('world.spawn liefert eine gültige id und sendet den Befehl; destroy ebenso', () => {
+    const { sandbox, cmds } = make(`function onClick() { const id = world.spawn('EntitySpec.sphere', { x: 1, y: 2, z: 3, color: '#ff0000', physics: 'dynamic', lifetime: 5, scale: 0.5 }); world.destroy(id); }`);
+    sandbox.dispatch('onClick', []);
+    const spawn = cmds[0] as Extract<ScriptCommand, { c: 'spawn' }>;
+    expect(spawn.id).toMatch(/^sp_[a-z0-9]+_1_[a-z0-9]+$/);
+    expect(spawn).toMatchObject({ ref: 'EntitySpec.sphere', v: [1, 2, 3], opts: { color: '#ff0000', physics: 'dynamic', lifetime: 5, scale: [0.5, 0.5, 0.5] } });
+    expect(cmds[1]).toEqual({ c: 'destroy', target: spawn.id });
+  });
+});

@@ -62,6 +62,8 @@ scope.onmessage = (event) => {
     send({ type: 'done', seq: msg.seq });
   } else if (msg.type === 'snapshot') {
     sandbox?.updateSnapshot(msg.snapshot);
+  } else if (msg.type === 'world') {
+    sandbox?.updateWorld(msg.view);
   }
 };
 

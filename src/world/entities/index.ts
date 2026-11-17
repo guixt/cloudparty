@@ -8,6 +8,7 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { EntitySpec } from '../../../shared/types';
 import { entityIdOf, tagEntityNode, type GameContext, type GameModule } from '../../core/context';
 import { classifyChange } from './diff';
+import { TweenManager } from './tween';
 import { buildPlaceholder, isBuildOnly, setBuildMarkersVisible } from './parts';
 import { getPrefab, onPrefabRegistered, updateLooks } from './prefabs';
 
@@ -96,6 +97,8 @@ const entities: GameModule = {
       }
     };
 
+    const tweens = new TweenManager(ctx);
+    disposers.push(() => tweens.dispose());
     rebuildAll();
     disposers.push(
       bus.on('world.loaded', rebuildAll),

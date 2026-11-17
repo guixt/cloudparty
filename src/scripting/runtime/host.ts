@@ -3,8 +3,8 @@
  * Watchdog (Zeitlimit), Ratenbegrenzung und Anwenden der Befehle.
  */
 import { entityScriptSource, resolveEntityScript } from '../../../shared/graphCompile';
-import { SCRIPT_EVENT_TIMEOUT_MS, SCRIPT_TICK_HZ } from '../../../shared/scriptApi';
-import type { EntitySpec } from '../../../shared/types';
+import { SCRIPT_EVENT_TIMEOUT_MS, SCRIPT_INDEX_MAX, SCRIPT_SPAWN_LIMIT_PER_SCRIPT, SCRIPT_SPAWN_LIMIT_WORLD, SCRIPT_SPAWN_RATE_PER_SEC, SCRIPT_TICK_HZ } from '../../../shared/scriptApi';
+import type { EntitySpec, Vec3 } from '../../../shared/types';
 import type { EventBus } from '../../core/events';
 import type { WorldStore } from '../../core/store';
 import {
@@ -18,6 +18,7 @@ import {
   type CommandDeps,
   type HostToWorker,
   type WorkerToHost,
+  type WorldView,
 } from './commands';
 
 export type ScriptStatus = 'running' | 'stopped' | 'error';
@@ -35,6 +36,10 @@ export interface HostDeps {
   bus: EventBus;
   localAvatarId(): string;
   audio: CommandDeps['audio'];
+  /** Neue Entity aus einem Baustein (für world.spawn). */
+  makeEntity(ref: string, pos: Vec3): EntitySpec;
+  /** Alle Avatare mit Position (für world.avatars). */
+  avatars(): { id: string; name: string; pos: Vec3 }[];
 }
 
 export const TIMEOUT_MESSAGE = 'Skript wurde beendet: Zeitlimit überschritten (Endlosschleife?)';
@@ -63,8 +68,15 @@ interface Rec {
   cmdLimiter: RateLimiter;
   sayLimiter: RateLimiter;
   logLimiter: RateLimiter;
+  groupLimiter: RateLimiter;
+  spawnLimiter: RateLimiter;
+  /** Das Skript nutzt world.find/findAll/avatars/group … und bekommt die Lesesicht der Welt. */
+  wantsWorld: boolean;
   lastSnapshot: { transform: EntitySpec['transform']; state: EntitySpec['state']; name: EntitySpec['name'] };
 }
+
+/** Nutzt der Quelltext die Lesefunktionen der Welt? */
+export const usesWorldView = (source: string): boolean => /\bworld\s*\.\s*(find|findAll|avatars|group)\b/.test(source);
 
 const runnable = (entity: EntitySpec | undefined): entity is EntitySpec => {
   const script = entity ? entityScriptSource(entity) : null;
@@ -85,6 +97,12 @@ export class ScriptHost {
   /** Entities, deren Graph-Fehler bei diesem Start schon gemeldet wurden. */
   private graphReported = new Set<string>();
   private commandDeps: CommandDeps;
+  /** Von Skripten erzeugte Objekte je Besitzer. */
+  private spawned = new Map<string, Set<string>>();
+  private spawnTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private spawnRate = new Map<string, RateLimiter>();
+  private viewTimer?: ReturnType<typeof setInterval>;
+  private objectsDirty = true;
 
   constructor(
     private readonly deps: HostDeps,
@@ -96,6 +114,35 @@ export class ScriptHost {
       localAvatarId: deps.localAvatarId,
       audio: deps.audio,
       deliver: (from, target, message, data) => this.deliver(from, target, message, data),
+      makeEntity: deps.makeEntity,
+      spawns: {
+        allow: (owner) => {
+          let limiter = this.spawnRate.get(owner);
+          if (!limiter) this.spawnRate.set(owner, (limiter = new RateLimiter(SCRIPT_SPAWN_RATE_PER_SEC)));
+          if (!limiter.take()) return 'Spawn: zu viele Objekte pro Sekunde';
+          if ((this.spawned.get(owner)?.size ?? 0) >= SCRIPT_SPAWN_LIMIT_PER_SCRIPT) return `Spawn: höchstens ${SCRIPT_SPAWN_LIMIT_PER_SCRIPT} Objekte je Skript`;
+          const total = this.deps.store.getState().order.reduce((a, id) => a + (id.startsWith('sp_') ? 1 : 0), 0);
+          if (total >= SCRIPT_SPAWN_LIMIT_WORLD) return `Spawn: höchstens ${SCRIPT_SPAWN_LIMIT_WORLD} erzeugte Objekte in der Welt`;
+          return null;
+        },
+        add: (owner, id, lifetime) => {
+          let set = this.spawned.get(owner);
+          if (!set) this.spawned.set(owner, (set = new Set()));
+          set.add(id);
+          if (lifetime !== undefined) {
+            this.spawnTimers.set(
+              id,
+              setTimeout(() => {
+                this.spawnTimers.delete(id);
+                if (this.deps.store.getState().entities[id]) this.deps.store.getState().removeEntity(id, { source: 'script' });
+                this.forgetSpawn(id);
+              }, lifetime * 1000),
+            );
+          }
+        },
+        owns: (owner, id) => this.spawned.get(owner)?.has(id) ?? false,
+        remove: (id) => this.forgetSpawn(id),
+      },
     };
   }
 
@@ -109,10 +156,18 @@ export class ScriptHost {
       this.startAll();
     };
     u.push(bus.on('world.loaded', reload));
+    u.push(bus.on('script.test.dispatch', ({ entityId, name, args }) => this.dispatch(entityId, name, args)));
     u.push(bus.on('mode.changed', reload));
-    u.push(bus.on('entity.added', ({ entity }) => this.start(entity.id)));
+    u.push(
+      bus.on('entity.added', ({ entity }) => {
+        this.objectsDirty = true;
+        this.start(entity.id);
+      }),
+    );
     u.push(
       bus.on('entity.removed', ({ entity }) => {
+        this.forgetSpawn(entity.id);
+        this.objectsDirty = true;
         this.stop(entity.id, false);
         this.final.delete(entity.id);
         this.graphReported.delete(entity.id);
@@ -120,6 +175,7 @@ export class ScriptHost {
     );
     u.push(
       bus.on('entity.changed', ({ entity, prev }) => {
+        this.objectsDirty = true;
         if (scriptChanged(prev, entity)) {
           this.restart(entity.id);
           return;
@@ -147,11 +203,31 @@ export class ScriptHost {
 
   stopAll(): void {
     for (const id of [...this.recs.keys()]) this.stop(id, false);
+    this.cleanupSpawned();
     this.final.clear();
     this.graphReported.clear();
   }
 
+  /** Entfernt alle von Skripten erzeugten Objekte (beim Verlassen des Spielmodus und beim Laden einer Welt). */
+  cleanupSpawned(): void {
+    for (const t of this.spawnTimers.values()) clearTimeout(t);
+    this.spawnTimers.clear();
+    this.spawned.clear();
+    const { store } = this.deps;
+    for (const id of [...store.getState().order]) if (id.startsWith('sp_')) store.getState().removeEntity(id, { source: 'script' });
+  }
+
+  private forgetSpawn(id: string): void {
+    const t = this.spawnTimers.get(id);
+    if (t) clearTimeout(t);
+    this.spawnTimers.delete(id);
+    for (const set of this.spawned.values()) set.delete(id);
+  }
+
   dispose(): void {
+    clearInterval(this.viewTimer);
+    this.viewTimer = undefined;
+    this.cleanupSpawned();
     for (const off of this.unsubs.splice(0)) off();
     for (const rec of [...this.recs.values()]) this.teardown(rec);
     this.recs.clear();
@@ -219,6 +295,9 @@ export class ScriptHost {
       cmdLimiter: new RateLimiter(COMMAND_LIMIT_PER_SEC * HOST_SLACK),
       sayLimiter: new RateLimiter(SAY_LIMIT_PER_SEC * HOST_SLACK),
       logLimiter: new RateLimiter(LOG_LIMIT_PER_SEC * HOST_SLACK),
+      groupLimiter: new RateLimiter(30),
+      spawnLimiter: new RateLimiter(SCRIPT_SPAWN_RATE_PER_SEC * HOST_SLACK),
+      wantsWorld: usesWorldView(entityScriptSource(entity)?.source ?? ''),
       lastSnapshot: { transform: entity.transform, state: entity.state, name: entity.name },
     };
     this.recs.set(id, rec);
@@ -310,6 +389,10 @@ export class ScriptHost {
           rec.lastTickAt = Date.now();
           rec.tickTimer = setInterval(() => this.tick(rec), 1000 / SCRIPT_TICK_HZ);
         }
+        if (rec.wantsWorld) {
+          this.post(rec, { type: 'world', view: this.buildView(true) });
+          this.ensureViewTimer();
+        }
         this.send(rec, 'onStart', []);
         const queued = rec.queue.splice(0);
         for (const item of queued) this.send(rec, item.name, item.args);
@@ -337,6 +420,10 @@ export class ScriptHost {
         if (rec.phase === 'booting') return;
         const raw = msg.cmd as { c?: unknown } | undefined;
         if (raw && raw.c === 'say' && !rec.sayLimiter.take()) return;
+        if (raw && raw.c === 'group' && !rec.groupLimiter.take()) {
+          if (rec.groupLimiter.shouldWarn()) this.emitLog(rec.id, 'error', 'Zu viele Gruppenbefehle (mehr als 30 pro Sekunde): weitere werden verworfen.');
+          return;
+        }
         if (!rec.cmdLimiter.take()) {
           if (rec.cmdLimiter.shouldWarn()) this.emitLog(rec.id, 'error', 'Zu viele Befehle: weitere werden verworfen.');
           return;
@@ -404,6 +491,46 @@ export class ScriptHost {
     if (last.transform === entity.transform && last.state === entity.state && last.name === entity.name) return;
     rec.lastSnapshot = { transform: entity.transform, state: entity.state, name: entity.name };
     this.post(rec, { type: 'snapshot', snapshot: snapshotOf(entity) });
+  }
+
+  // ------------------------------------------------------------ Lesesicht der Welt
+
+  private ensureViewTimer(): void {
+    if (this.viewTimer !== undefined) return;
+    this.viewTimer = setInterval(() => this.pushViews(), 250);
+  }
+
+  private cachedObjects: WorldView['objects'] = [];
+
+  /** Baut die Lesesicht (Objekte nur bei Änderungen neu). */
+  private buildView(forceObjects: boolean): WorldView {
+    if (forceObjects || this.objectsDirty) {
+      const { entities, order } = this.deps.store.getState();
+      const list: WorldView['objects'] = [];
+      for (const id of order) {
+        const e = entities[id];
+        if (!e || (!e.name && !e.group)) continue;
+        const r = (v: number) => Math.round(v * 100) / 100;
+        list.push({ id, ...(e.name ? { name: e.name } : {}), ...(e.group ? { group: e.group } : {}), ...(e.groupName ? { groupName: e.groupName } : {}), ref: e.ref, p: [r(e.transform.pos[0]), r(e.transform.pos[1]), r(e.transform.pos[2])] });
+        if (list.length >= SCRIPT_INDEX_MAX) break;
+      }
+      this.cachedObjects = list;
+      this.objectsDirty = false;
+    }
+    const r = (v: number) => Math.round(v * 100) / 100;
+    return { objects: this.cachedObjects, avatars: this.deps.avatars().map((a) => ({ id: a.id, name: a.name, p: [r(a.pos[0]), r(a.pos[1]), r(a.pos[2])] as Vec3 })) };
+  }
+
+  private pushViews(): void {
+    const wanting = [...this.recs.values()].filter((r) => r.wantsWorld && r.phase === 'ready' && !r.dead);
+    if (wanting.length === 0) {
+      clearInterval(this.viewTimer);
+      this.viewTimer = undefined;
+      return;
+    }
+    const changed = this.objectsDirty;
+    const view = this.buildView(false);
+    for (const rec of wanting) this.post(rec, { type: 'world', view: changed ? view : { avatars: view.avatars } });
   }
 
   private deliver(from: string, target: string | null, message: string, data: unknown): void {

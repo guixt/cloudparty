@@ -68,6 +68,8 @@ function onClick(avatar) {
 }
 \`\`\`
 ${scriptApiReference()}
+Skripte ausprobieren und verbessern: Nach set_script oder set_graph rufe script_test auf (Ereignis auslösen, Ergebnis lesen) und korrigiere Fehler, bis der Test sauber läuft; script_log zeigt Status und Protokoll. Schreibe in Skripten gern log("…"), damit der Test aussagekräftig ist.
+Bewegung und Ganzes: Türen, Brücken und Fahrzeuge bewegst du mit self.moveTo / self.rotateTo (sanft, mit Sekunden) statt per onTick-Schritten. Besteht ein Modell aus vielen Teilen (Auto, Riesenrad, Zugbrücke), gib den Teilen eine Gruppe (group_entities oder die Gruppe des Bauwerkzeugs) und steuere sie mit world.group('Name').moveBy(...) / .rotateBy(...) (rotateBy dreht um die Mitte; 360 Grad in N Sekunden ergibt ein Riesenrad: setInterval(() => world.group('Riesenrad').rotateBy(0, 0, 360, 20, 'linear'), 20000)). Bei einer Drehung um die Z-Achse stehen Rad und Gondeln seitlich. Andere Objekte findest du mit world.find('Name') (Position x, y, z), Avatare mit world.avatars(), neue Objekte erzeugst du mit world.spawn('EntitySpec.sphere', { x, y, z, physics: 'dynamic', lifetime: 5 }). Lies world.find und world.avatars nur in Handlern wie onTick oder onClick, nicht direkt beim Start (die Welt-Sicht kommt kurz danach).
 
 # Gruppen
 Fasse zusammengehörige Objekte (ein Haus, ein Möbelset, ein Baum aus mehreren Teilen) mit group_entities zusammen, am besten direkt nach dem Bauen: Gruppen lassen sich später gemeinsam wählen, verschieben und kopieren. ungroup löst sie wieder auf. get_world zeigt gruppe/gruppenname.

@@ -9,11 +9,13 @@ import { runtime as buildRuntime } from '../../build/runtime';
 import type { AskClaude, AssistantApi } from '../api';
 import { streamMessage } from './client';
 import { createAssistant } from './loop';
+import { attachScriptLog } from './scriptTestTools';
 import { estimateTokens, tooLongError } from './budget';
 import { outputLimitNote } from './prompt';
 import { getTokenLimits, hasApiKey } from './settings';
 
 let assistant: AssistantApi | null = null;
+let detachScriptLog: (() => void) | null = null;
 
 export function getAssistant(): AssistantApi | null {
   return assistant;
@@ -43,6 +45,7 @@ export function hasAiKey(): boolean {
 const mod: GameModule = {
   id: 'ai-core',
   init(ctx) {
+    detachScriptLog = attachScriptLog(ctx.bus);
     assistant = createAssistant({
       store: ctx.store,
       bus: ctx.bus,
@@ -54,6 +57,8 @@ const mod: GameModule = {
     (globalThis as { __cloudpartyAi?: AssistantApi }).__cloudpartyAi = assistant;
   },
   dispose() {
+    detachScriptLog?.();
+    detachScriptLog = null;
     assistant = null;
     delete (globalThis as { __cloudpartyAi?: AssistantApi }).__cloudpartyAi;
   },

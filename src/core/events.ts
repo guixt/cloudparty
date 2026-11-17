@@ -47,6 +47,11 @@ export interface GameEvents {
   'physics.collision': { a: string; b: string; impulse: number };
   /** Bitte Stoß auf dynamische Entity anwenden. */
   'entity.impulse': { entityId: string; impulse: Vec3 };
+  /**
+   * Sanfte Bewegung: wird VOR der Änderung im Store gesendet; die Darstellung gleitet von der bisherigen Lage zur neuen.
+   * Mit `orbit` drehen sich alle Objekte als Ganzes um `pivot` (Bahn statt Gerade).
+   */
+  'entity.tween': { ids: string[]; duration: number; ease: 'linear' | 'inOut' | 'out'; orbit?: { pivot: Vec3; axis: Vec3; angleDeg: number } };
 
   // --- Avatar (Paket 2) ---
   'avatar.spawned': { avatar: AvatarState };
@@ -70,6 +75,8 @@ export interface GameEvents {
   'script.log': { entityId: string; level: 'log' | 'error'; message: string; ts: number };
   'script.status': { entityId: string; status: 'running' | 'stopped' | 'error'; message?: string };
   'script.message': { from: string; to: string | '*'; message: string; data: unknown };
+  /** Test: ein Ereignis gezielt an das Skript eines Objekts zustellen (z. B. von den KI-Werkzeugen). */
+  'script.test.dispatch': { entityId: string; name: string; args: unknown[] };
   'ui.openScriptEditor': { entityId: string };
   /** Öffnet den Logik-Graph-Editor für ein Objekt (Paket 19). */
   'ui.openGraphEditor': { entityId: string };

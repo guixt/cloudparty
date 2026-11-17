@@ -45,7 +45,14 @@ function setup() {
   store.getState().loadWorld({ ...store.getState().toWorldSpec(), entities: [] });
   const workers: FakeWorker[] = [];
   const host = new ScriptHost(
-    { store, bus, localAvatarId: () => 'me', audio: { playSound() {}, playTone() {} } },
+    {
+      store,
+      bus,
+      localAvatarId: () => 'me',
+      audio: { playSound() {}, playTone() {} },
+      makeEntity: (ref, pos) => ({ id: 'tmp', ref, transform: { pos, rot: [0, 0, 0, 1], scale: [1, 1, 1] } }),
+      avatars: () => [{ id: 'me', name: 'Ich', pos: [1, 0, 2] }],
+    },
     () => {
       const w = new FakeWorker();
       workers.push(w);
@@ -281,3 +288,57 @@ describe('ScriptHost mit Logik-Graph', () => {
   });
 });
 
+
+describe('ScriptHost: Weltsicht, Spawn, Test-Ereignisse', () => {
+  const rect = (id: string, name: string, x: number, extra: Partial<EntitySpec> = {}): EntitySpec => ({ id, ref: 'EntitySpec.box', name, transform: { pos: [x, 0, 0], rot: [0, 0, 0, 1], scale: [1, 1, 1] }, ...extra });
+
+  it('schickt die Weltsicht nur an Skripte, die sie nutzen, und bei Änderungen erneut', () => {
+    const { add, workers, host } = setup();
+    add(rect('tuer', 'Tür', 3));
+    add(entity('a', "function onTick(){ const t = world.find('Tür'); }"));
+    add(entity('b', 'function onClick(){ self.say(1); }'));
+    workers[0].boot(['onTick']);
+    workers[1].boot(['onClick']);
+    const view = workers[0].sent.filter((m) => m.type === 'world');
+    expect(view).toHaveLength(1);
+    expect(view[0].view.objects.map((o: { id: string }) => o.id)).toContain('tuer');
+    expect(view[0].view.avatars).toEqual([{ id: 'me', name: 'Ich', p: [1, 0, 2] }]);
+    expect(workers[1].sent.filter((m) => m.type === 'world')).toHaveLength(0);
+    // Änderung → nach dem nächsten Takt neue Objektliste; ohne Änderung nur Avatare
+    vi.advanceTimersByTime(260);
+    expect(workers[0].sent.filter((m) => m.type === 'world').at(-1).view.objects).toBeUndefined();
+    host.getStatus('a');
+  });
+
+  it('Spawn: legt Objekte an, begrenzt sie, räumt sie beim Beenden auf, Lebensdauer entfernt sie', () => {
+    const { add, workers, store, bus } = setup();
+    add(entity('a', "function onClick(){ world.spawn('EntitySpec.sphere', {}); }"));
+    workers[0].boot(['onClick']);
+    const cmd = (id: string, lifetime?: number) => workers[0].emit({ type: 'cmd', cmd: { c: 'spawn', id, ref: 'EntitySpec.sphere', v: [0, 5, 0], opts: lifetime ? { lifetime } : {} } });
+    cmd('sp_a_1_x');
+    cmd('sp_a_2_x', 2);
+    expect(Object.keys(store.getState().entities).filter((i) => i.startsWith('sp_'))).toHaveLength(2);
+    vi.advanceTimersByTime(2100);
+    expect(store.getState().entities.sp_a_2_x).toBeUndefined();
+    expect(store.getState().entities.sp_a_1_x).toBeDefined();
+    bus.emit('mode.changed', { mode: 'build' }); // Spielmodus verlassen → Aufräumen
+    expect(store.getState().entities.sp_a_1_x).toBeUndefined();
+  });
+
+  it('script.test.dispatch stellt ein Ereignis zu', () => {
+    const { add, workers, bus } = setup();
+    add(entity('a', 'function onClick(){}'));
+    workers[0].boot(['onClick']);
+    bus.emit('script.test.dispatch', { entityId: 'a', name: 'onClick', args: [{ id: 't', name: 'Tester' }] });
+    expect(workers[0].events('onClick')).toHaveLength(1);
+  });
+
+  it('Gruppenbefehle sind auf 30 pro Sekunde begrenzt', () => {
+    const { add, workers, store } = setup();
+    add(rect('m1', 'M1', 0, { group: 'g', groupName: 'Rad' }));
+    add(entity('a', 'function onClick(){}'));
+    workers[0].boot(['onClick']);
+    for (let i = 0; i < 40; i++) workers[0].emit({ type: 'cmd', cmd: { c: 'group', name: 'Rad', op: 'move', v: [1, 0, 0], seconds: 0, ease: 'inOut' } });
+    expect(store.getState().entities.m1.transform.pos[0]).toBe(30);
+  });
+});

@@ -29,7 +29,21 @@ function setup() {
   }
   const audio = { playSound: vi.fn(), playTone: vi.fn() };
   const deliver = vi.fn();
-  const deps: CommandDeps = { store, bus, localAvatarId: () => 'me', audio, deliver };
+  const spawnedBy = new Map<string, Set<string>>();
+  const deps: CommandDeps = {
+    store,
+    bus,
+    localAvatarId: () => 'me',
+    audio,
+    deliver,
+    makeEntity: (ref, pos) => ({ id: 'tmp', ref, transform: { pos, rot: [0, 0, 0, 1], scale: [1, 1, 1] }, physics: { mode: 'static' } }),
+    spawns: {
+      allow: (owner) => ((spawnedBy.get(owner)?.size ?? 0) >= 3 ? 'Spawn: Limit' : null),
+      add: (owner, id) => spawnedBy.set(owner, (spawnedBy.get(owner) ?? new Set()).add(id)),
+      owns: (owner, id) => spawnedBy.get(owner)?.has(id) ?? false,
+      remove: (id) => spawnedBy.forEach((s) => s.delete(id)),
+    },
+  };
   const get = () => store.getState().entities.t1;
   return { deps, store, events, audio, deliver, get, apply: (cmd: unknown) => applyCommand(deps, 't1', cmd) };
 }
@@ -170,5 +184,71 @@ describe('applyCommand', () => {
     expect(() => applyCommand(deps, 'weg', { c: 'say', text: 'x' })).toThrow(CommandError);
     store.getState().addEntity({ id: 'p', ref: 'EntitySpec.box', transform: { pos: [0, 0, 0], rot: [0, 0, 0, 1], scale: [1, 1, 1] } });
     expect(() => applyCommand(deps, 'p', { c: 'media', op: 'setUrl', value: 'https://x' })).toThrow(/Medien/);
+  });
+});
+
+describe('Befehle: Bewegung, Gruppen, Spawn', () => {
+  function withGroup() {
+    const t = setup();
+    const mk = (id: string, x: number, group = 'g1'): EntitySpec => ({ id, ref: 'EntitySpec.box', name: id, group, groupName: group === 'g1' ? 'Rad' : 'Anderes', transform: { pos: [x, 0, 0], rot: [0, 0, 0, 1], scale: [1, 1, 1] } });
+    t.store.getState().addEntity(mk('m1', 0));
+    t.store.getState().addEntity(mk('m2', 4));
+    t.store.getState().addEntity(mk('o1', 50, 'anderes'));
+    const tweens: unknown[] = [];
+    t.deps.bus.on('entity.tween', (e) => tweens.push(e));
+    return { ...t, tweens };
+  }
+
+  it('tween setzt das Ziel sofort im Store und meldet die Bewegung vorher', () => {
+    const t = withGroup();
+    t.apply({ c: 'tween', op: 'move', v: [3, 0, 0], seconds: 2, ease: 'out' });
+    expect(t.get().transform.pos).toEqual([3, 0, 0]);
+    expect(t.tweens).toEqual([{ ids: ['t1'], duration: 2, ease: 'out' }]);
+    t.apply({ c: 'tween', op: 'move', v: [4, 0, 0], seconds: 0, ease: 'inOut' });
+    expect(t.tweens).toHaveLength(1); // ohne Dauer keine Bewegung
+  });
+
+  it('Gruppe drehen: starre Drehung um die Mitte, Bahn-Bewegung wird gemeldet', () => {
+    const t = withGroup();
+    applyCommand(t.deps, 't1', { c: 'group', name: 'Rad', op: 'rotate', v: [0, 90, 0], seconds: 2, ease: 'linear' });
+    const m1 = t.store.getState().entities.m1;
+    const m2 = t.store.getState().entities.m2;
+    // Mitte (2,0,0): m1 (-2) wird zu +z-Seite? Drehung um Y um 90°: (x,z) -> (z, -x) in Babylon; Abstand bleibt 2
+    expect(Math.hypot(m1.transform.pos[0] - 2, m1.transform.pos[2])).toBeCloseTo(2);
+    expect(m1.transform.pos[0] + m2.transform.pos[0]).toBeCloseTo(4); // Mitte bleibt (2, 0, 0)
+    expect(m1.transform.pos[2] + m2.transform.pos[2]).toBeCloseTo(0);
+    expect(m1.transform.rot[1]).toBeCloseTo(Math.SQRT1_2); // 90° um Y
+    expect(t.store.getState().entities.o1.transform.pos).toEqual([50, 0, 0]); // andere Gruppe unberührt
+    expect(t.tweens).toHaveLength(1);
+    expect(t.tweens[0]).toMatchObject({ ids: ['m1', 'm2'], duration: 2, orbit: { pivot: [2, 0, 0], angleDeg: expect.closeTo(90, 3) } });
+  });
+
+  it('Gruppe verschieben, färben; unbekannte Gruppe ist ein Fehler; 360° ändert nichts am Ergebnis', () => {
+    const t = withGroup();
+    applyCommand(t.deps, 't1', { c: 'group', name: 'g1', op: 'move', v: [0, 1, 0], seconds: 1, ease: 'inOut' });
+    expect(t.store.getState().entities.m2.transform.pos).toEqual([4, 1, 0]);
+    applyCommand(t.deps, 't1', { c: 'group', name: 'rad', op: 'color', color: '#ff0000', seconds: 0, ease: 'inOut' });
+    expect(t.store.getState().entities.m1.material?.color).toBe('#ff0000');
+    expect(() => applyCommand(t.deps, 't1', { c: 'group', name: 'Nix', op: 'move', v: [1, 0, 0], seconds: 0, ease: 'inOut' })).toThrow(CommandError);
+    applyCommand(t.deps, 't1', { c: 'group', name: 'Rad', op: 'rotate', v: [0, 360, 0], seconds: 5, ease: 'linear' });
+    expect(t.store.getState().entities.m1.transform.pos[0]).toBeCloseTo(0);
+    expect(t.tweens.at(-1)).toMatchObject({ orbit: { angleDeg: 360, axis: [0, 1, 0] } }); // voller Umlauf bleibt als Bahn erhalten
+  });
+
+  it('spawn erzeugt ein Objekt mit Optionen, Limit und Fremdschutz bei destroy', () => {
+    const t = withGroup();
+    const base = { c: 'spawn', ref: 'EntitySpec.sphere', v: [1, 2, 3], opts: { color: '#00ff00', physics: 'dynamic', mass: 2, scale: [0.5, 0.5, 0.5] } };
+    t.apply({ ...base, id: 'sp_t1_1_aaa' });
+    const e = t.store.getState().entities.sp_t1_1_aaa;
+    expect(e).toMatchObject({ ref: 'EntitySpec.sphere', material: { color: '#00ff00' }, physics: { mode: 'dynamic', mass: 2 } });
+    expect(e.transform.pos).toEqual([1, 2, 3]);
+    t.apply({ ...base, id: 'sp_t1_2_aaa' });
+    t.apply({ ...base, id: 'sp_t1_3_aaa' });
+    expect(() => t.apply({ ...base, id: 'sp_t1_4_aaa' })).toThrow(/Limit/);
+    expect(() => t.apply({ ...base, id: 'kein_sp' })).toThrow(CommandError);
+    expect(() => t.apply({ c: 'spawn', id: 'sp_t1_9_aaa', ref: 'EntitySpec.model', v: [0, 0, 0], opts: {} })).toThrow(/nicht erlaubt/);
+    expect(() => applyCommand(t.deps, 'm1', { c: 'destroy', target: 'sp_t1_1_aaa' })).toThrow(/nur mit world.spawn/);
+    applyCommand(t.deps, 't1', { c: 'destroy', target: 'sp_t1_1_aaa' });
+    expect(t.store.getState().entities.sp_t1_1_aaa).toBeUndefined();
   });
 });

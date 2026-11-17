@@ -3,7 +3,7 @@
  * `self`-/`world`-Objekte auf einer `post(command)`-Funktion auf. Wird vom Worker
  * und von den Unit-Tests gemeinsam genutzt (keine DOM-/Worker-Abhängigkeiten).
  */
-import { SCRIPT_EVENTS, type ScriptEventName } from '../../../shared/scriptApi';
+import { SCRIPT_EVENTS, SCRIPT_TWEEN_EASES, type ScriptEase, type ScriptEventName } from '../../../shared/scriptApi';
 import type { ParticlePreset, PhysicsMode, Vec3 } from '../../../shared/types';
 import {
   COMMAND_LIMIT_PER_SEC,
@@ -14,6 +14,7 @@ import {
   isJsonValue,
   type EntitySnapshot,
   type ScriptCommand,
+  type WorldView,
 } from './commands';
 
 /** Original-Konstruktor, vor dem Härten des Workers festgehalten. */
@@ -128,6 +129,8 @@ export interface Sandbox {
   handlers: ScriptEventName[];
   dispatch(name: string, args: unknown[]): void;
   updateSnapshot(snapshot: EntitySnapshot): void;
+  /** Neue Lesesicht der Welt (world.find, world.avatars …). */
+  updateWorld(view: Partial<WorldView>): void;
   dispose(): void;
 }
 
@@ -179,6 +182,18 @@ function textArg(value: unknown): string {
   return typeof value === 'string' ? value : describeValue(value);
 }
 
+function easeArg(value: unknown): ScriptEase {
+  if (value === undefined || value === null) return 'inOut';
+  if (!(SCRIPT_TWEEN_EASES as readonly string[]).includes(value as string)) {
+    throw new TypeError(`Kurve: '${String(value)}' unbekannt (erlaubt: ${SCRIPT_TWEEN_EASES.join(', ')})`);
+  }
+  return value as ScriptEase;
+}
+function secondsArg(value: unknown, fallback: number): number {
+  if (value === undefined || value === null) return fallback;
+  return Math.max(0, n(value, 'Sekunden'));
+}
+
 export function createSandbox(options: SandboxOptions): Sandbox {
   const now = options.now ?? (() => Date.now());
   const startedAt = now();
@@ -203,6 +218,9 @@ export function createSandbox(options: SandboxOptions): Sandbox {
     options.log(level, message.length > MAX_LOG_LENGTH ? `${message.slice(0, MAX_LOG_LENGTH)}…` : message);
   };
 
+  let view: WorldView = { objects: [], avatars: [] };
+  let spawnCounter = 0;
+  const selfTag = options.snapshot.id.toLowerCase().replace(/[^a-z0-9]/g, '').slice(-8) || 'x';
   let snapshot: EntitySnapshot = structuredCloneSafe(options.snapshot);
   function structuredCloneSafe(s: EntitySnapshot): EntitySnapshot {
     return {
@@ -316,6 +334,19 @@ export function createSandbox(options: SandboxOptions): Sandbox {
     setText: (text: string) => media({ c: 'media', op: 'setText', value: textArg(text) }),
     nextSlide: () => media({ c: 'media', op: 'nextSlide' }),
     prevSlide: () => media({ c: 'media', op: 'prevSlide' }),
+    moveTo(x: number, y: number, z: number, seconds?: number, ease?: string) {
+      const v: Vec3 = [n(x, 'moveTo x'), n(y, 'moveTo y'), n(z, 'moveTo z')];
+      snapshot.position = v;
+      post({ c: 'tween', op: 'move', v, seconds: secondsArg(seconds, 1), ease: easeArg(ease) });
+    },
+    rotateTo(x: number, y: number, z: number, seconds?: number, ease?: string) {
+      const v: Vec3 = [n(x, 'rotateTo x'), n(y, 'rotateTo y'), n(z, 'rotateTo z')];
+      snapshot.rotation = v;
+      post({ c: 'tween', op: 'rotate', v, seconds: secondsArg(seconds, 1), ease: easeArg(ease) });
+    },
+    scaleTo(x: number, y: number, z: number, seconds?: number, ease?: string) {
+      post({ c: 'tween', op: 'scale', v: [n(x, 'scaleTo x'), n(y, 'scaleTo y'), n(z, 'scaleTo z')], seconds: secondsArg(seconds, 1), ease: easeArg(ease) });
+    },
   };
 
   const jsonArg = (data: unknown): unknown => {
@@ -333,7 +364,76 @@ export function createSandbox(options: SandboxOptions): Sandbox {
     teleportAvatar: (avatarId: string, x: number, y: number, z: number) =>
       post({ c: 'teleport', avatarId: textArg(avatarId), v: [n(x, 'x'), n(y, 'y'), n(z, 'z')] }),
     time: () => (now() - startedAt) / 1000,
+    group(nameArg: string) {
+      const name = textArg(nameArg);
+      const members = () => view.objects.filter((o) => o.group === name || (o.groupName ?? '').trim().toLowerCase() === name.trim().toLowerCase());
+      const g = (op: 'move' | 'rotate', v: Vec3, seconds: unknown, ease: unknown, pivot?: unknown) =>
+        post({ c: 'group', name, op, v, seconds: secondsArg(seconds, 0), ease: easeArg(ease), ...(pivot === undefined ? {} : { pivot: pivot as Vec3 }) });
+      return {
+        name,
+        get count() {
+          return members().length;
+        },
+        get ids() {
+          return members().map((o) => o.id);
+        },
+        center() {
+          const list = members();
+          if (list.length === 0) return null;
+          const lo = [Infinity, Infinity, Infinity];
+          const hi = [-Infinity, -Infinity, -Infinity];
+          for (const o of list) for (let k = 0; k < 3; k++) {
+            lo[k] = Math.min(lo[k], o.p[k]);
+            hi[k] = Math.max(hi[k], o.p[k]);
+          }
+          return { x: (lo[0] + hi[0]) / 2, y: (lo[1] + hi[1]) / 2, z: (lo[2] + hi[2]) / 2 };
+        },
+        moveBy: (dx: number, dy: number, dz: number, seconds?: number, ease?: string) => g('move', [n(dx, 'moveBy dx'), n(dy, 'moveBy dy'), n(dz, 'moveBy dz')], seconds, ease),
+        rotateBy: (xDeg: number, yDeg: number, zDeg: number, seconds?: number, ease?: string, pivot?: number[]) =>
+          g('rotate', [n(xDeg, 'rotateBy x'), n(yDeg, 'rotateBy y'), n(zDeg, 'rotateBy z')], seconds, ease, pivot),
+        setColor: (color: string) => post({ c: 'group', name, op: 'color', color: hexArg(color, 'setColor'), seconds: 0, ease: 'inOut' }),
+        setEmissive: (color: string) => post({ c: 'group', name, op: 'emissive', color: hexArg(color, 'setEmissive'), seconds: 0, ease: 'inOut' }),
+        setAlpha: (alpha: number) => post({ c: 'group', name, op: 'alpha', alpha: n(alpha, 'setAlpha'), seconds: 0, ease: 'inOut' }),
+      };
+    },
+    find(query: string) {
+      const q = textArg(query).trim().toLowerCase();
+      const hit = view.objects.find((o) => o.id === query) ?? view.objects.find((o) => (o.name ?? '').trim().toLowerCase() === q);
+      return hit ? handleOf(hit) : null;
+    },
+    findAll(query: string) {
+      const q = textArg(query).trim().toLowerCase();
+      return view.objects
+        .filter((o) => o.group === query || (o.groupName ?? '').trim().toLowerCase() === q || (o.name ?? '').toLowerCase().startsWith(q))
+        .slice(0, 200)
+        .map(handleOf);
+    },
+    avatars: () => view.avatars.map((a) => ({ id: a.id, name: a.name, x: a.p[0], y: a.p[1], z: a.p[2] })),
+    spawn(ref: string, options?: Record<string, unknown>) {
+      const o = (typeof options === 'object' && options !== null ? options : {}) as Record<string, unknown>;
+      const id = `sp_${selfTag}_${++spawnCounter}_${Math.floor(Math.random() * 1e6).toString(36)}`;
+      const scaleOpt = o.scale === undefined ? undefined : typeof o.scale === 'number' ? ([o.scale, o.scale, o.scale] as Vec3) : (o.scale as Vec3);
+      post({
+        c: 'spawn',
+        id,
+        ref: textArg(ref),
+        v: [n(o.x ?? 0, 'spawn x'), n(o.y ?? 0, 'spawn y'), n(o.z ?? 0, 'spawn z')],
+        opts: {
+          ...(scaleOpt === undefined ? {} : { scale: scaleOpt }),
+          ...(o.color === undefined ? {} : { color: hexArg(o.color, 'spawn color') }),
+          ...(o.name === undefined ? {} : { name: textArg(o.name) }),
+          ...(o.physics === undefined ? {} : { physics: o.physics as PhysicsMode }),
+          ...(o.mass === undefined ? {} : { mass: n(o.mass, 'spawn mass') }),
+          ...(o.lifetime === undefined ? {} : { lifetime: n(o.lifetime, 'spawn lifetime') }),
+        },
+      });
+      return id;
+    },
+    destroy: (id: string) => post({ c: 'destroy', target: textArg(id) }),
   };
+  function handleOf(o: WorldView['objects'][number]) {
+    return { id: o.id, name: o.name ?? '', group: o.group ?? null, groupName: o.groupName ?? null, ref: o.ref, x: o.p[0], y: o.p[1], z: o.p[2] };
+  }
 
   const logFn = (...values: unknown[]) => log('log', values.map(describeValue).join(' '));
   const consoleObj = {
@@ -395,6 +495,9 @@ export function createSandbox(options: SandboxOptions): Sandbox {
     },
     updateSnapshot(next) {
       snapshot = structuredCloneSafe(next);
+    },
+    updateWorld(next) {
+      view = { objects: Array.isArray(next?.objects) ? next.objects : view.objects, avatars: Array.isArray(next?.avatars) ? next.avatars : view.avatars };
     },
     dispose() {
       disposed = true;
