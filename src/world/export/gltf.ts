@@ -106,7 +106,9 @@ export async function exportGlb(ctx: GameContext, options: ExportOptions = {}): 
     const node = ctx.entityNodes.get(e.id);
     if (!node) continue;
     const plan = exportMaterialPlan(e.material);
-    for (const mesh of node.getChildMeshes(false)) {
+    for (const child of node.getChildMeshes(false)) {
+      // Instanzen zeigen das Material ihres Masters; getauscht wird am Master.
+      const mesh: AbstractMesh = (child as AbstractMesh & { sourceMesh?: AbstractMesh }).sourceMesh ?? child;
       const mat = mesh.material;
       if (!(mat instanceof PBRMaterial)) continue;
       // Gleichaussehende Materialien teilen sich ein Export-Material.

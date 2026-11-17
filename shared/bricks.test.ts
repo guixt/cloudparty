@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLATE_H, STUD, brickSize, brickState, brickWorldPos, layerFootprints, profilePieces, restLevel, studSpots, tile1D } from './bricks';
+import { PLATE_H, STUD, hiddenBrickIds, brickSize, brickState, brickWorldPos, layerFootprints, profilePieces, restLevel, studSpots, tile1D } from './bricks';
 
 describe('Klemmbaustein-Maße', () => {
   it('Stein 2×4 ist 0,5 × 0,3 × 1,0 m', () => {
@@ -111,5 +111,48 @@ describe('Profil (Höhenverlauf)', () => {
   it('Segmente ohne Rand oder zu kurz bleiben Quader', () => {
     expect(profilePieces(2, [{ len: 2, h: 3, edgeBefore: 'curve' }]).every((p) => p.kind === 'stein')).toBe(true);
     expect(profilePieces(40, [{ len: 40, h: 3 }]).length).toBeLessThanOrEqual(9);
+  });
+});
+
+describe('Sichtbarkeit (verdeckte Steine)', () => {
+  const brick = (id: string, gx: number, gz: number, level: number, extra: Partial<import('./bricks').CullBrick> = {}, w = 1, d = 1, kind = 'stein') => ({
+    id,
+    pos: [(gx + w / 2) * STUD, level * PLATE_H, (gz + d / 2) * STUD],
+    rot: [0, 0, 0, 1],
+    state: { w, d, kind },
+    fixed: true,
+    ...extra,
+  });
+  const cube = () => {
+    const out = [];
+    for (let x = 0; x < 3; x++) for (let z = 0; z < 3; z++) for (let l = 0; l < 3; l++) out.push(brick(`b${x}${z}${l}`, x, z, l * 3));
+    return out;
+  };
+  it('im 3×3×3-Block werden die Mitte und der Stein darunter (Boden schließt ab) versteckt', () => {
+    const hidden = hiddenBrickIds(cube());
+    expect([...hidden].sort()).toEqual(['b110', 'b111']); // unten schließt der Boden ab
+  });
+  it('liegt der Block auf dem Boden, sind auch die Steine der Bodenschicht mit vollem Rundum geschützt', () => {
+    // 3×3-Platte unten: Mitte hat Boden unten, 4 Nachbarn seitlich und einen Stein darüber → versteckt
+    const bricks = [];
+    for (let x = 0; x < 3; x++) for (let z = 0; z < 3; z++) bricks.push(brick(`g${x}${z}`, x, z, 0));
+    bricks.push(brick('top', 1, 1, 3));
+    expect(hiddenBrickIds(bricks).has('g11')).toBe(true);
+    expect(hiddenBrickIds(bricks.filter((b) => b.id !== 'top')).has('g11')).toBe(false);
+  });
+  it('bewegliche, schiefe, gedrehte und nicht rasternde Steine verdecken nichts und werden nie versteckt', () => {
+    const c = cube();
+    const withoutNeighbor = hiddenBrickIds(c.map((b) => (b.id === 'b100' ? { ...b, fixed: false } : b)));
+    expect(withoutNeighbor.has('b110')).toBe(false); // verliert seine Abdeckung
+    expect(withoutNeighbor.has('b111')).toBe(true);
+    expect(hiddenBrickIds(c.map((b) => (b.id === 'b111' ? { ...b, pos: [b.pos[0] + 0.05, b.pos[1], b.pos[2]] } : b))).has('b111')).toBe(false);
+    expect(hiddenBrickIds(c.map((b) => (b.id === 'b111' ? { ...b, rot: [0, 0.3827, 0, 0.9239] } : b))).has('b111')).toBe(false);
+    expect(hiddenBrickIds(c.map((b) => (b.id === 'b011' ? { ...b, state: { w: 1, d: 1, kind: 'schraeg' } } : b))).has('b111')).toBe(false);
+  });
+  it('um 90° gedrehte Steine zählen mit vertauschter Grundfläche', () => {
+    const r = Math.SQRT1_2;
+    const turned = { id: 't', pos: [0.25 * 1, 0, 0.25 * 2], rot: [0, r, 0, r], state: { w: 2, d: 4, kind: 'platte' }, fixed: true };
+    const cover = [turned, brick('c', 0, 0, 0, {}, 2, 4, 'platte')];
+    expect(hiddenBrickIds(cover).size).toBe(0); // gleiche Zellen, nichts liegt außen herum
   });
 });

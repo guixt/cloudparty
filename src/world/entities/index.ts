@@ -106,8 +106,9 @@ const entities: GameModule = {
       bus.on('entity.removed', ({ entity }) => destroy(entity.id)),
       bus.on('entity.changed', ({ entity, prev }) => {
         const node = entityNodes.get(entity.id);
-        const change = classifyChange(prev, entity, getPrefab(entity.ref)?.stateKeys);
-        if (!node || change.rebuild) {
+        const def = getPrefab(entity.ref);
+        const change = classifyChange(prev, entity, def?.stateKeys);
+        if (!node || change.rebuild || (change.material && def?.rebuildOnMaterial)) {
           destroy(entity.id);
           create(entity);
           return;

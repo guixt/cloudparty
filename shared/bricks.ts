@@ -289,3 +289,75 @@ export function profilePieces(width: number, segments: readonly ProfileSegment[]
   });
   return out;
 }
+
+/** Ein Stein für die Sichtbarkeitsprüfung (Weltposition, Drehung als Quaternion [x,y,z,w], Zustand). */
+export interface CullBrick {
+  id: string;
+  pos: readonly number[];
+  rot: readonly number[];
+  state?: Record<string, unknown>;
+  /** false = beweglich (dynamisch): weder verdeckend noch verdeckt. */
+  fixed: boolean;
+}
+
+const SOLID_KINDS: readonly BrickKind[] = ['stein', 'platte', 'fliese'];
+const GRID_TOL = 0.002;
+
+interface Cells {
+  x0: number;
+  x1: number;
+  z0: number;
+  z1: number;
+  y0: number;
+  y1: number;
+}
+
+/** Raster-Zellen (ganzzahlig, Noppen × Platten) eines Quader-Steins, oder null (schief, gedreht, nicht im Raster). */
+function cellsOf(b: CullBrick): Cells | null {
+  const st = brickState(b.state);
+  if (!SOLID_KINDS.includes(st.kind)) return null;
+  const yaw = 2 * Math.atan2(b.rot[1] ?? 0, b.rot[3] ?? 1);
+  if (Math.abs(b.rot[0] ?? 0) > 1e-4 || Math.abs(b.rot[2] ?? 0) > 1e-4) return null;
+  const quarter = yaw / (Math.PI / 2);
+  if (Math.abs(quarter - Math.round(quarter)) > 0.01) return null;
+  const turned = Math.abs(Math.round(quarter)) % 2 === 1;
+  const w = turned ? st.d : st.w;
+  const d = turned ? st.w : st.d;
+  const fx = (b.pos[0] - (w * STUD) / 2) / STUD;
+  const fz = (b.pos[2] - (d * STUD) / 2) / STUD;
+  const fy = b.pos[1] / PLATE_H;
+  const onGrid = (v: number) => Math.abs(v - Math.round(v)) < GRID_TOL / STUD * 4;
+  if (!onGrid(fx) || !onGrid(fz) || !onGrid(fy)) return null;
+  const plates = kindPlates(st.kind, st.d);
+  return { x0: Math.round(fx), x1: Math.round(fx) + w, z0: Math.round(fz), z1: Math.round(fz) + d, y0: Math.round(fy), y1: Math.round(fy) + plates };
+}
+
+const OFF = 1024;
+const key = (x: number, y: number, z: number) => ((x + OFF) * 2048 + (z + OFF)) * 2048 + (y + OFF);
+
+/**
+ * Ids der Steine, die von außen nirgends zu sehen sind: alle sechs Seiten grenzen vollständig an andere feste Quader-Steine
+ * (oder, unten, an die Inselfläche). Beweglich, schief oder nicht im Raster liegende Steine zählen nie als verdeckt oder verdeckend.
+ */
+export function hiddenBrickIds(bricks: readonly CullBrick[]): Set<string> {
+  const cells = new Map<string, Cells>();
+  const occupied = new Set<number>();
+  for (const b of bricks) {
+    if (!b.fixed) continue;
+    const c = cellsOf(b);
+    if (!c) continue;
+    cells.set(b.id, c);
+    for (let x = c.x0; x < c.x1; x++) for (let z = c.z0; z < c.z1; z++) for (let y = c.y0; y < c.y1; y++) occupied.add(key(x, y, z));
+  }
+  const hidden = new Set<string>();
+  for (const [id, c] of cells) {
+    let covered = true;
+    const full = (xa: number, xb: number, ya: number, yb: number, za: number, zb: number): boolean => {
+      for (let x = xa; x < xb; x++) for (let z = za; z < zb; z++) for (let y = ya; y < yb; y++) if (!occupied.has(key(x, y, z))) return false;
+      return true;
+    };
+    covered = full(c.x0 - 1, c.x0, c.y0, c.y1, c.z0, c.z1) && full(c.x1, c.x1 + 1, c.y0, c.y1, c.z0, c.z1) && full(c.x0, c.x1, c.y0, c.y1, c.z0 - 1, c.z0) && full(c.x0, c.x1, c.y0, c.y1, c.z1, c.z1 + 1) && full(c.x0, c.x1, c.y1, c.y1 + 1, c.z0, c.z1) && (c.y0 <= 0 || full(c.x0, c.x1, c.y0 - 1, c.y0, c.z0, c.z1));
+    if (covered) hidden.add(id);
+  }
+  return hidden;
+}

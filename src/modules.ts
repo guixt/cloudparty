@@ -6,6 +6,7 @@ import type { GameModule } from './core/context';
 import environment from './engine/environment';
 import persistence from './world/persistence';
 import entities from './world/entities';
+import brickCulling from './world/bricks';
 import media from './world/media';
 import physics from './engine/physics';
 import avatar from './engine/avatar';
@@ -28,6 +29,7 @@ export const modules: GameModule[] = [
   persistence, // 3
   environment, // 1
   entities, // 4
+  brickCulling, // Sichtbarkeit von Steinen
   media, // 12
   water, // 23
   materials, // 22
