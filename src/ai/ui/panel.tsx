@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as R
 import { useStore } from 'zustand';
 import { bringToFront, useWindowZ } from '../../core/windowStack';
 import type { AssistantApi } from '../api';
+import { Markdown } from './markdown';
 import { SUGGESTIONS, usageLine, type AiController, type AiStore, type Message } from './state';
 
 function MessageView({ m, ctl }: { m: Message; ctl: AiController }) {
@@ -9,7 +10,9 @@ function MessageView({ m, ctl }: { m: Message; ctl: AiController }) {
     case 'user':
       return <div className="ai-msg ai-user" data-testid="ai-msg-user">{m.text}</div>;
     case 'assistant':
-      return <div className="ai-msg ai-assistant" data-testid="ai-msg-assistant">{m.text}</div>;
+      return <div className="ai-msg ai-assistant" data-testid="ai-msg-assistant">
+          <Markdown text={m.text} />
+        </div>;
     case 'tool':
       return (
         <div className={`ai-tool ${m.ok ? 'ai-tool-ok' : 'ai-tool-fail'}`} data-testid="ai-tool">

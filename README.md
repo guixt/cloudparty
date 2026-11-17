@@ -166,3 +166,7 @@ Echte Bildraten auf deiner Grafikkarte kann ich nicht messen; die Zahlen oben ze
 - **Erzeugen:** `world.spawn(ref, { x, y, z, scale, color, name, physics, mass, lifetime })` für Würfel, Kugel, Zylinder, Kegel, Ring, Platte und Klemmbaustein (höchstens 100 je Skript, 300 insgesamt, 20 pro Sekunde); `world.destroy(id)` nur für selbst erzeugte Objekte. Erzeugte Objekte verschwinden beim Verlassen des Spielmodus.
 - **KI testet ihre Skripte:** `script_test` schaltet kurz in den Spielmodus, löst ein Ereignis aus (onClick, onTouch, Trigger, onChat, onMessage oder nur Warten), wartet und meldet Status, `log()`-Ausgaben, Fehler mit Zeilennummer, Chat-Ausgaben, gesendete Nachrichten, erzeugte und geänderte Objekte (vorher → nachher) und setzt danach alles zurück; `script_log` liest Status und Protokoll. Höchstens 6 Tests je Auftrag.
 - **Grenzen:** Bewegte Objekte mit statischer Physik springen für die Physik sofort ans Ziel (kein „Mitnehmen“ von Avataren auf bewegten Plattformen). Andere Spieler im Netz sehen das Ziel, nicht den Verlauf der Bewegung.
+
+## Formatierte KI-Antworten
+
+Die Antworten im KI-Chat werden als Markdown dargestellt (`src/ai/ui/markdown.tsx`, ohne zusätzliche Bibliothek): Überschriften, Absätze, **fett**, *kursiv*, `Code`, durchgestrichen, Listen (auch nummeriert und verschachtelt), Zitate, Codeblöcke, Tabellen, Trennlinien und Links (nur http/https, öffnen in neuem Tab). Es wird kein HTML eingeschleust: alles entsteht als React-Elemente, fremdes HTML erscheint als Text. Unfertiger Text beim Streamen bleibt lesbar.
