@@ -6,6 +6,7 @@
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import type { Node } from '@babylonjs/core/node';
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import '@babylonjs/serializers/glTF/2.0/Extensions/KHR_materials_clearcoat';
 import '@babylonjs/serializers/glTF/2.0/Extensions/KHR_materials_transmission';
 import '@babylonjs/serializers/glTF/2.0/Extensions/KHR_materials_ior';
@@ -62,6 +63,23 @@ export function entityExtras(e: EntitySpec): Record<string, unknown> {
     ...(e.script ? { cp_has_script: true } : {}),
     ...(e.media?.kind ? { cp_media: e.media.kind } : {}),
   };
+}
+
+/** Lesbarer Name eines Knotens: Objektname, sonst Art des Bausteins. */
+export function exportLabel(e: EntitySpec): string {
+  return (e.name || e.ref.replace(/^EntitySpec\./, '')).trim().slice(0, 60) || 'Objekt';
+}
+
+/** Gruppen für den Export: je Gruppen-id der Name und die ausgewählten Mitglieder (mindestens 2 oder ein Gruppenname). */
+export function exportGroups(chosen: readonly EntitySpec[]): Map<string, { name: string; ids: string[] }> {
+  const out = new Map<string, { name: string; ids: string[] }>();
+  for (const e of chosen) {
+    if (!e.group) continue;
+    const g = out.get(e.group) ?? { name: (e.groupName || 'Gruppe').trim().slice(0, 60) || 'Gruppe', ids: [] };
+    g.ids.push(e.id);
+    out.set(e.group, g);
+  }
+  return out;
 }
 
 function safeFileName(name: string): string {
@@ -145,6 +163,26 @@ export async function exportGlb(ctx: GameContext, options: ExportOptions = {}): 
     return true;
   };
 
+  // Lesbare Namen und Gruppen als Eltern-Knoten, damit Blender „Bett“ statt „entity.e_mwmo…“ zeigt.
+  const renamed: Array<{ node: Node; name: string; parent: Node | null }> = [];
+  const groupNodes: TransformNode[] = [];
+  const groups = exportGroups(chosen);
+  const groupNodeOf = new Map<string, TransformNode>();
+  for (const [gid, g] of groups) {
+    const gn = new TransformNode(g.name, ctx.scene);
+    gn.metadata = { entityId: g.ids[0], cpGroupNode: gid };
+    groupNodes.push(gn);
+    groupNodeOf.set(gid, gn);
+  }
+  for (const e of chosen) {
+    const node = ctx.entityNodes.get(e.id);
+    if (!node) continue;
+    renamed.push({ node, name: node.name, parent: node.parent });
+    node.name = exportLabel(e);
+    const gn = e.group ? groupNodeOf.get(e.group) : undefined;
+    if (gn) node.parent = gn;
+  }
+
   try {
     const data = await GLTF2Export.GLBAsync(ctx.scene, baseName, {
       shouldExportNode,
@@ -152,7 +190,10 @@ export async function exportGlb(ctx: GameContext, options: ExportOptions = {}): 
       exportWithoutWaitingForScene: true,
       metadataSelector: (metadata: { entityId?: string } | null | undefined) => {
         const entity = metadata?.entityId ? byId.get(metadata.entityId) : undefined;
-        return entity ? entityExtras(entity) : undefined;
+        if (!entity) return undefined;
+        const groupId = (metadata as { cpGroupNode?: string }).cpGroupNode;
+        if (groupId) return { cp_group: groupId, ...(entity.groupName ? { cp_group_name: entity.groupName } : {}) };
+        return entityExtras(entity);
       },
     });
     const file = Object.entries(data.files).find(([name]) => name.endsWith('.glb'));
@@ -160,6 +201,11 @@ export async function exportGlb(ctx: GameContext, options: ExportOptions = {}): 
     const blob = file[1] instanceof Blob ? file[1] : new Blob([file[1]], { type: 'model/gltf-binary' });
     return { blob, fileName: `${baseName}.glb`, entities: chosen.length, skipped };
   } finally {
+    for (const r of renamed) {
+      r.node.parent = r.parent;
+      r.node.name = r.name;
+    }
+    for (const gn of groupNodes) gn.dispose();
     for (const m of swapped) m.mesh.material = m.original;
     for (const s of snapshots.values()) {
       s.mat.alpha = s.alpha;

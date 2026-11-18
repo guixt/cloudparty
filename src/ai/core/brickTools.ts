@@ -6,6 +6,7 @@ import { AI_LIMITS } from '../../../shared/aiTools';
 import { BRICK_KINDS, placedFromEntity, profilePieces, type ProfileEdge, type ProfileSegment, BRICK_REF, MAX_BRICK_STUDS, STUD, PLATE_H, brickState, brickWorldPos, kindPlates, floorFootprints, layerFootprints, restLevel, type BrickKind, type Footprint, type PlacedBrick } from '../../../shared/bricks';
 import { newEntityId, type EntitySpec, type Vec3 } from '../../../shared/types';
 import { yawQuat } from './buildGeometry';
+import { describeOpening, nameOpenings, saveOpenings, type OpeningInfo } from './anchors';
 import { createEntityFromPrefab } from '../../world/entities/prefabs';
 import { applyCommon, coord, reserveEntities, fail, int, obj, ok, opts, str, type Handler, type RunCounters, type ToolContext } from './tools';
 
@@ -77,6 +78,7 @@ function originOf(input: Record<string, unknown>): Vec3 {
 }
 
 interface Opening {
+  name?: string;
   side: 'north' | 'south' | 'east' | 'west';
   at: number;
   width: number;
@@ -165,7 +167,7 @@ export const brickHandlers: Record<string, Handler> = {
     const openings: Opening[] = (rawOpenings as unknown[]).map((o, i) => {
       const r = obj(o, `openings[${i}]`);
       if (!['north', 'south', 'east', 'west'].includes(String(r.side))) fail(`openings[${i}].side muss north, south, east oder west sein.`);
-      return { side: r.side as Opening['side'], at: int(r.at, `openings[${i}].at`, 0, 64), width: int(r.width, `openings[${i}].width`, 1, 64), layers: int(r.layers, `openings[${i}].layers`, 1, 40), sill: r.sill_layers === undefined ? 0 : int(r.sill_layers, `openings[${i}].sill_layers`, 0, 40) };
+      return { ...(r.name === undefined ? {} : { name: str(r.name, `openings[${i}].name`, 40) }), side: r.side as Opening['side'], at: int(r.at, `openings[${i}].at`, 0, 64), width: int(r.width, `openings[${i}].width`, 1, 64), layers: int(r.layers, `openings[${i}].layers`, 1, 40), sill: r.sill_layers === undefined ? 0 : int(r.sill_layers, `openings[${i}].sill_layers`, 0, 40) };
     });
     const specs: Spec[] = [];
     for (let layer = 0; layer < layers; layer++) {
@@ -181,6 +183,7 @@ export const brickHandlers: Record<string, Handler> = {
     const name = input.name === undefined ? (mode === 'wall' ? 'Mauer' : 'Bodenplatte') : str(input.name, 'name', 80, true) || 'Mauer';
     const { ids, group, bounds } = await place(specs, origin, name, ctx, counters);
     const m = (n: number) => Math.round(n * 100) / 100;
+    let openingInfoText = '';
     const doors = openings.map((o) => {
       const y0 = origin[1] + o.sill * 0.3;
       const y1 = origin[1] + (o.sill + o.layers) * 0.3;
@@ -191,6 +194,29 @@ export const brickHandlers: Record<string, Handler> = {
       const x = origin[0] + (gx0 + (o.side === 'west' ? 0 : cols)) * STUD;
       return `${o.side}: z ${m(origin[2] + (gz0 + o.at) * STUD)}–${m(origin[2] + (gz0 + o.at + o.width) * STUD)} m an der Wand bei x = ${m(x)}, Höhe ${m(y0)}–${m(y1)} m`;
     });
-    return ok(`${ids.length} Steine gemauert: group="${group}". ${bounds}${doors.length ? ` Öffnungen (Welt-Koordinaten; north = kleineres z, south = größeres z, west = kleineres x, east = größeres x): ${doors.join('; ')}.` : ''}`, `${name} gemauert (${ids.length} Steine)`, true);
+    if (openings.length > 0) {
+      const kinds = openings.map((o) => (o.sill > 0 ? 'Fenster' : 'Tür') as OpeningInfo['kind']);
+      const names = nameOpenings(kinds.map((kind, i) => ({ kind, name: openings[i].name })));
+      const infos: OpeningInfo[] = openings.map((o, i) => {
+        const horizontal = o.side === 'north' || o.side === 'south';
+        const mid = o.at + o.width / 2;
+        const sign = o.side === 'north' || o.side === 'west' ? -1 : 1;
+        return {
+          name: names[i],
+          kind: kinds[i],
+          center: horizontal
+            ? [origin[0] + (gx0 + mid) * STUD, origin[1] + (o.sill + o.layers / 2) * 0.3, origin[2] + (gz0 + (o.side === 'north' ? 0.5 : rows - 0.5)) * STUD]
+            : [origin[0] + (gx0 + (o.side === 'west' ? 0.5 : cols - 0.5)) * STUD, origin[1] + (o.sill + o.layers / 2) * 0.3, origin[2] + (gz0 + mid) * STUD],
+          width: o.width * STUD,
+          height: o.layers * 0.3,
+          thickness: STUD,
+          u: horizontal ? [1, 0] : [0, 1],
+          normal: horizontal ? [0, sign] : [sign, 0],
+        };
+      });
+      saveOpenings(ctx, group, infos);
+      openingInfoText = `\nÖffnungen gespeichert (für fit_to_opening/verify):\n${infos.map((o, i) => describeOpening(o, i)).join('\n')}`;
+    }
+    return ok(`${ids.length} Steine gemauert: group="${group}". ${bounds}${doors.length ? ` Öffnungen (Welt-Koordinaten; north = kleineres z, south = größeres z, west = kleineres x, east = größeres x): ${doors.join('; ')}.` : ''}${openingInfoText}`, `${name} gemauert (${ids.length} Steine)`, true);
   },
 };

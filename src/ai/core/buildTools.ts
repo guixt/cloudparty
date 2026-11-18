@@ -13,6 +13,7 @@ import {
   arrayItems,
   beamTransform,
   quatMul,
+  rotateVec,
   rotatedBox,
   transformPoint,
   transformRotation,
@@ -23,7 +24,9 @@ import {
   type Mirror,
   type Opening,
 } from './buildGeometry';
+import { mediaKindOfRef, boardSize } from '../../world/media/helpers';
 import { wrapData } from './summary';
+import { describeOpening, nameOpenings, openingsOfGroup, saveOpenings, type OpeningInfo } from './anchors';
 import { applyCommon, coord, reserveEntities, fail, getEntityOrGroup, resolveTargets, num, obj, ok, opts, str, vec, type Handler, type RunCounters, type ToolContext } from './tools';
 
 const MAX_WALL_PIECES = 100;
@@ -73,6 +76,17 @@ export function entityBox(e: EntitySpec): { box: Box; approx: boolean } {
     return { box: rotatedBox(center, size, e.transform.rot), approx: false };
   }
   const [sx, sy, sz] = e.transform.scale;
+  const mediaKind = mediaKindOfRef(e.ref);
+  if (mediaKind) {
+    // Tafel: Ursprung am Boden, Bildfläche beginnt 0,9 m darüber (Rahmen 0,09 m, Tiefe 0,1 m); mit Standfüßen reicht sie bis zum Boden.
+    const bs = boardSize(mediaKind, e.state?.aspect);
+    const bottom = e.state?.stand === false ? 0.9 - 0.09 : 0;
+    const top = 0.9 + bs.height + 0.09;
+    const local: Vec3 = [0, ((bottom + top) / 2) * sy, 0];
+    const off = rotateVec(e.transform.rot, local);
+    const c: Vec3 = [e.transform.pos[0] + off[0], e.transform.pos[1] + off[1], e.transform.pos[2] + off[2]];
+    return { box: rotatedBox(c, [(bs.width + 0.18) * sx, (top - bottom) * sy, 0.1 * sz], e.transform.rot), approx: false };
+  }
   if (PRIMITIVES.has(e.ref)) {
     const thin = e.ref === 'EntitySpec.plane' ? 0.05 : 1;
     return { box: rotatedBox(e.transform.pos, [sx, sy * thin, sz], e.transform.rot), approx: false };
@@ -117,8 +131,10 @@ export const buildHandlers: Record<string, Handler> = {
     const rawOpenings = input.openings === undefined ? [] : input.openings;
     if (!Array.isArray(rawOpenings)) fail('openings muss eine Liste sein.');
     if ((rawOpenings as unknown[]).length > 10) fail('Höchstens 10 Öffnungen pro Wand.');
+    const openingNames: Array<string | undefined> = [];
     const openings: Opening[] = (rawOpenings as unknown[]).map((o, i) => {
       const r = obj(o, `openings[${i}]`);
+      openingNames.push(r.name === undefined ? undefined : str(r.name, `openings[${i}].name`, 40));
       return {
         at: num(r.at, `openings[${i}].at`, 0, 1000),
         width: num(r.width, `openings[${i}].width`, 0.1, 100),
@@ -140,7 +156,26 @@ export const buildHandlers: Record<string, Handler> = {
       made.push(entity);
     });
     counters.newEntities += pieces.length;
-    return ok(`Wand angelegt: group="${group.id}", ${pieces.length} Teile${idsText(ids)}. ${boundsText(made)}`, `${name} gebaut (${pieces.length} Teile)`, true);
+    let openingText = '';
+    if (openings.length > 0) {
+      const len = Math.hypot(to[0] - from[0], to[1] - from[1]);
+      const u: [number, number] = [(to[0] - from[0]) / len, (to[1] - from[1]) / len];
+      const kinds = openings.map((o) => ((o.sill ?? 0) > 0 ? 'Fenster' : 'Tür') as OpeningInfo['kind']);
+      const names = nameOpenings(kinds.map((kind, i) => ({ kind, name: openingNames[i] })));
+      const infos: OpeningInfo[] = openings.map((o, i) => ({
+        name: names[i],
+        kind: kinds[i],
+        center: [from[0] + u[0] * (o.at + o.width / 2), y0 + (o.sill ?? 0) + o.height / 2, from[1] + u[1] * (o.at + o.width / 2)],
+        width: o.width,
+        height: o.height,
+        thickness,
+        u,
+        normal: [-u[1], u[0]],
+      }));
+      saveOpenings(ctx, group.id, infos);
+      openingText = ` Öffnungen gespeichert (für fit_to_opening/verify):\n${infos.map((o, i) => describeOpening(o, i)).join('\n')}`;
+    }
+    return ok(`Wand angelegt: group="${group.id}", ${pieces.length} Teile${idsText(ids)}. ${boundsText(made)}${openingText}`, `${name} gebaut (${pieces.length} Teile)`, true);
   },
 
   async add_beam(input, ctx, counters) {
@@ -266,6 +301,7 @@ export const buildHandlers: Record<string, Handler> = {
       mitte: roundVec([(box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, (box.min[2] + box.max[2]) / 2]),
       groesse: roundVec(size),
       ungefaehr: boxes.some((b) => b.approx),
+      oeffnungen: openingsOfGroup(ctx, entity.group).map((o, i) => describeOpening(o, i)),
       hinweis: boxes.some((b) => b.approx) ? 'Zusammengesetzte Bausteine (Bank, Baum …) sind nur geschätzt (Größe = scale, Ursprung am Boden).' : undefined,
     };
     return ok(wrapData(JSON.stringify(result)), `Maße gelesen (${round(size[0])} × ${round(size[1])} × ${round(size[2])} m)`, false);

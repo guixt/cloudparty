@@ -11,6 +11,7 @@ import { toImageBlocks } from './userImages';
 import { buildSystemPrompt } from './prompt';
 import * as settings from './settings';
 import { executeTool, type RunCounters } from './tools';
+import { diffEntities, type ChangeSet } from './placeTools';
 
 /** Höchstens so viele Nachrichten (≈ 20 Gesprächsrunden) bleiben zwischen Aufträgen erhalten. */
 export const MAX_HISTORY_MESSAGES = 40;
@@ -107,7 +108,20 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
     // Freigabe-Modus einmal pro Auftrag lesen, damit eine Umstellung mitten im Auftrag nicht halb wirkt.
     const startIds = new Set(store.getState().order);
     const createdSince = () => store.getState().order.filter((id) => !startIds.has(id));
-    const toolCtx = { store, bus, createdSince, getAvatar: deps.getAvatar, confirm, autoApprove: settings.getApproval() === 'auto', vision: settings.getVision(), captureView: deps.captureView, imageSearch: settings.getImageSearch(), fetchImage: deps.fetchImage };
+    const startEntities = new Map(Object.entries(store.getState().entities));
+    const changedSince = (): ChangeSet => {
+      const { entities } = store.getState();
+      const removed = [...startEntities].filter(([id]) => !entities[id]).map(([id, e]) => ({ id, name: e.name, group: e.group, groupName: e.groupName }));
+      const modified: ChangeSet['modified'] = [];
+      for (const [id, before] of startEntities) {
+        const after = entities[id];
+        if (!after || after === before) continue;
+        const fields = diffEntities(before, after);
+        if (fields.length > 0) modified.push({ id, fields });
+      }
+      return { created: createdSince(), removed, modified };
+    };
+    const toolCtx = { store, bus, createdSince, changedSince, getAvatar: deps.getAvatar, confirm, autoApprove: settings.getApproval() === 'auto', vision: settings.getVision(), captureView: deps.captureView, imageSearch: settings.getImageSearch(), fetchImage: deps.fetchImage };
 
     try {
       let finished = false;

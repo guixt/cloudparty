@@ -33,6 +33,7 @@ import { planHandlers } from './planTools';
 import { visionHandlers } from './visionTools';
 import { buildHandlers } from './buildTools';
 import { brickHandlers } from './brickTools';
+import { placeHandlers } from './placeTools';
 import { scriptTestHandlers } from './scriptTestTools';
 import { imageHandlers } from './imageTools';
 import { baseEntityFor, isKnownRef, knownRefs } from './refs';
@@ -55,6 +56,8 @@ export interface ToolContext {
   captureView?(req: import('./capture').ViewRequest): Promise<string | null>;
   /** Ids der Objekte, die seit Start des Auftrags neu entstanden und noch vorhanden sind. */
   createdSince?(): string[];
+  /** Neu, entfernt und geändert seit Start des Auftrags (für what_changed). */
+  changedSince?(): import('./placeTools').ChangeSet;
 }
 /** Zähler pro Auftrag. */
 export interface RunCounters {
@@ -537,7 +540,7 @@ const handlers: Record<string, Handler> = {
 /** Führt ein Werkzeug aus. Wirft nie; Fehler kommen als `ok: false` zurück. */
 export async function executeTool(name: string, rawInput: unknown, ctx: ToolContext, counters: RunCounters): Promise<ToolOutcome> {
   const def = getToolDefinition(name);
-  const handler = def ? (handlers[name] ?? groupHandlers[name] ?? libraryHandlers[name] ?? graphHandlers[name] ?? planHandlers[name] ?? visionHandlers[name] ?? buildHandlers[name] ?? brickHandlers[name] ?? scriptTestHandlers[name] ?? imageHandlers[name]) : undefined;
+  const handler = def ? (handlers[name] ?? groupHandlers[name] ?? libraryHandlers[name] ?? graphHandlers[name] ?? planHandlers[name] ?? visionHandlers[name] ?? buildHandlers[name] ?? brickHandlers[name] ?? scriptTestHandlers[name] ?? imageHandlers[name] ?? placeHandlers[name]) : undefined;
   if (!def || !handler) {
     const msg = `Unbekanntes Werkzeug "${name.slice(0, 40)}".`;
     return { ok: false, content: msg, summary: msg, mutated: false };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ISLAND, type EntitySpec, type WorldSpec } from '../../../shared/types';
 import { buildBlenderScript, skyColors } from './blenderScript';
-import { entityExtras, selectExportEntities } from './gltf';
+import { entityExtras, exportGroups, exportLabel, selectExportEntities } from './gltf';
 import { exportMaterialPlan } from './materialPlan';
 
 const ent = (id: string, ref: string, extra: Partial<EntitySpec> = {}): EntitySpec => ({ id, ref, transform: { pos: [0, 0, 0], rot: [0, 0, 0, 1], scale: [1, 1, 1] }, ...extra });
@@ -30,6 +30,17 @@ describe('Auswahl und Zusatzdaten', () => {
   });
   it('Extras tragen Gruppe, Name und Typ', () => {
     expect(entityExtras(ent('x', 'EntitySpec.brick', { name: 'Wand 1', group: 'grp_1', groupName: 'Mauer', material: { preset: 'lack' } }))).toMatchObject({ cp_id: 'x', cp_ref: 'EntitySpec.brick', cp_name: 'Wand 1', cp_group: 'grp_1', cp_group_name: 'Mauer', cp_preset: 'lack' });
+  });
+});
+
+describe('Namen und Gruppen im Export', () => {
+  it('Objektname bzw. Art als Knotenname, Gruppen mit Namen', () => {
+    const a = { id: 'e_1', ref: 'EntitySpec.box', name: 'Matratze', group: 'g1', groupName: 'Bett', transform: { pos: [0, 0, 0], rot: [0, 0, 0, 1], scale: [1, 1, 1] } } as never;
+    const b = { id: 'e_2', ref: 'EntitySpec.bench', group: 'g1', groupName: 'Bett', transform: { pos: [0, 0, 0], rot: [0, 0, 0, 1], scale: [1, 1, 1] } } as never;
+    expect(exportLabel(a)).toBe('Matratze');
+    expect(exportLabel(b)).toBe('bench');
+    const g = exportGroups([a, b]);
+    expect(g.get('g1')).toEqual({ name: 'Bett', ids: ['e_1', 'e_2'] });
   });
 });
 

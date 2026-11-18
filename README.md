@@ -192,3 +192,18 @@ Im KI-Chat lassen sich bis zu 4 Bilder pro Nachricht anhängen: Knopf 📎, Einf
 ## Boden und Grundplatten ohne Flimmern
 
 Die Inseloberfläche (`env.islandMat`) hat einen Tiefenversatz (`ISLAND_Z_OFFSET` in `src/engine/environment/island.ts`). Platten, Böden und Flächen, deren Oberkante genau bei y = 0 liegt, gewinnen dadurch immer gegen das Gras; das Z-Fighting (Streifen) entfällt, ein manuelles Anheben ist nicht mehr nötig.
+
+## KI: Platzieren und Prüfen
+
+Neue Werkzeuge, damit die KI nicht mehr Koordinaten raten muss:
+
+- **Öffnungen als Metadaten:** `add_wall` und `fill_bricks` speichern Türen und Fenster (Name, Mitte, Größe, Wanddicke, Vorderseite) in `world.extensions['cloudparty.ai.openings']`. Das Ergebnis der Werkzeuge, `get_bounds` und `group_entities` kennen sie.
+- **`fit_to_opening`:** passt eine Medien-Tafel oder einen Quader (Glasscheibe) in eine Öffnung ein (Größe, Position, Drehung, Blickseite `face`, `fit` contain/stretch, `mode` flush/surface). Der versteckte Versatz von Tafeln (Ursprung am Boden, Bildfläche 0,9 m darüber) ist eingerechnet.
+- **`place_relative`** (auf, unter, nördlich, südlich, östlich, westlich von einem anderen Teil, mit Abstand und Ausrichtung), **`align_entities`** (ausrichten und gleichmäßig verteilen), **`find_free_spot`** (freier Boden, ohne Überschneidung).
+- **`verify`:** rechnerische Prüfung (sitzt in Öffnung, berührt, steht auf dem Boden, Maße, innerhalb, keine Überschneidung) mit Messwert und Korrekturhinweis; **`what_changed`:** Zusammenfassung des Auftrags.
+- **`look`** kann mit `views` zwei Ansichten in einem Bild zeigen (zählt als ein Screenshot) und das Ziel mit `mark` magenta hervorheben.
+- `get_bounds` kennt jetzt die Maße von Medien-Tafeln (mit und ohne Standfüße).
+
+## Blender-Export: Namen und Gruppen
+
+Knoten heißen im Export wie das Objekt (sonst wie der Baustein, z. B. „box“), nicht mehr `entity.e_…`. Jede Gruppe wird ein Eltern-Knoten mit dem Gruppennamen (z. B. „Bett“); die Namen in der Szene werden danach zurückgesetzt.

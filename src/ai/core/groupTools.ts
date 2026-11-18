@@ -1,4 +1,5 @@
 /** Werkzeuge für Gruppen (group_entities, ungroup). */
+import { migrateOpenings } from './anchors';
 import { newEntityId } from '../../../shared/types';
 import { expandTargets, fail, getEntityOrGroup, isObj, ok, opts, str, type Handler, type ToolContext } from './tools';
 
@@ -21,6 +22,7 @@ export const groupHandlers: Record<string, Handler> = {
     const group = newEntityId('grp');
     const store = ctx.store.getState();
     for (const e of entities) store.updateEntity(e.id, { group, groupName: name }, opts);
+    migrateOpenings(ctx, oldGroups, group);
     // Reste alter Gruppen mit nur noch einem Mitglied auflösen.
     for (const old of oldGroups) {
       const rest = groupMembers(ctx, old);

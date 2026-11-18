@@ -4,7 +4,7 @@ import type { Vec3 } from '../../../shared/types';
 import { VIEW_NAMES, type ViewName } from './capture';
 import { entityBox } from './buildTools';
 import { unionBox } from './buildGeometry';
-import { fail, getEntityOrGroup, num, ok, type Handler, type ToolContext } from './tools';
+import { fail, getEntityOrGroup, resolveTargets, num, ok, type Handler, type ToolContext } from './tools';
 
 /** Mittelpunkt und Radius um ein Objekt (bei Gruppen: um alle Mitglieder). */
 export function boundsFor(ctx: ToolContext, id: unknown): { center: Vec3; radius: number } {
@@ -28,13 +28,21 @@ export const visionHandlers: Record<string, Handler> = {
     }
     const view = input.view === undefined ? 'iso' : input.view;
     if (typeof view !== 'string' || !(VIEW_NAMES as readonly string[]).includes(view)) fail(`view muss eines von ${VIEW_NAMES.join(', ')} sein.`);
+    let views: [ViewName, ViewName] | undefined;
+    if (input.views !== undefined) {
+      const v = input.views;
+      if (!Array.isArray(v) || v.length !== 2 || v.some((x) => typeof x !== 'string' || !(VIEW_NAMES as readonly string[]).includes(x))) fail(`views muss genau zwei Ansichten aus ${VIEW_NAMES.join(', ')} enthalten.`);
+      views = [(v as unknown[])[0], (v as unknown[])[1]] as [ViewName, ViewName];
+    }
     const distance = input.distance === undefined ? undefined : num(input.distance, 'distance', 2, 200);
 
     let center: Vec3;
     let radius = 4;
     const target = input.target;
+    let highlight: string[] | undefined;
     if (typeof target === 'string') {
       ({ center, radius } = boundsFor(ctx, target));
+      if (input.mark !== false) highlight = resolveTargets(ctx, target).targets.map((e) => e.id);
     } else if (Array.isArray(target)) {
       if (target.length !== 3) fail('target als Position braucht genau 3 Zahlen [x, y, z].');
       center = [num(target[0], 'target[0]', -AI_LIMITS.maxCoordinate, AI_LIMITS.maxCoordinate), num(target[1], 'target[1]', -AI_LIMITS.maxCoordinate, AI_LIMITS.maxCoordinate), num(target[2], 'target[2]', -AI_LIMITS.maxCoordinate, AI_LIMITS.maxCoordinate)];
@@ -46,9 +54,9 @@ export const visionHandlers: Record<string, Handler> = {
     }
 
     counters.screenshots = (counters.screenshots ?? 0) + 1;
-    const data = await capture({ center, radius, view: view as ViewName, ...(distance !== undefined ? { distance } : {}) });
+    const data = await capture({ center, radius, view: (views ? views[0] : view) as ViewName, ...(views ? { views } : {}), ...(highlight ? { highlight } : {}), ...(distance !== undefined ? { distance } : {}) });
     if (!data) return fail('Der Screenshot ist fehlgeschlagen.');
     const left = AI_LIMITS.maxScreenshotsPerRun - counters.screenshots;
-    return { ok: true, content: `Screenshot (${view}) um [${center.map((n) => Math.round(n * 10) / 10).join(', ')}]. Noch ${left} Screenshot(s) in diesem Auftrag erlaubt.`, summary: 'Welt angesehen', mutated: false, image: data };
+    return { ok: true, content: `Screenshot (${views ? `${views[0]} links, ${views[1]} rechts` : view}${highlight ? ', Ziel magenta markiert' : ''}) um [${center.map((n) => Math.round(n * 10) / 10).join(', ')}]. Noch ${left} Screenshot(s) in diesem Auftrag erlaubt.`, summary: 'Welt angesehen', mutated: false, image: data };
   },
 };
