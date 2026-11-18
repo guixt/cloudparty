@@ -68,13 +68,39 @@ def find_glb():
             return candidate
     return os.path.join(folders[0], GLB_NAME)
 
+def import_glb(path):
+    # Mehrere Aufrufarten, weil sich die Operator-Parameter zwischen Blender-Versionen unterscheiden.
+    folder, name = os.path.split(path)
+    attempts = [
+        {"filepath": path},
+        {"filepath": path, "directory": folder + os.sep, "files": [{"name": name}]},
+    ]
+    last = None
+    for kwargs in attempts:
+        try:
+            bpy.ops.import_scene.gltf(**kwargs)
+            return True
+        except Exception as error:  # noqa: BLE001
+            last = error
+            print("Import-Versuch fehlgeschlagen:", sorted(kwargs.keys()), "->", error)
+    print("Der automatische Import ist fehlgeschlagen:", last)
+    return False
+
 def main():
-    path = find_glb()
-    if not os.path.exists(path):
-        raise FileNotFoundError("Datei nicht gefunden: " + path + " (GLB_PATH im Skript setzen)")
-    before = set(bpy.data.objects.keys())
-    bpy.ops.import_scene.gltf(filepath=path)
-    imported = [o for o in bpy.data.objects if o.name not in before]
+    path = os.path.normpath(find_glb())
+    print("Cloudparty: suche", path, "vorhanden:", os.path.exists(path), "Größe:", os.path.getsize(path) if os.path.exists(path) else "-")
+    already = [o for o in bpy.data.objects if o.get("cp_id") is not None]
+    if not already:
+        if not os.path.exists(path):
+            raise FileNotFoundError("Datei nicht gefunden: " + path + " (GLB_PATH im Skript setzen)")
+        if not import_glb(path):
+            raise RuntimeError(
+                "Import nicht möglich. Importiere die Datei von Hand (Datei > Importieren > glTF 2.0, "
+                + path + ") und führe dieses Skript danach erneut aus: es erkennt die importierten Objekte."
+            )
+    else:
+        print("Cloudparty: vorhandene importierte Objekte gefunden, Import wird übersprungen.")
+    imported = [o for o in bpy.data.objects if o.get("cp_id") is not None]
 
     scene = bpy.context.scene
     scene.unit_settings.system = 'METRIC'

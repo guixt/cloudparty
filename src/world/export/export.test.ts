@@ -45,6 +45,11 @@ describe('Blender-Skript', () => {
     expect(py).toContain('SUN_DIRECTION = (-0.866, 0, 0.5)');
     expect(py).toContain('cp_group_name');
     expect(py.trim().endsWith('main()')).toBe(true);
+    // Robuster Import: mehrere Aufrufarten, Hinweis zum manuellen Import, Erkennung schon importierter Objekte
+    expect(py).toContain('def import_glb(path)');
+    expect(py).toContain('"directory": folder + os.sep');
+    expect(py).toContain('o.get("cp_id") is not None');
+    expect(py).toContain('Importiere die Datei von Hand');
   });
   it('Dateinamen mit Anführungszeichen brechen das Skript nicht', () => {
     const py = buildBlenderScript({ glbFile: 'a"b.glb', world });
