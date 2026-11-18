@@ -10,6 +10,8 @@ export const API_VERSION = '2023-06-01';
 export type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: unknown }
+  /** Vom Nutzer angehängtes Bild (Base64 ohne Präfix). */
+  | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'; data: string } }
   | { type: 'tool_result'; tool_use_id: string; content: string | ToolResultPart[]; is_error?: boolean };
 
 /** Teile eines Werkzeugergebnisses mit Bild (Screenshot als Base64-JPEG ohne Präfix). */

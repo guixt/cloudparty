@@ -6,7 +6,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { AssistantApi, AssistantEvent } from '../api';
 
 export type Message =
-  | { id: number; kind: 'user'; text: string }
+  | { id: number; kind: 'user'; text: string; images?: string[] }
   | { id: number; kind: 'assistant'; text: string }
   | { id: number; kind: 'tool'; name: string; summary: string; ok: boolean }
   | { id: number; kind: 'error'; message: string }
@@ -25,6 +25,8 @@ export type PromptResult = 'ok' | 'failed' | 'skipped';
 export interface QueuedPrompt {
   id: number;
   text: string;
+  /** Vom Nutzer angehängte Bilder (Daten-URLs). */
+  images?: string[];
   /** Kurzer Anzeigetext statt des (langen) Auftragstexts, z. B. bei Plan-Knoten. */
   label?: string;
   /** Wird direkt vor dem Start dieses Auftrags aufgerufen (z. B. frischer Gesprächsverlauf). */
@@ -57,8 +59,8 @@ function push(state: AiView, make: (id: number) => Message): AiView {
   return { ...state, messages: [...state.messages, make(state.nextId)], nextId: state.nextId + 1 };
 }
 
-export function addUser(state: AiView, text: string): AiView {
-  return push({ ...state, usage: null, changed: false }, (id) => ({ id, kind: 'user', text }));
+export function addUser(state: AiView, text: string, images?: string[]): AiView {
+  return push({ ...state, usage: null, changed: false }, (id) => ({ id, kind: 'user', text, ...(images && images.length > 0 ? { images } : {}) }));
 }
 
 /** Wendet ein Ereignis des Assistenten auf das Ansichtsmodell an. */
@@ -132,7 +134,7 @@ export interface ControllerDeps {
 
 export interface AiController {
   /** Startet die Nachricht sofort oder reiht sie in die Warteschlange ein, wenn gerade ein Auftrag läuft. */
-  send(prompt: string): Promise<void>;
+  send(prompt: string, images?: string[]): Promise<void>;
   /** Hält den laufenden Auftrag an; wartende Nachrichten bleiben erhalten, die Schlange pausiert. */
   stop(): void;
   /** Setzt eine pausierte Warteschlange fort. */
@@ -167,15 +169,16 @@ export function createController(deps: ControllerDeps): AiController {
   }
 
   /** Führt einen Auftrag aus. Gibt true zurück, wenn er regulär und ohne Fehler zu Ende ging. */
-  async function execute(text: string, api: AssistantApi, display?: string, maxOutputTokens?: number): Promise<boolean> {
+  async function execute(text: string, api: AssistantApi, display?: string, maxOutputTokens?: number, images?: string[]): Promise<boolean> {
     const ac = new AbortController();
     abort = ac;
     let failed = false;
-    update((s) => ({ ...addUser(s, display ?? text), running: true }));
+    update((s) => ({ ...addUser(s, display ?? text, images), running: true }));
     try {
       await api.run(text, {
         signal: ac.signal,
         ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+        ...(images && images.length > 0 ? { images } : {}),
         onEvent: (ev) => {
           if (ev.type === 'error' || (ev.type === 'done' && ev.stopped)) failed = true;
           update((s) => applyEvent(s, ev));
@@ -220,7 +223,7 @@ export function createController(deps: ControllerDeps): AiController {
         if (!next) return;
         update((v) => ({ ...v, queue: v.queue.slice(1) }));
         next.beforeRun?.();
-        const ok = await execute(next.text, api, next.label, next.maxOutputTokens);
+        const ok = await execute(next.text, api, next.label, next.maxOutputTokens, next.images);
         next.onResult?.(ok ? 'ok' : 'failed');
         if (!ok) {
           if (store.getState().queue.length > 0) update((v) => ({ ...v, paused: true }));
@@ -233,10 +236,10 @@ export function createController(deps: ControllerDeps): AiController {
   }
 
   return {
-    async send(prompt) {
+    async send(prompt, images) {
       const text = prompt.trim();
       const api = getApi();
-      if (!text || !api) return;
+      if ((!text && !(images && images.length > 0)) || !api) return;
       if (!api.getSettings().hasKey) {
         needKey();
         return;
@@ -245,7 +248,7 @@ export function createController(deps: ControllerDeps): AiController {
         notify(`Die Warteschlange ist voll (höchstens ${MAX_QUEUE} Nachrichten).`, 'error');
         return;
       }
-      update((s) => ({ ...s, queue: [...s.queue, { id: s.nextId, text }], nextId: s.nextId + 1 }));
+      update((s) => ({ ...s, queue: [...s.queue, { id: s.nextId, text: text || 'Siehe Bild.', ...(images && images.length > 0 ? { images } : {}) }], nextId: s.nextId + 1 }));
       await pump();
     },
     enqueuePrompt(prompt, hooks = {}) {

@@ -85,3 +85,13 @@
 .ai-queue-item { display: flex; align-items: center; gap: 6px; counter-increment: q; font-size: 13px; }
 .ai-queue-item::before { content: counter(q) '.'; color: var(--cp-muted); min-width: 1.6em; }
 .ai-queue-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Bilder anhängen */
+.ai-attachments { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px 0; }
+.ai-attachment { position: relative; display: inline-block; }
+.ai-attachment img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; border: 1px solid var(--cp-border); display: block; }
+.ai-attachment-remove { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; padding: 0; line-height: 16px; font-size: 10px; border-radius: 50%; border: 1px solid var(--cp-border); background: rgba(20, 24, 34, 0.95); color: inherit; cursor: pointer; }
+.ai-attachment-busy { font-size: 12px; }
+.ai-drop { outline: 2px dashed var(--cp-accent); outline-offset: -4px; border-radius: 8px; }
+.ai-user-images { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.ai-user-image { max-width: 120px; max-height: 90px; border-radius: 6px; display: block; }

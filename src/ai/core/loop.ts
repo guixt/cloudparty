@@ -7,6 +7,7 @@ import type { WorldStore } from '../../core/store';
 import { AiError, streamMessage, type ApiMessage, type ApiTool, type ContentBlock } from './client';
 import { dropImages, fitToBudget } from './budget';
 import { clip, logEvent } from './log';
+import { toImageBlocks } from './userImages';
 import { buildSystemPrompt } from './prompt';
 import * as settings from './settings';
 import { executeTool, type RunCounters } from './tools';
@@ -77,7 +78,8 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
     running = true;
     const signal = options.signal;
     const counters: RunCounters = { toolCalls: 0, newEntities: 0, removals: 0 };
-    const messages: ApiMessage[] = [...conversation, { role: 'user', content: text }];
+    const userImages = toImageBlocks(options.images);
+    const messages: ApiMessage[] = [...conversation, { role: 'user', content: userImages.length > 0 ? [...userImages, { type: 'text', text }] : text }];
     // Längengrenzen einmal pro Auftrag lesen (wie der Freigabe-Modus).
     const limits = settings.getTokenLimits();
     if (options.maxOutputTokens !== undefined && Number.isFinite(options.maxOutputTokens)) {
@@ -86,7 +88,7 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
     const currentFrom = conversation.length;
     const runStart = Date.now();
     const runId = `r${runStart.toString(36)}`;
-    logEvent('run.start', { run: runId, model: settings.getModel(), maxOutput: limits.maxOutputTokens, maxInput: limits.maxInputTokens, entities: store.getState().order.length }, { prompt: clip(text) });
+    logEvent('run.start', { run: runId, model: settings.getModel(), maxOutput: limits.maxOutputTokens, maxInput: limits.maxInputTokens, entities: store.getState().order.length, images: userImages.length }, { prompt: clip(text) });
     let answer = '';
     let changed = false;
     let stopped = false;
@@ -214,7 +216,7 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
     }
     if (changed) lastGroupUndoCount = deps.getHistory()?.undoCount ?? null;
     logEvent('run.end', { run: runId, ms: Date.now() - runStart, stopped, changed, toolCalls: counters.toolCalls, newEntities: counters.newEntities, truncations }, { answer: clip(answer.trim()) });
-    remember(text, answer.trim());
+    remember(userImages.length > 0 ? `${text}\n[Der Nutzer hatte ${userImages.length} Bild${userImages.length === 1 ? '' : 'er'} angehängt; sie sind in diesem Verlauf nicht mehr sichtbar.]` : text, answer.trim());
     emit({ type: 'done', stopped, changed });
   }
 

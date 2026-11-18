@@ -19,6 +19,8 @@ export type AssistantEvent =
 
 export interface RunOptions {
   signal?: AbortSignal;
+  /** Bilder des Nutzers als Daten-URLs (JPEG/PNG/WebP/GIF), höchstens 4; gehen mit der Nachricht an die KI. */
+  images?: string[];
   /** Ausgabegrenze nur für diesen Auftrag (Tokens, wird auf den erlaubten Bereich begrenzt); z. B. größere Grenze für Plan-Knoten. */
   maxOutputTokens?: number;
   onEvent: (event: AssistantEvent) => void;

@@ -389,6 +389,24 @@ describe('Freigabe-Modus', () => {
   });
 });
 
+describe('Bilder vom Nutzer', () => {
+  it('gehen als Bildblöcke vor dem Text in die erste Nachricht; spätere Aufträge bekommen nur einen Hinweis', async () => {
+    const s = setup();
+    const requests = mockFetch([textResponse('Ich sehe einen Grundriss.'), textResponse('ok')]);
+    await s.assistant.run('Baue das nach', { ...s.makeOptions(), images: ['data:image/png;base64,iVBORw0KGgo=', 'kaputt'] });
+    const first = requests[0].body.messages.at(-1);
+    expect(first.role).toBe('user');
+    const blocks = first.content as { type: string; text?: string; source?: { media_type: string; data: string } }[];
+    expect(blocks.map((b) => b.type)).toEqual(['image', 'text']);
+    expect(blocks[0].source).toMatchObject({ media_type: 'image/png', data: 'iVBORw0KGgo=' });
+    expect(blocks[1].text).toBe('Baue das nach');
+    await s.assistant.run('weiter', s.makeOptions());
+    const history = JSON.stringify(requests[1].body.messages);
+    expect(history).not.toContain('iVBORw0KGgo=');
+    expect(history).toContain('1 Bild angehängt');
+  });
+});
+
 describe('Abgeschnittene Antworten', () => {
   const cut = (events: unknown[]) => ({ events: [{ type: 'message_start', message: { usage: { input_tokens: 10, output_tokens: 1 } } }, ...events, { type: 'message_delta', delta: { stop_reason: 'max_tokens' }, usage: { output_tokens: 4096 } }, { type: 'message_stop' }] });
   const cutCall = () =>

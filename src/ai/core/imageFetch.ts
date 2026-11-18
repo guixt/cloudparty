@@ -42,8 +42,8 @@ export async function fetchImageAsDataUrl(url: string, maxBytes = MAX_IMAGE_BYTE
 }
 
 /** Zeichnet ein Bild stufenweise kleiner, bis das JPEG nicht größer als `maxBytes` ist (null: nicht möglich). */
-export function fitToJpeg(source: CanvasImageSource, width: number, height: number, maxBytes = MAX_IMAGE_BYTES, maxWidth = 1024): string | null {
-  for (const step of FIT_STEPS) {
+export function fitToJpeg(source: CanvasImageSource, width: number, height: number, maxBytes = MAX_IMAGE_BYTES, maxWidth = 1024, steps: { width: number; quality: number }[] = FIT_STEPS): string | null {
+  for (const step of steps) {
     const scale = Math.min(1, Math.min(step.width, maxWidth) / width);
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(width * scale));

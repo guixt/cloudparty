@@ -60,6 +60,19 @@ describe('controller', () => {
     expect(s.running).toBe(false);
     expect(s.changed).toBe(true);
   });
+  it('Bilder gehen mit der Nachricht an run und stehen in der Sprechblase; nur Bilder ohne Text sind erlaubt', async () => {
+    const seen: RunOptions[] = [];
+    const store = createAiStore();
+    const ctl = createController({ store, getApi: () => fakeApi(async (_p, o) => void seen.push(o)), notify: vi.fn(), needKey: vi.fn() });
+    await ctl.send('Baue das nach', ['data:image/png;base64,AAAA']);
+    await ctl.send('', ['data:image/png;base64,BBBB']);
+    await ctl.send('', []);
+    expect(seen).toHaveLength(2);
+    expect(seen[0].images).toEqual(['data:image/png;base64,AAAA']);
+    const users = store.getState().messages.filter((m) => m.kind === 'user') as { text: string; images?: string[] }[];
+    expect(users[0]).toMatchObject({ text: 'Baue das nach', images: ['data:image/png;base64,AAAA'] });
+    expect(users[1].text).toBe('Siehe Bild.');
+  });
   it('ohne Key: needKey statt run', async () => {
     const run = vi.fn();
     const needKey = vi.fn();
