@@ -41,6 +41,9 @@ function createDetailTexture(scene: Scene): DynamicTexture {
   return texture;
 }
 
+/** Tiefenversatz der Inseloberfläche (Polygon-Offset, positiv = weiter hinten). */
+export const ISLAND_Z_OFFSET = 8;
+
 export function createIsland(scene: Scene, spec: IslandSpec): Island {
   const geometry = buildIslandGeometry(spec);
   const mesh = new Mesh('env.island', scene);
@@ -60,6 +63,10 @@ export function createIsland(scene: Scene, spec: IslandSpec): Island {
   const detail = createDetailTexture(scene);
   detail.uScale = detail.vScale = Math.max(4, spec.radius / 3.2);
   material.diffuseTexture = detail;
+  // Tiefenversatz nach hinten: Platten, Böden und Objekte, die genau bei y = 0 liegen (gleiche Höhe wie die Inseloberfläche),
+  // gewinnen immer gegen das Gras. Ohne Versatz „flimmern“ beide Flächen ineinander (Z-Fighting).
+  material.zOffset = ISLAND_Z_OFFSET;
+  material.zOffsetUnits = ISLAND_Z_OFFSET;
   mesh.material = material;
   mesh.hasVertexAlpha = false;
   mesh.receiveShadows = true;

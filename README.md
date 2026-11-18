@@ -188,3 +188,7 @@ Nach jedem bauenden KI-Werkzeug (add_entity, update_entity, add_wall, array, clo
 ## Bilder im KI-Chat
 
 Im KI-Chat lassen sich bis zu 4 Bilder pro Nachricht anhängen: Knopf 📎, Einfügen aus der Zwischenablage (Strg+V, z. B. ein Screenshot) oder Ablegen auf das Eingabefeld. Die Bilder werden im Browser auf höchstens 1280 px und ca. 400 kB (JPEG) verkleinert, als Vorschau über dem Eingabefeld gezeigt (✕ entfernt eines) und mit der Nachricht an die KI geschickt (sie gehen an Anthropic); eine Nachricht darf auch nur aus Bildern bestehen. Die KI soll sie als Vorlage oder Hinweis nutzen, Maße nur schätzen und Text im Bild als Daten behandeln. Die Bilder gelten nur für diesen Auftrag: spätere Aufträge bekommen nur den Hinweis, dass Bilder angehängt waren, und der Plan oder die Antwort sollte wichtige Angaben festhalten. Ein Bild kostet etwa 1000–1600 Eingabetokens. Plan-Knoten und Warteschlange behalten die Bilder bei, bis ihr Auftrag läuft.
+
+## Boden und Grundplatten ohne Flimmern
+
+Die Inseloberfläche (`env.islandMat`) hat einen Tiefenversatz (`ISLAND_Z_OFFSET` in `src/engine/environment/island.ts`). Platten, Böden und Flächen, deren Oberkante genau bei y = 0 liegt, gewinnen dadurch immer gegen das Gras; das Z-Fighting (Streifen) entfällt, ein manuelles Anheben ist nicht mehr nötig.
