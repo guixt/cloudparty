@@ -4,6 +4,7 @@
  */
 import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
 import { Quaternion } from '@babylonjs/core/Maths/math.vector';
+import type { Material } from '@babylonjs/core/Materials/material';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { EntitySpec } from '../../../shared/types';
 import { entityIdOf, tagEntityNode, type GameContext, type GameModule } from '../../core/context';
@@ -39,6 +40,21 @@ function isInteractive(entity: EntitySpec | undefined): boolean {
   if (entity.script?.enabled && entity.script.source.trim()) return true;
   const seats = entity.state?.seats;
   return typeof seats === 'number' && seats > 0;
+}
+
+/**
+ * Räumt einen Entity-Knoten auf. Instanzen (Klemmbausteine) teilen sich Material und Geometrie mit ihrem Master:
+ * deren Material darf NICHT mit entsorgt werden, sonst verliert der Master sein Material (und alle anderen Steine auch).
+ */
+export function disposeNode(node: TransformNode): void {
+  const own = new Set<Material>();
+  for (const mesh of node.getChildMeshes(false)) {
+    const instanced = (mesh as { sourceMesh?: unknown }).sourceMesh !== undefined;
+    if (!instanced && mesh.material) own.add(mesh.material);
+  }
+  node.dispose(false, false);
+  const scene = node.getScene();
+  for (const m of own) if (scene.materials.includes(m)) m.dispose(false, true);
 }
 
 const entities: GameModule = {
@@ -85,7 +101,7 @@ const entities: GameModule = {
       if (!node) return;
       entityNodes.delete(id);
       bus.emit('entity.node.disposed', { id });
-      node.dispose(false, true);
+      disposeNode(node);
     };
 
     const rebuildAll = () => {

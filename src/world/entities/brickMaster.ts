@@ -7,6 +7,7 @@ import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import type { Scene } from '@babylonjs/core/scene';
 import { STUD_DIAMETER, STUD_HEIGHT, brickSize, studSpots, type BrickState } from '../../../shared/bricks';
 import { createArch, createCurvedSlope, createDome, createInvertedSlope, createQuarter, createSlope } from './brickShapes';
@@ -42,6 +43,30 @@ function bodyMesh(scene: Scene, st: BrickState): Mesh {
   }
 }
 
+/**
+ * Sorgt dafür, dass ein Mesh Texturkoordinaten hat (ebene Abbildung nach der dominanten Normalenachse). Die selbst gebauten
+ * Formen (Schräge, Bogen, Viertel …) haben keine; Meshes mit unterschiedlichen Vertex-Daten lassen sich nicht verschmelzen.
+ */
+export function ensureUvs(mesh: Mesh): void {
+  if (mesh.getVerticesData(VertexBuffer.UVKind)) return;
+  const pos = mesh.getVerticesData(VertexBuffer.PositionKind);
+  const nor = mesh.getVerticesData(VertexBuffer.NormalKind);
+  if (!pos) return;
+  const uvs = new Float32Array((pos.length / 3) * 2);
+  for (let i = 0; i < pos.length / 3; i++) {
+    const x = pos[i * 3];
+    const y = pos[i * 3 + 1];
+    const z = pos[i * 3 + 2];
+    const nx = Math.abs(nor?.[i * 3] ?? 0);
+    const ny = Math.abs(nor?.[i * 3 + 1] ?? 1);
+    const nz = Math.abs(nor?.[i * 3 + 2] ?? 0);
+    const [u, v] = nx >= ny && nx >= nz ? [z, y] : ny >= nz ? [x, z] : [x, y];
+    uvs[i * 2] = u * 2;
+    uvs[i * 2 + 1] = v * 2;
+  }
+  mesh.setVerticesData(VertexBuffer.UVKind, uvs);
+}
+
 /** Körper plus Noppen als ein einziges Mesh. */
 function buildMergedBrick(scene: Scene, st: BrickState): Mesh {
   const [, bh] = brickSize(st);
@@ -51,10 +76,20 @@ function buildMergedBrick(scene: Scene, st: BrickState): Mesh {
     stud.position.set(x, bh + STUD_HEIGHT / 2, z);
     parts.push(stud);
   }
-  for (const part of parts) part.computeWorldMatrix(true);
-  const merged = Mesh.MergeMeshes(parts, true, true, undefined, false, false);
-  if (!merged) throw new Error('Klemmbaustein konnte nicht zusammengesetzt werden');
-  return merged;
+  let merged: Mesh | null = null;
+  try {
+    for (const part of parts) {
+      ensureUvs(part);
+      part.computeWorldMatrix(true);
+    }
+    merged = Mesh.MergeMeshes(parts, true, true, undefined, false, false);
+    if (!merged) throw new Error('Klemmbaustein konnte nicht zusammengesetzt werden');
+    return merged;
+  } catch (error) {
+    // Keine Reste in der Szene zurücklassen (sonst entstehen sichtbare, nicht wählbare „Geisterteile“).
+    for (const part of parts) if (!part.isDisposed()) part.dispose();
+    throw error;
+  }
 }
 
 /**
@@ -70,7 +105,11 @@ export function getBrickMaster(scene: Scene, st: BrickState, appearance: string,
   }
   const key = `${st.kind}|${st.w}|${st.d}|${st.studs ? 1 : 0}|${appearance}`;
   const found = map.get(key);
-  if (found && !found.isDisposed()) return found;
+  if (found && !found.isDisposed()) {
+    // Das Material gehört dem Master; ist es verloren gegangen (z. B. entsorgt), neu erzeugen.
+    if (!found.material || !scene.materials.includes(found.material)) found.material = makeMaterial();
+    return found;
+  }
   const master = buildMergedBrick(scene, st);
   master.name = `brick.master.${key.slice(0, 40)}`;
   master.material = makeMaterial();
