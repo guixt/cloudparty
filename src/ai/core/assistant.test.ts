@@ -426,6 +426,24 @@ describe('Abgeschnittene Antworten', () => {
     expect(s.events.some((e) => e.type === 'error')).toBe(false);
   });
 
+  it('leere abgeschnittene Antwort bricht nicht ab, sondern setzt kürzer neu an', async () => {
+    const s = setup();
+    const requests = mockFetch([cut([]), textResponse('fertig')]);
+    await s.assistant.run('baue', s.makeOptions());
+    expect(requests).toHaveLength(2);
+    expect(JSON.stringify(requests[1].body.messages.at(-1).content)).toContain('abgeschnitten');
+    expect(s.events.some((e) => e.type === 'error')).toBe(false);
+  });
+
+  it('eine größere Ausgabegrenze nur für diesen Auftrag (z. B. Plan-Knoten) geht an die API', async () => {
+    const s = setup();
+    const requests = mockFetch([textResponse('ok'), textResponse('ok')]);
+    await s.assistant.run('a', s.makeOptions());
+    await s.assistant.run('b', { ...s.makeOptions(), maxOutputTokens: 9000 });
+    expect(requests[0].body.max_tokens).toBe(4096);
+    expect(requests[1].body.max_tokens).toBe(9000);
+  });
+
   it('nach zu vielen Abbrüchen gibt der Assistent mit Hinweis auf die Einstellung auf', async () => {
     const s = setup();
     mockFetch(Array.from({ length: 8 }, () => cutText('lang …')));

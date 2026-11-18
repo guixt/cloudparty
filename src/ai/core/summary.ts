@@ -6,6 +6,7 @@ import { PREFABS } from '../../world/entities/prefabs';
 import { extraCatalog } from './refs';
 import { quatToEuler } from '../../scripting/runtime/commands';
 import { graphToCompact } from '../../../shared/graphCompact';
+import { describeFront, frontDirection, hasFront } from '../../../shared/front';
 
 /** get_world zeigt den Graphen in Kompaktform (höchstens für diese Anzahl Objekte, je höchstens MAX_GRAPH_CHARS Zeichen). */
 export const MAX_GRAPH_OBJECTS = 20;
@@ -32,6 +33,14 @@ export function entitySummary(e: EntitySpec, includeGraph = false) {
     drehung_grad: r3(quatToEuler(e.transform.rot)),
     skalierung: r3(e.transform.scale),
   };
+  if (hasFront(e.ref)) {
+    const dir = frontDirection(e.transform.rot);
+    out.vorderseite = describeFront(dir);
+    // Schaut die Vorderseite zur Inselmitte (0, 0)? Hilfreich, um Tafeln zum Betrachter auszurichten.
+    const toCenter = [-e.transform.pos[0], -e.transform.pos[2]];
+    const len = Math.hypot(toCenter[0], toCenter[1]);
+    if (len > 0.5) out.vorderseite_zur_inselmitte = (dir[0] * toCenter[0] + dir[2] * toCenter[1]) / len > 0.3;
+  }
   if (e.material?.color) out.farbe = e.material.color;
   if (e.material?.preset) out.material_preset = e.material.preset;
   if (e.material?.pattern && e.material.pattern !== 'none') out.muster = e.material.pattern;
@@ -95,6 +104,7 @@ export function prefabCatalog() {
       kategorie: p.category,
       standard_skalierung: p.defaults.transform?.scale ?? [1, 1, 1],
       ursprung: (p.groundOffset ?? 0) > 0 ? 'Mitte' : 'Boden',
+      ...(hasFront(p.ref) ? { vorderseite: 'lokale +Z-Richtung (Rückseite leer); mit face_toward ausrichten' } : {}),
     })),
     // Bausteine des Bauen-Menüs ohne Prefab-Registrierung, z. B. die Medien-Tafeln.
     ...extraCatalog(),

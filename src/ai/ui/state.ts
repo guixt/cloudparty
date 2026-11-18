@@ -29,6 +29,8 @@ export interface QueuedPrompt {
   label?: string;
   /** Wird direkt vor dem Start dieses Auftrags aufgerufen (z. B. frischer Gesprächsverlauf). */
   beforeRun?: () => void;
+  /** Ausgabegrenze nur für diesen Auftrag (z. B. größer für Plan-Knoten). */
+  maxOutputTokens?: number;
   /** Meldet, wie der Auftrag endete. */
   onResult?: (result: PromptResult) => void;
 }
@@ -139,7 +141,7 @@ export interface AiController {
    * Reiht einen Auftrag in dieselbe Warteschlange wie normale Nachrichten ein (läuft gerade etwas, wartet er) und
    * liefert, wie er endete. Für Plan-Knoten: `label` erscheint in der Liste, `beforeRun` läuft direkt vor dem Start.
    */
-  enqueuePrompt(prompt: string, hooks?: { label?: string; beforeRun?: () => void }): Promise<PromptResult>;
+  enqueuePrompt(prompt: string, hooks?: { label?: string; beforeRun?: () => void; maxOutputTokens?: number }): Promise<PromptResult>;
   removeQueued(id: number): void;
   clearQueue(): void;
   answer(id: number, ok: boolean): void;
@@ -165,7 +167,7 @@ export function createController(deps: ControllerDeps): AiController {
   }
 
   /** Führt einen Auftrag aus. Gibt true zurück, wenn er regulär und ohne Fehler zu Ende ging. */
-  async function execute(text: string, api: AssistantApi, display?: string): Promise<boolean> {
+  async function execute(text: string, api: AssistantApi, display?: string, maxOutputTokens?: number): Promise<boolean> {
     const ac = new AbortController();
     abort = ac;
     let failed = false;
@@ -173,6 +175,7 @@ export function createController(deps: ControllerDeps): AiController {
     try {
       await api.run(text, {
         signal: ac.signal,
+        ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
         onEvent: (ev) => {
           if (ev.type === 'error' || (ev.type === 'done' && ev.stopped)) failed = true;
           update((s) => applyEvent(s, ev));
@@ -217,7 +220,7 @@ export function createController(deps: ControllerDeps): AiController {
         if (!next) return;
         update((v) => ({ ...v, queue: v.queue.slice(1) }));
         next.beforeRun?.();
-        const ok = await execute(next.text, api, next.label);
+        const ok = await execute(next.text, api, next.label, next.maxOutputTokens);
         next.onResult?.(ok ? 'ok' : 'failed');
         if (!ok) {
           if (store.getState().queue.length > 0) update((v) => ({ ...v, paused: true }));
@@ -258,7 +261,7 @@ export function createController(deps: ControllerDeps): AiController {
         return Promise.resolve('skipped');
       }
       return new Promise<PromptResult>((resolve) => {
-        update((s) => ({ ...s, queue: [...s.queue, { id: s.nextId, text, label: hooks.label, beforeRun: hooks.beforeRun, onResult: resolve }], nextId: s.nextId + 1 }));
+        update((s) => ({ ...s, queue: [...s.queue, { id: s.nextId, text, label: hooks.label, beforeRun: hooks.beforeRun, maxOutputTokens: hooks.maxOutputTokens, onResult: resolve }], nextId: s.nextId + 1 }));
         void pump();
       });
     },

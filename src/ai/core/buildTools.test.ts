@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AI_LIMITS } from '../../../shared/aiTools';
 import { EventBus } from '../../core/events';
 import { createWorldStore } from '../../core/store';
+import { frontDirection } from '../../../shared/front';
 import { executeTool, type RunCounters, type ToolContext } from './tools';
 
 function setup(canBuild = true) {
@@ -285,5 +286,33 @@ describe('Material-Voreinstellung und get_world-Details', () => {
     expect(wall.ok).toBe(true);
     const byName = JSON.parse(/<welt_daten>\n([\s\S]*)\n<\/welt_daten>/.exec((await t.run('get_world', { group: 'gartenmauer' })).content)![1]);
     expect(byName.objekte.length).toBeGreaterThan(2);
+  });
+});
+
+
+describe('face_toward und Blickrichtung', () => {
+  const front = (rot: readonly number[]) => frontDirection(rot);
+  it('Tafel schaut nach dem Anlegen zum Zielpunkt; get_world nennt die Blickrichtung', async () => {
+    const t = setup();
+    const r = await t.run('add_entity', { ref: 'EntitySpec.media-image', position: [10, 0, 0], face_toward: [0, 0], name: 'Bildtafel' });
+    expect(r.ok).toBe(true);
+    const e = t.all().find((x) => x.name === 'Bildtafel')!;
+    const d = front(e.transform.rot);
+    expect(d[0]).toBeCloseTo(-1, 3); // von x = 10 zur Mitte: nach −x
+    expect(Math.abs(d[2])).toBeLessThan(0.001);
+    const w = JSON.parse(/<welt_daten>\n([\s\S]*)\n<\/welt_daten>/.exec((await t.run('get_world', { name_contains: 'Bildtafel' })).content)![1]);
+    const row = w.objekte.find((o: { name: string }) => o.name === 'Bildtafel');
+    expect(row.vorderseite).toContain('−x');
+    expect(row.vorderseite_zur_inselmitte).toBe(true);
+  });
+  it('update_entity dreht nachträglich; face_toward mit Position [x, y, z]; ungültig wird abgelehnt', async () => {
+    const t = setup();
+    await t.run('add_entity', { ref: 'EntitySpec.media-text', position: [0, 0, 8], name: 'Schild' });
+    const id = t.all().find((x) => x.name === 'Schild')!.id;
+    expect((await t.run('update_entity', { id, face_toward: [0, 1.5, 20] })).ok).toBe(true);
+    expect(front(t.store.getState().entities[id].transform.rot)[2]).toBeCloseTo(1, 3); // zu +z
+    expect((await t.run('update_entity', { id, face_toward: [0, 0, 0] })).ok).toBe(true);
+    expect(front(t.store.getState().entities[id].transform.rot)[2]).toBeCloseTo(-1, 3); // zurück zur Mitte (−z)
+    expect((await t.run('update_entity', { id, face_toward: 'mitte' })).ok).toBe(false);
   });
 });

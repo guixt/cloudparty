@@ -170,3 +170,9 @@ Echte Bildraten auf deiner Grafikkarte kann ich nicht messen; die Zahlen oben ze
 ## Formatierte KI-Antworten
 
 Die Antworten im KI-Chat werden als Markdown dargestellt (`src/ai/ui/markdown.tsx`, ohne zusätzliche Bibliothek): Überschriften, Absätze, **fett**, *kursiv*, `Code`, durchgestrichen, Listen (auch nummeriert und verschachtelt), Zitate, Codeblöcke, Tabellen, Trennlinien und Links (nur http/https, öffnen in neuem Tab). Es wird kein HTML eingeschleust: alles entsteht als React-Elemente, fremdes HTML erscheint als Text. Unfertiger Text beim Streamen bleibt lesbar.
+
+## Ausrichtung von Tafeln und Plan-Knoten
+
+- **Vorderseite:** Tafeln (Bild, Folien, Web, Video, Text) und Spiegel zeigen ihre Inhalte nur auf der Vorderseite (lokale +Z-Richtung); die Rückseite ist leer. Im Baumodus zeigt ein grüner Pfeil vor der Tafel, wohin sie schaut. Beim Setzen aus der Palette dreht sich die Tafel zur Kamera.
+- **KI:** `add_entity`/`update_entity` kennen `face_toward` ([x, z] oder [x, y, z]) und drehen die Vorderseite zum Punkt; `get_world` nennt je Tafel `vorderseite` (Blickrichtung) und `vorderseite_zur_inselmitte`, der Katalog weist auf die Vorderseite hin.
+- **Plan-Knoten und Ausgabelänge:** Jeder Knoten läuft mit mindestens 8000 Tokens Ausgabegrenze (höher eingestellte Werte bleiben, Maximum 16000), unabhängig von der Chat-Einstellung; die Grenze steht im Auftragstext, die KI soll größere Knoten per `plan_add_node` teilen. Eine abgeschnittene Antwort (auch eine leere) lässt die KI kürzer neu ansetzen (bis zu 4 Mal), erst danach bricht der Knoten mit einer Meldung ab, die die Grenze nennt.

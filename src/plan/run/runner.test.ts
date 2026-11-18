@@ -3,7 +3,7 @@ import { PLAN_EXTENSION_KEY } from '../../../shared/plan';
 import { EventBus } from '../../core/events';
 import { createWorldStore } from '../../core/store';
 import { addNode, createPlan, getPlan, updateNode, type PlanCtx } from '../core/api';
-import { MAX_NODES_PER_RUN, RUN_TOKEN_LIMIT, buildNodePrompt, queueBlockReason, runPlan, type PromptResult, type RunDeps } from './runner';
+import { MAX_NODES_PER_RUN, PLAN_NODE_MIN_OUTPUT, RUN_TOKEN_LIMIT, buildNodePrompt, nodeOutputTokens, queueBlockReason, runPlan, type PromptResult, type RunDeps } from './runner';
 
 function setup() {
   const bus = new EventBus();
@@ -212,5 +212,29 @@ describe('Längenhinweis im Knoten-Auftrag', () => {
     expect(prompt).toContain('4096 Tokens');
     expect(prompt).toContain('plan_add_node');
     expect(buildNodePrompt('p1', 'n1', 8000)).toContain('8000 Tokens');
+  });
+});
+
+
+describe('Ausgabegrenze für Plan-Knoten', () => {
+  it('mindestens 8000, eine höhere Einstellung bleibt, Maximum 16000', () => {
+    expect(nodeOutputTokens(4096)).toBe(PLAN_NODE_MIN_OUTPUT);
+    expect(nodeOutputTokens(12000)).toBe(12000);
+    expect(nodeOutputTokens(99999)).toBe(16000);
+  });
+
+  it('jeder Knoten-Auftrag bekommt die Grenze mit, im Text und als Parameter', async () => {
+    const t = setup();
+    const plan = createPlan(t.ctx, 'Haus', [{ title: 'A' }]);
+    const seen: { max?: number; prompt: string }[] = [];
+    await runPlan(t.ctx, plan.id, undefined, {
+      ...t.base,
+      runPrompt: async (p, h) => {
+        seen.push({ max: h.maxOutputTokens, prompt: p });
+        return completing(t.ctx, plan.id)(p, h);
+      },
+    });
+    expect(seen[0].max).toBeGreaterThanOrEqual(PLAN_NODE_MIN_OUTPUT);
+    expect(seen[0].prompt).toContain(`${seen[0].max} Tokens`);
   });
 });

@@ -166,6 +166,7 @@ const particles = {
 const transformProps = {
   position: { ...vec3, description: 'Mittelpunkt in Metern (x, y, z); y nach oben, Inseloberseite bei y = 0' },
   rotation_degrees: { ...vec3, description: 'Drehung in Grad (x, y, z)' },
+  face_toward: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 3, description: 'Dreht das Objekt um die Senkrechte so, dass seine Vorderseite zum Punkt [x, z] (oder [x, y, z]) schaut. Für Tafeln, Spiegel und Schilder statt rotation_degrees zu raten; gilt nach `position`.' },
   scale: { ...vec3, description: 'Größe pro Achse (Faktor, 1 = Standardgröße)' },
 };
 

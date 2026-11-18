@@ -7,9 +7,19 @@
  * (Status „queued“) und startet danach (Status „running“).
  */
 import { isQueueable, isRunnable, queueableOrder, runOrder } from '../../../shared/plan';
+import { AI_TOKEN_LIMITS } from '../../../shared/aiTools';
 import { outputBudget } from '../../ai/core/prompt';
 import { getTokenLimits } from '../../ai/core/settings';
 import { PlanError, getPlan, updateNode, type PlanCtx } from '../core/api';
+
+/**
+ * Ausgabegrenze für einen Plan-Knoten: mindestens PLAN_NODE_MIN_OUTPUT, sonst die eingestellte Grenze (höchstens das Maximum).
+ * Bezahlt wird nur, was tatsächlich erzeugt wird; eine größere Grenze verhindert abgeschnittene Knoten.
+ */
+export const PLAN_NODE_MIN_OUTPUT = 8000;
+export function nodeOutputTokens(configured = getTokenLimits().maxOutputTokens): number {
+  return Math.min(AI_TOKEN_LIMITS.output.max, Math.max(configured, PLAN_NODE_MIN_OUTPUT));
+}
 
 /** Höchstens so viele Knoten pro „Alle ausführen“. */
 export const MAX_NODES_PER_RUN = 20;
@@ -23,7 +33,7 @@ export interface RunDeps {
    * Reiht einen Auftrag ein und meldet, wie er endete: ok = regulär beendet, failed = Fehler/Abbruch,
    * skipped = nie gestartet (kein Key, aus der Warteschlange entfernt). `beforeRun` läuft direkt vor dem Start.
    */
-  runPrompt(prompt: string, hooks: { label: string; beforeRun: () => void }): Promise<PromptResult>;
+  runPrompt(prompt: string, hooks: { label: string; beforeRun: () => void; maxOutputTokens?: number }): Promise<PromptResult>;
   /** Setzt den Gesprächsverlauf des Modells zurück (frischer Kontext je Knoten). */
   resetContext(): void;
   /** Tokens (Ein- plus Ausgabe) des zuletzt beendeten Auftrags. */
@@ -131,8 +141,10 @@ export async function runPlan(ctx: PlanCtx, planId: string, nodeId: string | und
     try {
       markQueued(ctx, planId, [id]);
       const label = `Plan: ${node.title}`.slice(0, 70);
-      result = await deps.runPrompt(buildNodePrompt(planId, id), {
+      const outTokens = nodeOutputTokens();
+      result = await deps.runPrompt(buildNodePrompt(planId, id, outTokens), {
         label,
+        maxOutputTokens: outTokens,
         beforeRun: () => {
           // Direkt vor dem eigentlichen Start: Knoten läuft jetzt, frischer Gesprächsverlauf.
           try {

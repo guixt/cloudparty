@@ -5,6 +5,8 @@ import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { newEntityId, type EntitySpec, type Vec3 } from '../../shared/types';
 import { entityIdOf, type GameContext } from '../core/context';
 import { createFromItem, type CatalogItem } from './catalog';
+import { hasFront, yawToward } from '../../shared/front';
+import { eulerToQuat } from '../scripting/runtime/commands';
 import { BRICK_REF, STUD, brickState, brickWorldPos, placedFromEntity, restLevel, type PlacedBrick } from '../../shared/bricks';
 import { fallbackPoint, placementY, snapValue, SNAP_POSITION } from './logic';
 import { alignDeltas, boxFromTransform, cloneEntities, distributeDeltas, groupPatches, nextGroupName, ungroupPatches, type AlignMode, type Box, type Patches } from './multi';
@@ -37,6 +39,7 @@ export function placeItem(ctx: GameContext, item: CatalogItem, surface?: Vec3): 
   const y = placementY(point[1], item.anchor, item.scale[1], item.baseHeight) + (item.lift ?? 0);
   const entity = createFromItem(item, [x, point[1], z], y);
   if (item.ref === BRICK_REF) snapBrickToStuds(ctx, entity);
+  if (hasFront(item.ref)) faceCamera(ctx, entity); // Tafeln und Spiegel schauen zum Betrachter
   ctx.store.getState().addEntity(entity, { source: 'local' });
   ctx.store.getState().select(entity.id);
   return entity;
@@ -186,4 +189,13 @@ function snapBrickToStuds(ctx: GameContext, entity: EntitySpec): void {
   const level = restLevel({ gx, gz, w: st.w, d: st.d }, others);
   const p = brickWorldPos({ gx, gz, w: st.w, d: st.d, level, plates: 1 }, [0, 0, 0]);
   entity.transform.pos = [p[0], Math.max(p[1], entity.transform.pos[1] - 0.001), p[2]];
+}
+
+/** Dreht Objekte mit Vorderseite (Tafeln, Spiegel) so, dass die Vorderseite zur Kamera schaut. */
+function faceCamera(ctx: GameContext, entity: EntitySpec): void {
+  const cam = ctx.scene.activeCamera;
+  if (!cam) return;
+  const p = cam.globalPosition;
+  const yaw = yawToward(entity.transform.pos[0], entity.transform.pos[2], p.x, p.z);
+  entity.transform.rot = eulerToQuat(0, yaw, 0);
 }

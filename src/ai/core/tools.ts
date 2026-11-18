@@ -24,6 +24,7 @@ import {
 } from '../../../shared/types';
 import { PREFABS, createEntityFromPrefab, getPrefab } from '../../world/entities/prefabs';
 import { eulerToQuat } from '../../scripting/runtime/commands';
+import { yawToward } from '../../../shared/front';
 import { buildWorldSummary, wrapData } from './summary';
 import { groupHandlers } from './groupTools';
 import { libraryHandlers } from './libraryTools';
@@ -328,6 +329,13 @@ export function applyCommon(entity: EntitySpec, input: Record<string, unknown>, 
     const d = vec(input.rotation_degrees, 'rotation_degrees', -3600, 3600);
     next.transform.rot = eulerToQuat(d[0], d[1], d[2]);
   }
+  if (input.face_toward !== undefined) {
+    const t = input.face_toward as unknown[];
+    if (!Array.isArray(t) || (t.length !== 2 && t.length !== 3) || t.some((v) => typeof v !== 'number' || !Number.isFinite(v))) fail('face_toward muss [x, z] oder [x, y, z] sein.');
+    const [tx, tz] = t.length === 2 ? [t[0] as number, t[1] as number] : [t[0] as number, t[2] as number];
+    const yaw = yawToward(next.transform.pos[0], next.transform.pos[2], tx, tz);
+    next.transform.rot = eulerToQuat(0, yaw, 0);
+  }
   if (input.scale !== undefined) next.transform.scale = size(input.scale, 'scale');
   if (input.material !== undefined) next.material = parseMaterial(input.material, existing?.material);
   if (input.physics !== undefined) next.physics = parsePhysics(input.physics);
@@ -368,7 +376,7 @@ const handlers: Record<string, Handler> = {
       const bad = ['position', 'rotation_degrees', 'scale', 'state'].filter((k) => input[k] !== undefined);
       if (bad.length > 0) fail(`Bei einer Gruppen-id sind ${bad.join(', ')} nicht erlaubt (jedes Teil hat eine eigene Lage). Nutze move_by, material, physics, particles oder name, oder clone_group zum Drehen/Spiegeln.`);
     }
-    const changed = ['name', 'position', 'rotation_degrees', 'scale', 'material', 'physics', 'particles', 'state', 'move_by'].some((k) => input[k] !== undefined);
+    const changed = ['name', 'position', 'rotation_degrees', 'face_toward', 'scale', 'material', 'physics', 'particles', 'state', 'move_by'].some((k) => input[k] !== undefined);
     if (!changed) fail('update_entity: keine Änderung angegeben.');
     targets.forEach((entity, i) => {
       const own = isGroup && input.name !== undefined ? { ...input, name: `${str(input.name, 'name', 80, true)} ${i + 1}` } : input;

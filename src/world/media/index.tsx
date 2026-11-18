@@ -8,6 +8,7 @@ import type { Observer } from '@babylonjs/core/Misc/observable';
 import type { Scene } from '@babylonjs/core/scene';
 import type { EntitySpec } from '../../../shared/types';
 import { entityIdOf, tagEntityNode, type GameContext, type GameModule } from '../../core/context';
+import { setBuildMarkersVisible } from '../entities/parts';
 import { buildBoard, layoutFromNode } from './board';
 import { mediaKindOfRef } from './helpers';
 import { MediaPanel } from './panel';
@@ -61,6 +62,7 @@ const mod: GameModule & { _dispose?: () => void } = {
           const kind = entity.media?.kind ?? refKind;
           const board = buildBoard(scene, node, id, kind, entity.state);
           for (const mesh of board.meshes) ctx.shadows.add(mesh);
+          setBuildMarkersVisible(node, ctx.store.getState().mode === 'build');
           surfaceArgs = { layout: board.layout, owned: { meshes: board.meshes, materials: board.materials } };
         } else {
           surfaceArgs = { layout: layoutFromNode(node), owned: { meshes: [], materials: [] } };

@@ -19,6 +19,8 @@ export type AssistantEvent =
 
 export interface RunOptions {
   signal?: AbortSignal;
+  /** Ausgabegrenze nur für diesen Auftrag (Tokens, wird auf den erlaubten Bereich begrenzt); z. B. größere Grenze für Plan-Knoten. */
+  maxOutputTokens?: number;
   onEvent: (event: AssistantEvent) => void;
   /** Wird für `confirm`-Ereignisse aufgerufen; true = ausführen. */
   confirm: (question: string, detail?: string) => Promise<boolean>;

@@ -1,5 +1,5 @@
 /** Der Assistent: Gesprächsverlauf, Tool-Use-Schleife, Undo-Gruppe. */
-import { AI_LIMITS, AI_MODELS, AI_TOOLS } from '../../../shared/aiTools';
+import { AI_LIMITS, AI_MODELS, AI_TOKEN_LIMITS, AI_TOOLS } from '../../../shared/aiTools';
 import type { Vec3 } from '../../../shared/types';
 import type { AssistantApi, AssistantEvent, RunOptions } from '../api';
 import type { EventBus } from '../../core/events';
@@ -80,6 +80,9 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
     const messages: ApiMessage[] = [...conversation, { role: 'user', content: text }];
     // Längengrenzen einmal pro Auftrag lesen (wie der Freigabe-Modus).
     const limits = settings.getTokenLimits();
+    if (options.maxOutputTokens !== undefined && Number.isFinite(options.maxOutputTokens)) {
+      limits.maxOutputTokens = Math.min(AI_TOKEN_LIMITS.output.max, Math.max(AI_TOKEN_LIMITS.output.min, Math.round(options.maxOutputTokens)));
+    }
     const currentFrom = conversation.length;
     const runStart = Date.now();
     const runId = `r${runStart.toString(36)}`;
@@ -133,18 +136,19 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
           truncations += 1;
           logEvent('truncated', { run: runId, round, count: truncations });
           if (truncations > MAX_TRUNCATIONS) {
-            emit({ type: 'error', message: 'Die Antwort der KI wurde mehrfach abgeschnitten, weil die maximale Ausgabelänge erreicht ist. Erhöhe sie in den KI-Einstellungen oder gib einen kleineren Auftrag.' });
+            emit({ type: 'error', message: `Die Antwort der KI wurde mehrfach abgeschnitten, weil die maximale Ausgabelänge (Grenze von ${limits.maxOutputTokens} Tokens) erreicht ist. Erhöhe sie in den KI-Einstellungen (bis ${AI_TOKEN_LIMITS.output.max}) oder teile den Auftrag bzw. den Plan-Knoten in kleinere Schritte.` });
             finished = true;
             break;
           }
           emit({ type: 'tool', name: 'weiter', summary: 'Antwort war zu lang – die KI macht in kleineren Schritten weiter', ok: true });
         }
         if (toolUses.length === 0) {
-          if (truncated && result.content.length > 0) {
+          if (truncated) {
+            // Auch eine leere abgeschnittene Antwort (z. B. nur Gedankentext) wird wie eine lange behandelt: kürzer neu ansetzen.
+            if (result.content.length === 0) logEvent('truncated.empty', { run: runId, round, outTokens: result.outputTokens, limit: limits.maxOutputTokens });
             messages.push({ role: 'user', content: CONTINUE_TEXT });
             continue;
           }
-          if (truncated) emit({ type: 'error', message: 'Die Antwort der KI wurde abgeschnitten, weil die maximale Ausgabelänge erreicht ist. Erhöhe sie in den KI-Einstellungen oder gib einen kleineren Auftrag.' });
           finished = true;
           break;
         }
