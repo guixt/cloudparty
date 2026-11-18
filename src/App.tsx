@@ -8,6 +8,7 @@ import type { GameContext } from './core/context';
 import { createUiRegistry, type UiPanel, type UiSlot } from './core/ui';
 import { startGame, type Game } from './engine/bootstrap';
 import { modules } from './modules';
+import { SLOT_DEFAULT, applySlotWidth, loadSlotWidth, saveSlotWidth, widthFromPointer, type ResizableSlot } from './ui/slotWidth';
 import './styles.css';
 
 const ui = createUiRegistry();
@@ -19,7 +20,56 @@ interface Toast {
   kind: 'info' | 'error';
 }
 
+/** Griff am inneren Rand einer seitlichen Leiste: mit der Maus ziehen verbreitert oder verschmälert sie, Doppelklick setzt zurück. */
+function SlotResizer({ slot }: { slot: ResizableSlot }) {
+  const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    document.body.classList.add('cp-resizing');
+    let last = loadSlotWidth(slot);
+    const move = (ev: PointerEvent) => {
+      last = widthFromPointer(slot, ev.clientX, window.innerWidth);
+      applySlotWidth(slot, last);
+    };
+    const up = (ev: PointerEvent) => {
+      target.releasePointerCapture?.(ev.pointerId);
+      target.removeEventListener('pointermove', move);
+      target.removeEventListener('pointerup', up);
+      target.removeEventListener('pointercancel', up);
+      document.body.classList.remove('cp-resizing');
+      saveSlotWidth(slot, last);
+    };
+    target.addEventListener('pointermove', move);
+    target.addEventListener('pointerup', up);
+    target.addEventListener('pointercancel', up);
+  };
+  return (
+    <div
+      className={`cp-slot-resizer cp-slot-resizer-${slot}`}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={slot === 'left' ? 'Breite der linken Leiste' : 'Breite der rechten Leiste'}
+      title="Ziehen: Breite ändern · Doppelklick: zurücksetzen"
+      data-testid={`resize-${slot}`}
+      onPointerDown={onDown}
+      onDoubleClick={() => {
+        applySlotWidth(slot, SLOT_DEFAULT[slot]);
+        saveSlotWidth(slot, SLOT_DEFAULT[slot]);
+      }}
+    />
+  );
+}
+
 function Slots({ ctx }: { ctx: GameContext }) {
+  useEffect(() => {
+    const apply = () => {
+      for (const slot of ['left', 'right'] as const) applySlotWidth(slot, loadSlotWidth(slot));
+    };
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
+  }, []);
   const panels = useStore(ui.store, (state) => state.panels);
   const mode = useStore(ctx.store, (state) => state.mode);
   const bySlot = (slot: UiSlot): UiPanel[] => panels.filter((panel) => panel.slot === slot);
@@ -30,6 +80,7 @@ function Slots({ ctx }: { ctx: GameContext }) {
           {bySlot(slot).map((panel) => (
             <panel.component key={panel.id} ctx={ctx} />
           ))}
+          {(slot === 'left' || slot === 'right') && <SlotResizer slot={slot} />}
         </div>
       ))}
     </div>

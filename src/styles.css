@@ -27,10 +27,18 @@ body { font-family: var(--cp-font); color: var(--cp-text); background: #6fb3f2; 
 .cp-slot > * { pointer-events: auto; }
 .cp-slot-top-left { top: 12px; left: 12px; flex-direction: column; align-items: flex-start; }
 .cp-slot-top-right { top: 12px; right: 12px; flex-direction: column; align-items: flex-end; }
-.cp-slot-left { top: 64px; left: 12px; bottom: calc(var(--cp-toolbar-height) + 24px); flex-direction: column; width: 240px; }
-.cp-slot-right { top: 64px; right: 12px; bottom: calc(var(--cp-toolbar-height) + 24px); flex-direction: column; width: 290px; }
+.cp-slot-left { top: 64px; left: 12px; bottom: calc(var(--cp-toolbar-height) + 24px); flex-direction: column; width: var(--cp-left-width, 240px); }
+.cp-slot-right { top: 64px; right: 12px; bottom: calc(var(--cp-toolbar-height) + 24px); flex-direction: column; width: var(--cp-right-width, 290px); }
 .cp-slot-bottom-left { left: 12px; bottom: calc(var(--cp-toolbar-height) + 24px); flex-direction: column; align-items: flex-start; }
-.cp-mode-build .cp-slot-bottom-left { left: 264px; }
+.cp-mode-build .cp-slot-bottom-left { left: calc(var(--cp-left-width, 240px) + 24px); }
+/* Griff zum Verbreitern der Leisten (nur sichtbar, wenn die Leiste Inhalt hat) */
+.cp-slot-resizer { position: absolute; top: 0; bottom: 0; width: 12px; cursor: col-resize; z-index: 2; touch-action: none; }
+.cp-slot-resizer-left { right: -10px; }
+.cp-slot-resizer-right { left: -10px; }
+.cp-slot-resizer::after { content: ''; position: absolute; top: 50%; left: 4px; width: 4px; height: 48px; margin-top: -24px; border-radius: 2px; background: rgba(255, 255, 255, 0.28); opacity: 0; transition: opacity 0.15s; }
+.cp-slot-resizer:hover::after, body.cp-resizing .cp-slot-resizer::after { opacity: 1; }
+.cp-slot:not(:has(> :not(.cp-slot-resizer))) .cp-slot-resizer { display: none; }
+body.cp-resizing { cursor: col-resize; user-select: none; }
 .cp-slot-toolbar { left: 50%; bottom: 12px; transform: translateX(-50%); height: var(--cp-toolbar-height); align-items: center;
   padding: 6px 10px; background: var(--cp-bg); border: 1px solid var(--cp-border); border-radius: 14px; backdrop-filter: blur(8px); }
 .cp-slot-toolbar { max-width: calc(100vw - 16px); overflow-x: auto; scrollbar-width: none; }
