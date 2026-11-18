@@ -316,3 +316,41 @@ describe('face_toward und Blickrichtung', () => {
     expect((await t.run('update_entity', { id, face_toward: 'mitte' })).ok).toBe(false);
   });
 });
+
+describe('Überschneidungsmeldung nach dem Bauen', () => {
+  it('add_entity meldet ein Objekt, das in ein anderes ragt, und ein Teil unter dem Boden', async () => {
+    const t = setup();
+    await t.run('add_entity', { ref: 'EntitySpec.box', position: [20, 0.5, 20], name: 'Kasten' });
+    const r = await t.run('add_entity', { ref: 'EntitySpec.box', position: [20.4, 0.5, 20], name: 'Nachbar' });
+    expect(r.ok).toBe(true);
+    expect(r.content).toContain('ACHTUNG – Überschneidungen');
+    expect(r.content).toContain('Kasten');
+    expect(r.summary).toContain('Überschneidung');
+    const low = await t.run('add_entity', { ref: 'EntitySpec.box', position: [30, 0, 30], name: 'Halbversunken' });
+    expect(low.content).toContain('unter der Inseloberfläche');
+    const fine = await t.run('add_entity', { ref: 'EntitySpec.box', position: [40, 0.5, 40], name: 'Frei' });
+    expect(fine.content).not.toContain('ACHTUNG');
+  });
+
+  it('Verschieben auf ein anderes Objekt wird gemeldet; check_overlaps findet es in der Welt', async () => {
+    const t = setup();
+    await t.run('add_entity', { ref: 'EntitySpec.box', position: [50, 0.5, 50], name: 'A' });
+    await t.run('add_entity', { ref: 'EntitySpec.box', position: [55, 0.5, 50], name: 'B' });
+    const moved = await t.run('update_entity', { id: 'B', position: [50.3, 0.5, 50] });
+    expect(moved.content).toContain('ACHTUNG');
+    const all = await t.run('check_overlaps', {});
+    expect(all.content).toContain('„A“');
+    const none = await t.run('check_overlaps', { id: 'A' });
+    expect(none.content).toContain('„B“');
+    await t.run('update_entity', { id: 'B', position: [55, 0.5, 50] });
+    expect((await t.run('check_overlaps', { id: 'A' })).content).toContain('Keine Überschneidungen');
+  });
+
+  it('exakt gemauerte Klemmbaustein-Wände melden nichts', async () => {
+    const t = setup();
+    const r = await t.run('fill_bricks', { mode: 'wall', x: 100, z: 100, cols: 8, rows: 6, layers: 3 });
+    expect(r.content).not.toContain('ACHTUNG');
+    const b = await t.run('add_bricks', { bricks: [{ x: 200, z: 200, w: 2, d: 4 }, { x: 200, z: 200, w: 2, d: 2 }] });
+    expect(b.content).not.toContain('ACHTUNG');
+  });
+});

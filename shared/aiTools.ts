@@ -114,6 +114,7 @@ export type AiToolName =
   | 'bricks_profile'
   | 'use_texture'
   | 'script_log'
+  | 'check_overlaps'
   | 'script_test'
   | 'use_image';
 
@@ -690,6 +691,13 @@ export const AI_TOOLS: AiToolDefinition[] = [
       required: ['x', 'z', 'width', 'segments'],
     },
     mutates: true,
+  },
+  {
+    name: 'check_overlaps',
+    description:
+      'Prüft, ob sich Objekte durchdringen (z. B. Balken, die in Wänden stecken, doppelte Böden, ineinander stehende Möbel). Ohne Argumente: die ganze Welt; mit `id` (Objekt, Gruppe oder Name): nur dieses Objekt bzw. diese Gruppe gegen alles andere. Liefert Paare mit Eindringtiefe und der Achse der kleinsten Verschiebung, außerdem Teile unter der Inseloberfläche. Gemessen werden Grundformen und Klemmbausteine; zusammengesetzte Bausteine (Bank, Baum …) ohne feste Maße nicht. Teile derselben Gruppe werden nicht gegeneinander geprüft. Beim Bauen meldet jedes Werkzeug neue Überschneidungen schon selbst.',
+    input_schema: { type: 'object', properties: { id: { type: 'string', description: 'Objekt-id, Gruppen-id oder Name (optional)' } } },
+    mutates: false,
   },
   {
     name: 'script_log',

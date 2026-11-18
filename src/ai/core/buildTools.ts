@@ -6,6 +6,7 @@ import { AI_LIMITS } from '../../../shared/aiTools';
 import { BRICK_REF, brickSize, brickState } from '../../../shared/bricks';
 import { DEFAULT_ISLAND, newEntityId, type EntitySpec, type Quat, type Vec3 } from '../../../shared/types';
 import { createEntityFromPrefab, getPrefab } from '../../world/entities/prefabs';
+import { belowSurface, describeBelowSurface, describeOverlaps, findOverlaps } from './overlap';
 import { baseEntityFor, isKnownRef, knownRefs } from './refs';
 import {
   GeometryError,
@@ -23,7 +24,7 @@ import {
   type Opening,
 } from './buildGeometry';
 import { wrapData } from './summary';
-import { applyCommon, coord, reserveEntities, fail, getEntityOrGroup, num, obj, ok, opts, str, vec, type Handler, type RunCounters, type ToolContext } from './tools';
+import { applyCommon, coord, reserveEntities, fail, getEntityOrGroup, resolveTargets, num, obj, ok, opts, str, vec, type Handler, type RunCounters, type ToolContext } from './tools';
 
 const MAX_WALL_PIECES = 100;
 const MAX_ARRAY_ITEMS = AI_LIMITS.maxPerCall;
@@ -98,6 +99,15 @@ function membersOf(ctx: ToolContext, e: EntitySpec): EntitySpec[] {
 }
 
 export const buildHandlers: Record<string, Handler> = {
+  check_overlaps(input, ctx) {
+    const { entities, order } = ctx.store.getState();
+    const ids = input.id === undefined ? [...order] : resolveTargets(ctx, input.id).targets.map((e) => e.id);
+    const result = findOverlaps(entities, order, ids, 20);
+    const below = belowSurface(entities, input.id === undefined ? order : ids);
+    const text = [result.total > 0 ? describeOverlaps(entities, result) : 'Keine Überschneidungen gefunden.', below.length > 0 ? describeBelowSurface(entities, below) : ''].filter(Boolean).join('\n');
+    return ok(wrapData(text), result.total > 0 ? `${result.total} Überschneidung${result.total === 1 ? '' : 'en'} gefunden` : 'Keine Überschneidungen', false);
+  },
+
   async add_wall(input, ctx, counters) {
     const from = xz(input.from, 'from');
     const to = xz(input.to, 'to');

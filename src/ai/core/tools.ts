@@ -36,6 +36,7 @@ import { brickHandlers } from './brickTools';
 import { scriptTestHandlers } from './scriptTestTools';
 import { imageHandlers } from './imageTools';
 import { baseEntityFor, isKnownRef, knownRefs } from './refs';
+import { belowSurface, describeBelowSurface, describeOverlaps, findOverlaps } from './overlap';
 
 export interface ToolContext {
   store: WorldStore;
@@ -547,7 +548,26 @@ export async function executeTool(name: string, rawInput: unknown, ctx: ToolCont
     if (def.mutates && !ctx.store.getState().canBuild) {
       return { ok: false, content: 'Der Nutzer hat auf dieser Insel kein Baurecht. Es kann nichts verändert werden; erkläre das dem Nutzer.', summary: 'Kein Baurecht', mutated: false };
     }
-    return await handler(input, ctx, counters);
+    const before = def.mutates ? ctx.store.getState() : null;
+    const beforeOrder = before ? new Set(before.order) : null;
+    const beforeTransforms = before ? new Map(before.order.map((id) => [id, before.entities[id]?.transform])) : null;
+    const outcome = await handler(input, ctx, counters);
+    if (!outcome.ok || !outcome.mutated || !beforeOrder || !beforeTransforms || name === 'check_overlaps') return outcome;
+    // Nach dem Bauen: neue oder verschobene Objekte auf Überschneidungen und Lage unter dem Boden prüfen.
+    const after = ctx.store.getState();
+    const changed: string[] = [];
+    for (const id of after.order) {
+      if (!beforeOrder.has(id) || beforeTransforms.get(id) !== after.entities[id]?.transform) changed.push(id);
+      if (changed.length >= 300) break;
+    }
+    if (changed.length === 0) return outcome;
+    const result = findOverlaps(after.entities, after.order, changed);
+    const below = belowSurface(after.entities, changed);
+    const notes: string[] = [];
+    if (result.total > 0) notes.push(describeOverlaps(after.entities, result));
+    if (below.length > 0) notes.push(describeBelowSurface(after.entities, below));
+    if (notes.length === 0) return outcome;
+    return { ...outcome, content: `${outcome.content}\n${notes.join('\n')}`, summary: result.total > 0 ? `${outcome.summary} (⚠ ${result.total} Überschneidung${result.total === 1 ? '' : 'en'})` : outcome.summary };
   } catch (error) {
     const message = error instanceof ToolError ? error.message : `Interner Fehler: ${(error as Error)?.message ?? 'unbekannt'}`;
     return { ok: false, content: message, summary: `${name} fehlgeschlagen: ${message}`.slice(0, 200), mutated: false };
