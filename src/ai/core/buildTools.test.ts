@@ -354,3 +354,35 @@ describe('Überschneidungsmeldung nach dem Bauen', () => {
     expect(b.content).not.toContain('ACHTUNG');
   });
 });
+
+describe('Verbesserte Hinweise', () => {
+  it('Überschneidungen vieler Paare werden je Gruppe zusammengefasst', async () => {
+    const t = setup();
+    await t.run('fill_bricks', { mode: 'floor', x: 0, z: 0, cols: 16, rows: 16, layers: 1, name: 'Fundament', origin: [60, 0, 60] });
+    const r = await t.run('fill_bricks', { mode: 'wall', x: 0, z: 0, cols: 16, rows: 16, layers: 2, name: 'Wände', origin: [60, 0, 60] });
+    expect(r.content).toContain('ACHTUNG – Überschneidungen');
+    expect(r.content).toMatch(/Gruppe „(Fundament|Wände)“[^\n]*Gruppe „(Fundament|Wände)“[^\n]*Paare/);
+    expect(r.content.split('\n').length).toBeLessThan(14);
+    expect(r.content).toContain('statt alles zu entfernen');
+  });
+
+  it('falsch abgetippte ids bekommen einen Vorschlag', async () => {
+    const t = setup();
+    const a = await t.run('add_entity', { ref: 'EntitySpec.box', position: [30, 0.5, 30], name: 'Wintergarten Tisch' });
+    const id = /id="([^"]+)"/.exec(a.content)![1];
+    const typo = `${id.slice(0, 5)} ${id.slice(5)}`;
+    const r = await t.run('update_entity', { id: typo, move_by: [1, 0, 0] });
+    expect(r.ok).toBe(false);
+    expect(r.content).toContain(`Meintest du: ${id}`);
+    const named = await t.run('get_bounds', { id: 'Wintergarten Einrichtung' });
+    expect(named.content).toContain('Wintergarten Tisch');
+  });
+
+  it('Wand mit mehr als 8 Fenstern und breite Rechtecke gehen jetzt', async () => {
+    const t = setup();
+    const openings = Array.from({ length: 12 }, (_, i) => ({ side: 'south', at: 2 + i * 5, width: 2, layers: 2, sill_layers: 1 }));
+    const r = await t.run('fill_bricks', { mode: 'wall', x: 0, z: 0, cols: 70, rows: 6, layers: 4, openings, origin: [80, 0, 80] });
+    expect(r.ok).toBe(true);
+    expect((await t.run('fill_bricks', { mode: 'wall', x: 0, z: 0, cols: 70, rows: 6, layers: 1, openings: Array.from({ length: 17 }, (_, i) => ({ side: 'south', at: i, width: 1, layers: 1 })) })).content).toContain('höchstens 16');
+  });
+});

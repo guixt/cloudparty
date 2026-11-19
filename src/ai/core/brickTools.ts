@@ -156,14 +156,14 @@ export const brickHandlers: Record<string, Handler> = {
     if (mode !== 'wall' && mode !== 'floor') fail('mode muss wall oder floor sein.');
     const gx0 = int(input.x, 'x', -500, 500);
     const gz0 = int(input.z, 'z', -500, 500);
-    const cols = int(input.cols, 'cols', 1, 64);
-    const rows = int(input.rows, 'rows', 1, 64);
+    const cols = int(input.cols, 'cols', 1, 128);
+    const rows = int(input.rows, 'rows', 1, 128);
     const layers = int(input.layers, 'layers', 1, 40);
     if (mode === 'wall' && (cols < 3 || rows < 3)) fail('Eine Wand braucht mindestens 3 × 3 Noppen.');
     const origin = originOf(input);
     const color = colorOf(input.color, 'color');
     const rawOpenings = input.openings === undefined ? [] : input.openings;
-    if (!Array.isArray(rawOpenings) || rawOpenings.length > 8) fail('openings muss eine Liste mit höchstens 8 Einträgen sein.');
+    if (!Array.isArray(rawOpenings) || rawOpenings.length > 16) fail('openings muss eine Liste mit höchstens 16 Einträgen sein (für mehr Fenster teile die Wand in zwei Aufrufe).');
     const openings: Opening[] = (rawOpenings as unknown[]).map((o, i) => {
       const r = obj(o, `openings[${i}]`);
       if (!['north', 'south', 'east', 'west'].includes(String(r.side))) fail(`openings[${i}].side muss north, south, east oder west sein.`);

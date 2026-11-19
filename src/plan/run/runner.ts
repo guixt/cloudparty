@@ -53,7 +53,7 @@ export function buildNodePrompt(planId: string, nodeId: string, maxOutputTokens 
   const b = outputBudget(maxOutputTokens);
   return [
     `Führe jetzt genau einen Knoten des Bauplans aus (plan="${planId}", node="${nodeId}").`,
-    'Lies ihn zuerst mit plan_get (plan und node): du siehst Titel, Notizen und die Ergebnisse der Vorgänger.',
+    'Lies ihn zuerst mit EINEM plan_get-Aufruf (plan und node): du siehst Titel, Notizen und die Ergebnisse der Vorgänger. Den ganzen Plan musst du nicht zusätzlich lesen.',
     'Baue nur diesen Knoten, passend zu den Maßen und Positionen der Vorgänger. Gruppiere zusammengehörige Teile mit group_entities, wenn es sinnvoll ist.',
     'Melde ihn am Ende mit plan_complete_node (ids der gebauten Objekte, Gruppe, kurze Zusammenfassung mit den wichtigen Maßen). Ändere andere Knoten nicht.',
     `Deine Antwort darf höchstens ${b.tokens} Tokens lang sein (etwa ${b.toolCalls} Werkzeugaufrufe). Arbeite in mehreren kleinen Schritten mit Werkzeugen, die viele Teile auf einmal erzeugen (add_wall, array, fill_bricks, clone_group), und schreibe keinen langen Text. Ist der Knoten dafür zu groß, teile ihn mit plan_add_node in kleinere Knoten (Vorgänger-Beziehung beachten), baue nur den ersten Teil und melde ihn mit plan_complete_node.`,

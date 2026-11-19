@@ -633,22 +633,22 @@ export const AI_TOOLS: AiToolDefinition[] = [
   {
     name: 'fill_bricks',
     description:
-      'Mauert ein Rechteck aus Klemmbausteinen mit versetzten Fugen (wie echtes Mauerwerk). `mode` = wall (einreihiger Rand: Hauswand, Turm) oder floor (volle Fläche aus Platten). `x`, `z` = Ecke in Noppen, `cols` × `rows` = Größe in Noppen (Wand: ≥ 3 × 3), `layers` = Anzahl Schichten (Wand: Stein hoch, Boden: Platten; Böden bestehen aus großen Platten bis 16 × 16 Noppen), `origin` [x, y, z] in Metern, `color`, `openings` (nur Wand; north = Seite mit kleinerem z, south = größerem z, west = kleinerem x, east = größerem x): [{ side: north|south|east|west, at (Noppen vom Wandanfang), width (Noppen), layers (Höhe in Schichten) }] für Türen und Fenster; mit `sill_layers` Brüstung. Bis zu 500 Steine pro Aufruf.',
+      'Mauert ein Rechteck aus Klemmbausteinen mit versetzten Fugen (wie echtes Mauerwerk). `mode` = wall (einreihiger Rand: Hauswand, Turm) oder floor (volle Fläche aus Platten). `x`, `z` = Ecke in Noppen, `cols` × `rows` = Größe in Noppen (Wand: ≥ 3 × 3), `layers` = Anzahl Schichten (Wand: Stein hoch, Boden: Platten; Böden bestehen aus großen Platten bis 16 × 16 Noppen), `origin` [x, y, z] in Metern, `color`, `openings` (nur Wand; north = Seite mit kleinerem z, south = größerem z, west = kleinerem x, east = größerem x): [{ side: north|south|east|west, at (Noppen vom Wandanfang), width (Noppen), layers (Höhe in Schichten) }] für Türen und Fenster; mit `sill_layers` Brüstung. Bis zu 500 Steine pro Aufruf, höchstens 16 Öffnungen, Breite und Tiefe höchstens 128 Noppen (größer: mehrere Aufrufe).',
     input_schema: {
       type: 'object',
       properties: {
         mode: { enum: ['wall', 'floor'] },
         x: { type: 'integer' },
         z: { type: 'integer' },
-        cols: { type: 'integer', minimum: 1, maximum: 64 },
-        rows: { type: 'integer', minimum: 1, maximum: 64 },
+        cols: { type: 'integer', minimum: 1, maximum: 128 },
+        rows: { type: 'integer', minimum: 1, maximum: 128 },
         layers: { type: 'integer', minimum: 1, maximum: 40 },
         origin: vec3,
         color,
         name: { type: 'string', maxLength: 80 },
         openings: {
           type: 'array',
-          maxItems: 8,
+          maxItems: 16,
           items: {
             type: 'object',
             properties: {

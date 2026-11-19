@@ -84,7 +84,7 @@ export interface Overlap {
  * Prüft die Objekte `checkIds` gegen alle anderen. Paare in derselben Gruppe werden übersprungen (Werkzeuge setzen die Teile
  * einer Gruppe passend), ebenso Paare, bei denen beide in `checkIds` liegen und zur selben Gruppe gehören.
  */
-export function findOverlaps(entities: Record<string, EntitySpec>, order: readonly string[], checkIds: readonly string[], limit = 12): { overlaps: Overlap[]; total: number } {
+export function findOverlaps(entities: Record<string, EntitySpec>, order: readonly string[], checkIds: readonly string[], limit = 12): { overlaps: Overlap[]; total: number; all?: Overlap[] } {
   const boxes = new Map<string, Obb>();
   for (const id of order) {
     const e = entities[id];
@@ -117,7 +117,7 @@ export function findOverlaps(entities: Record<string, EntitySpec>, order: readon
     }
   }
   found.sort((x, y) => y.depth - x.depth);
-  return { overlaps: found.slice(0, limit), total: found.length };
+  return { overlaps: found.slice(0, limit), total: found.length, all: found.slice(0, 2000) };
 }
 
 const r = (n: number) => Math.round(n * 100) / 100;
@@ -127,12 +127,33 @@ const axisName = (v: Vec3): string => {
   return ['x', 'y', 'z'][k];
 };
 
-/** Text für die KI: wer überschneidet sich mit wem und wie tief. */
-export function describeOverlaps(entities: Record<string, EntitySpec>, result: { overlaps: Overlap[]; total: number }): string {
+/** Text für die KI: wer überschneidet sich mit wem und wie tief; Paare derselben Gruppen werden zusammengefasst. */
+export function describeOverlaps(entities: Record<string, EntitySpec>, result: { overlaps: Overlap[]; total: number; all?: Overlap[] }): string {
   const name = (id: string) => entities[id]?.name || entities[id]?.ref.replace('EntitySpec.', '') || id;
-  const lines = result.overlaps.map((o) => `„${name(o.a)}“ (${o.a}) ↔ „${name(o.b)}“ (${o.b}): ${r(o.depth)} m ineinander, kleinste Verschiebung entlang ${axisName(o.axis)}`);
-  const more = result.total > result.overlaps.length ? ` (und ${result.total - result.overlaps.length} weitere)` : '';
-  return `ACHTUNG – Überschneidungen${more}:\n${lines.join('\n')}\nPrüfe, ob das gewollt ist (z. B. Dachbalken, der in einer Wand steckt). Sonst verschiebe oder verkleinere eines der Teile mit update_entity (Verschiebung entlang der genannten Achse um mindestens die Tiefe).`;
+  const label = (id: string) => {
+    const e = entities[id];
+    return e?.group ? `Gruppe „${e.groupName || 'ohne Namen'}“ (${e.group})` : `„${name(id)}“ (${id})`;
+  };
+  const list = result.all ?? result.overlaps;
+  const groups = new Map<string, { a: string; b: string; count: number; depth: number; axis: Vec3 }>();
+  for (const o of list) {
+    const la = label(o.a);
+    const lb = label(o.b);
+    const key = la < lb ? `${la}|${lb}` : `${lb}|${la}`;
+    const g = groups.get(key);
+    if (!g) groups.set(key, { a: la, b: lb, count: 1, depth: o.depth, axis: o.axis });
+    else {
+      g.count += 1;
+      if (o.depth > g.depth) {
+        g.depth = o.depth;
+        g.axis = o.axis;
+      }
+    }
+  }
+  const rows = [...groups.values()].sort((x, y) => y.depth - x.depth);
+  const lines = rows.slice(0, 8).map((g) => `${g.a} ↔ ${g.b}: ${g.count === 1 ? '1 Paar' : `${g.count} Paare`}, bis ${r(g.depth)} m ineinander, kleinste Verschiebung entlang ${axisName(g.axis)}`);
+  const more = rows.length > 8 ? `\n… und ${rows.length - 8} weitere Kombinationen` : '';
+  return `ACHTUNG – Überschneidungen (${result.total} Paar${result.total === 1 ? '' : 'e'}):\n${lines.join('\n')}${more}\nPrüfe, ob das gewollt ist (z. B. Dachbalken, der in einer Wand steckt). Sonst verschiebe das neue Teil oder die ganze Gruppe gezielt (update_entity mit move_by, mindestens um die genannte Tiefe entlang der Achse) statt alles zu entfernen und neu zu bauen. Steht eine Wand in der Bodenplatte, hebe sie (origin y) auf die Oberkante der Platte.`;
 }
 
 /** Objekte, deren Unterkante deutlich unter der Inseloberfläche (y = 0) liegt. */

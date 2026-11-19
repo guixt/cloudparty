@@ -113,7 +113,7 @@ export function vec(v: unknown, label: string, min: number, max: number): Vec3 {
 export const coord = (v: unknown, label: string) => vec(v, label, -AI_LIMITS.maxCoordinate, AI_LIMITS.maxCoordinate);
 function size(v: unknown, label: string): Vec3 {
   const s = vec(v, label, -AI_LIMITS.maxSize, AI_LIMITS.maxSize);
-  for (const c of s) if (Math.abs(c) < AI_LIMITS.minSize) return fail(`${label}: Beträge müssen mindestens ${AI_LIMITS.minSize} sein.`);
+  for (const c of s) if (Math.abs(c) < AI_LIMITS.minSize) return fail(`${label}: Beträge müssen mindestens ${AI_LIMITS.minSize} sein (auch flache Platten brauchen eine Dicke, z. B. [4, ${AI_LIMITS.minSize}, 4]; 0 ist nicht erlaubt).`);
   return s;
 }
 function color(v: unknown, label: string): string {
@@ -247,6 +247,43 @@ function groupByName(ctx: ToolContext, sid: string): EntitySpec[] {
   return new Set(hits.map((h) => h.group)).size === 1 ? hits : [];
 }
 
+function editDistance(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 3) return 99;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/** Hinweis „Meintest du …?“ bei falsch abgetippten ids oder Namen (Leerzeichen, Tippfehler, Teilnamen). */
+export function didYouMean(ctx: ToolContext, sid: string): string {
+  const needle = sid.replace(/\s+/g, '').toLowerCase();
+  const text = sid.trim().toLowerCase();
+  const words = text.split(/[^a-zäöüß0-9]+/).filter((w) => w.length >= 5);
+  if (!needle) return '';
+  const { entities, order } = ctx.store.getState();
+  const hits: string[] = [];
+  const seenGroups = new Set<string>();
+  for (const id of order) {
+    const e = entities[id];
+    if (!e) continue;
+    const name = (e.name ?? '').trim().toLowerCase();
+    const close = id.toLowerCase() === needle || editDistance(id.toLowerCase(), needle) <= 2;
+    const partial = text.length >= 4 && name.length >= 4 && (name.includes(text) || text.includes(name) || words.some((w) => name.includes(w)));
+    if (close || partial) hits.push(`${id}${e.name ? ` („${e.name}“)` : ''}`);
+    const gname = (e.groupName ?? '').trim().toLowerCase();
+    if (e.group && !seenGroups.has(e.group) && text.length >= 4 && gname.length >= 4 && (gname.includes(text) || text.includes(gname) || words.some((w) => gname.includes(w)))) {
+      seenGroups.add(e.group);
+      hits.push(`${e.group} (Gruppe „${e.groupName}“)`);
+    }
+    if (hits.length >= 4) break;
+  }
+  return hits.length > 0 ? ` Meintest du: ${hits.join(', ')}?` : '';
+}
+
 export function getEntity(ctx: ToolContext, id: unknown): EntitySpec {
   const sid = str(id, 'id', 200);
   const entity = ctx.store.getState().entities[sid];
@@ -255,7 +292,7 @@ export function getEntity(ctx: ToolContext, id: unknown): EntitySpec {
   if (members.length > 0) {
     return fail(`"${sid.slice(0, 60)}" ist eine Gruppen-id, kein Objekt. Nimm die id eines Mitglieds (z. B. "${members[0].id}"); get_bounds, clone_group, use_texture, look, remove_entity und update_entity (material, physics, particles, move_by) akzeptieren auch Gruppen-ids.`);
   }
-  return byName(ctx, sid) ?? fail(`Kein Objekt mit der id "${sid.slice(0, 60)}" gefunden. Rufe get_world auf, um gültige ids zu sehen.`);
+  return byName(ctx, sid) ?? fail(`Kein Objekt mit der id "${sid.slice(0, 60)}" gefunden.${didYouMean(ctx, sid)} Kopiere ids exakt aus einem Werkzeugergebnis oder rufe get_world auf.`);
 }
 
 /** Ziel eines Werkzeugs: ein Objekt oder (bei einer Gruppen-id oder einem eindeutigen Gruppennamen) alle Mitglieder der Gruppe. */
