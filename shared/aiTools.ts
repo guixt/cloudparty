@@ -122,7 +122,9 @@ export type AiToolName =
   | 'fit_to_opening'
   | 'verify'
   | 'find_free_spot'
-  | 'what_changed';
+  | 'what_changed'
+  | 'plan_connect'
+  | 'plan_edit';
 
 export interface AiToolDefinition {
   name: AiToolName;
@@ -417,7 +419,7 @@ export const AI_TOOLS: AiToolDefinition[] = [
   },
   {
     name: 'plan_add_node',
-    description: 'Fügt einem Plan einen Knoten hinzu; `after` = ids oder `key`-Kennungen bestehender Knoten, von denen er abhängt. `key` = eigene Kurzkennung (z. B. "n08"), auf die sich spätere Knoten in `after` beziehen können, auch im selben Schritt. Lege lange Pläne in Blöcken von höchstens etwa 8 Knoten an und halte Notizen kurz (unter 300 Zeichen).',
+    description: 'Fügt einem Plan einen Knoten hinzu; `after` = Vorgänger, `before` = Nachfolger (zum Einfügen); `after` = ids oder `key`-Kennungen bestehender Knoten, von denen er abhängt. `key` = eigene Kurzkennung (z. B. "n08"), auf die sich spätere Knoten in `after` beziehen können, auch im selben Schritt. Lege lange Pläne in Blöcken von höchstens etwa 8 Knoten an und halte Notizen kurz (unter 300 Zeichen).',
     input_schema: {
       type: 'object',
       properties: {
@@ -425,10 +427,33 @@ export const AI_TOOLS: AiToolDefinition[] = [
         title: { type: 'string', maxLength: 80 },
         key: { type: 'string', maxLength: 40 },
         notes: { type: 'string', maxLength: 2000 },
-        after: { type: 'array', items: { type: 'string' }, maxItems: 20 },
+        after: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'Vorgänger: Knoten, von denen dieser abhängt' },
+        before: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'Nachfolger: bestehende Knoten, die künftig von diesem abhängen (zum Einfügen in eine Kette)' },
       },
       required: ['plan', 'title'],
     },
+    mutates: true,
+  },
+  {
+    name: 'plan_connect',
+    description:
+      'Setzt oder entfernt Abhängigkeiten zwischen bestehenden Knoten, auch nachträglich (Knoten müssen dafür nicht neu angelegt werden). `chain` = Knoten in Ausführungsreihenfolge, werden hintereinander verbunden (A → B → C). `edges` = einzelne Verbindungen [{ from, to }]: „to“ hängt von „from“ ab, „from“ läuft zuerst. `remove: true` löst die genannten Verbindungen. Knoten werden über id, key oder Titelnummer angegeben. Kreise werden abgelehnt.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        plan: { type: 'string' },
+        chain: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 120 },
+        edges: { type: 'array', maxItems: 100, items: { type: 'object', properties: { from: { type: 'string' }, to: { type: 'string' } }, required: ['from', 'to'] } },
+        remove: { type: 'boolean' },
+      },
+      required: ['plan'],
+    },
+    mutates: true,
+  },
+  {
+    name: 'plan_edit',
+    description: 'Benennt einen Plan um (`title`) oder löscht ihn samt allen Knoten (`delete: true`, gebaute Objekte bleiben stehen; fragt den Nutzer, außer im Modus „alles erlaubt“).',
+    input_schema: { type: 'object', properties: { plan: { type: 'string' }, title: { type: 'string', maxLength: 80 }, delete: { type: 'boolean' } }, required: ['plan'] },
     mutates: true,
   },
   {

@@ -1,6 +1,6 @@
 /** Werkzeuge für das Plan-Board (plan_*). Titel und Notizen sind Nutzerinhalt = Daten. */
 import { PLAN_LIMITS, compactPlan, type PlanSpec } from '../../../shared/plan';
-import { PlanError, addNode, createPlan, getPlan, listPlans, removeNode, updateNode, type PlanCtx } from '../../plan/core/api';
+import { PlanError, addEdge, addNode, createPlan, deletePlan, getPlan, listPlans, removeEdge, removeNode, renamePlan, updateNode, type PlanCtx } from '../../plan/core/api';
 import { fail, ok, str, ToolError, type Handler, type ToolContext } from './tools';
 import { wrapData } from './summary';
 
@@ -46,7 +46,58 @@ function progress(plan: PlanSpec): string {
   return `${live.filter((n) => n.status === 'done').length}/${live.length} fertig`;
 }
 
+/** Knoten ohne jede Verbindung in einem Plan mit mehreren Knoten: Hinweis, dass plan_connect sie verbinden kann. */
+function isolatedHint(plan: PlanSpec): string {
+  if (plan.nodes.length < 2) return '';
+  const linked = new Set(plan.edges.flatMap((e) => [e.from, e.to]));
+  const alone = plan.nodes.filter((n) => !linked.has(n.id) && n.status !== 'disabled');
+  if (alone.length === 0 || alone.length === plan.nodes.length && plan.nodes.length < 3) return '';
+  return `\nHinweis: ${alone.length} Knoten haben keine Verbindungen (${alone.slice(0, 8).map((n) => n.key ?? n.id).join(', ')}). Mit plan_connect (edges oder chain) setzt du die Reihenfolge nachträglich, ohne Knoten neu anzulegen.`;
+}
+
+function edgeList(v: unknown, plan: PlanSpec): Array<{ from: string; to: string }> {
+  if (!Array.isArray(v) || v.length === 0) return fail('edges muss eine nicht leere Liste aus { from, to } sein.');
+  if (v.length > 100) return fail('Höchstens 100 Verbindungen pro Aufruf.');
+  return v.map((raw, i) => {
+    if (typeof raw !== 'object' || raw === null) return fail(`edges[${i}] ist ungültig.`);
+    const e = raw as Record<string, unknown>;
+    return { from: needNode(plan, e.from), to: needNode(plan, e.to) };
+  });
+}
+
 export const planHandlers: Record<string, Handler> = {
+  plan_connect(input, ctx) {
+    const plan = needPlan(ctx, input.plan);
+    const remove = input.remove === true;
+    let edges: Array<{ from: string; to: string }> = [];
+    if (input.chain !== undefined) {
+      const chain = stringList(input.chain, 'chain', 120).map((id) => needNode(plan, id));
+      if (chain.length < 2) fail('chain braucht mindestens 2 Knoten (in Ausführungsreihenfolge).');
+      edges = chain.slice(1).map((to, i) => ({ from: chain[i], to }));
+    }
+    if (input.edges !== undefined) edges = edges.concat(edgeList(input.edges, plan));
+    if (edges.length === 0) fail('Gib chain (Knoten in Reihenfolge) oder edges ([{ from, to }]) an. „from → to“ heißt: to hängt von from ab.');
+    let changed = 0;
+    for (const e of edges) {
+      const before = getPlan(pctx(ctx), plan.id)?.edges.length ?? 0;
+      guard(() => (remove ? removeEdge(pctx(ctx), plan.id, e) : addEdge(pctx(ctx), plan.id, e)));
+      if ((getPlan(pctx(ctx), plan.id)?.edges.length ?? 0) !== before) changed += 1;
+    }
+    return ok(`${remove ? 'Entfernt' : 'Verbunden'}: ${changed} von ${edges.length} Verbindungen (${remove ? 'gab es nicht mehr' : 'schon vorhanden'}: ${edges.length - changed}).`, `${changed} Verbindung${changed === 1 ? '' : 'en'} ${remove ? 'entfernt' : 'gesetzt'}`, changed > 0);
+  },
+
+  async plan_edit(input, ctx) {
+    const plan = needPlan(ctx, input.plan);
+    if (input.delete === true) {
+      if (!ctx.autoApprove && !(await ctx.confirm(`Die KI möchte den Plan „${plan.title}“ mit ${plan.nodes.length} Knoten löschen (gebaute Objekte bleiben stehen). Erlauben?`))) fail('Nutzer hat abgelehnt');
+      guard(() => deletePlan(pctx(ctx), plan.id));
+      return ok('Plan gelöscht.', `Plan „${plan.title}“ gelöscht`, true);
+    }
+    if (input.title === undefined) fail('Gib title (umbenennen) oder delete: true an.');
+    guard(() => renamePlan(pctx(ctx), plan.id, str(input.title, 'title', PLAN_LIMITS.title)));
+    return ok('Plan umbenannt.', 'Plan umbenannt', true);
+  },
+
   plan_create(input, ctx) {
     const title = str(input.title, 'title', PLAN_LIMITS.title);
     if (!Array.isArray(input.nodes)) fail('nodes muss eine Liste sein.');
@@ -83,7 +134,8 @@ export const planHandlers: Record<string, Handler> = {
       k.ergebnis.gruppe = groups.size === 1 ? ([...groups][0] ?? undefined) : undefined;
       k.ergebnis.ids = alive.map((e) => e.id);
     }
-    return ok(wrapData(JSON.stringify(compact)), only ? 'Knoten gelesen' : `Plan „${plan.title}“ gelesen`, false);
+    const hint = only ? '' : isolatedHint(plan);
+    return ok(wrapData(JSON.stringify(compact)) + hint, only ? 'Knoten gelesen' : `Plan „${plan.title}“ gelesen`, false);
   },
 
   plan_update_node(input, ctx) {
@@ -111,7 +163,9 @@ export const planHandlers: Record<string, Handler> = {
         afterIds,
       }),
     );
-    return ok(`Knoten angelegt: node="${created.id}"${created.key ? ` (key ${created.key})` : ''}.`, `Knoten „${created.title}“ hinzugefügt`, true);
+    const beforeIds = stringList(input.before, 'before', 20).map((id) => needNode(plan, id));
+    for (const to of beforeIds) guard(() => addEdge(pctx(ctx), plan.id, { from: created.id, to }));
+    return ok(`Knoten angelegt: node="${created.id}"${created.key ? ` (key ${created.key})` : ''}${beforeIds.length ? `, davor eingefügt vor ${beforeIds.length} Knoten` : ''}.`, `Knoten „${created.title}“ hinzugefügt`, true);
   },
 
   plan_remove_node(input, ctx) {

@@ -160,3 +160,58 @@ describe('Plan: eigene Kennungen und aktuelle Gruppen', () => {
     expect(got.content).not.toContain(oldGroup);
   });
 });
+
+describe('Pläne nachträglich verbinden und bearbeiten', () => {
+  const unlinked = { title: 'Stadt', nodes: ['A1', 'A2', 'A3', 'A4'].map((t, i) => ({ id: `a${i + 1}`, title: t })) };
+
+  it('plan_get weist auf Knoten ohne Verbindungen hin, plan_connect setzt eine Kette ohne Neuanlage', async () => {
+    const t = setup();
+    await t.run('plan_create', unlinked);
+    const [plan] = listPlans(t.ctx);
+    const ids = plan.nodes.map((n) => n.id);
+    expect((await t.run('plan_get', { plan: plan.id })).content).toContain('plan_connect');
+    const r = await t.run('plan_connect', { plan: plan.id, chain: ['a1', 'a2', 'a3', 'a4'] });
+    expect(r.ok).toBe(true);
+    expect(r.summary).toContain('3 Verbindungen');
+    const after = listPlans(t.ctx)[0];
+    expect(after.nodes.map((n) => n.id)).toEqual(ids);
+    expect(after.edges).toEqual([{ from: ids[0], to: ids[1] }, { from: ids[1], to: ids[2] }, { from: ids[2], to: ids[3] }]);
+    expect((await t.run('plan_get', { plan: plan.id })).content).not.toContain('keine Verbindungen');
+    const again = await t.run('plan_connect', { plan: plan.id, chain: ['a1', 'a2'] });
+    expect(again.content).toContain('schon vorhanden: 1');
+  });
+
+  it('plan_connect: einzelne Kanten, Lösen, Kreise und unbekannte Knoten werden abgewiesen', async () => {
+    const t = setup();
+    await t.run('plan_create', unlinked);
+    const [plan] = listPlans(t.ctx);
+    await t.run('plan_connect', { plan: plan.id, edges: [{ from: 'a1', to: 'a2' }, { from: 'a2', to: 'a3' }] });
+    expect(listPlans(t.ctx)[0].edges).toHaveLength(2);
+    expect((await t.run('plan_connect', { plan: plan.id, edges: [{ from: 'a3', to: 'a1' }] })).content).toContain('Kreis');
+    expect((await t.run('plan_connect', { plan: plan.id, edges: [{ from: 'a1', to: 'zz' }] })).ok).toBe(false);
+    expect((await t.run('plan_connect', { plan: plan.id })).ok).toBe(false);
+    await t.run('plan_connect', { plan: plan.id, remove: true, edges: [{ from: 'a1', to: 'a2' }] });
+    expect(listPlans(t.ctx)[0].edges).toHaveLength(1);
+  });
+
+  it('plan_add_node mit before fügt in eine Kette ein; plan_edit benennt um und löscht (mit Rückfrage)', async () => {
+    const t = setup();
+    await t.run('plan_create', house);
+    const [plan] = listPlans(t.ctx);
+    const r = await t.run('plan_add_node', { plan: plan.id, title: 'Keller', before: ['f'] });
+    expect(r.ok).toBe(true);
+    const p = listPlans(t.ctx)[0];
+    const keller = p.nodes.find((n) => n.title === 'Keller')!;
+    expect(p.edges).toContainEqual({ from: keller.id, to: 'f'.length ? p.nodes.find((n) => n.title === 'Fundament')!.id : '' });
+    expect((await t.run('plan_edit', { plan: plan.id, title: 'Villa' })).ok).toBe(true);
+    expect(listPlans(t.ctx)[0].title).toBe('Villa');
+    const noWay = await (async () => {
+      const ctx2: ToolContext = { ...t.ctx, confirm: async () => false };
+      return executeTool('plan_edit', { plan: plan.id, delete: true }, ctx2, { toolCalls: 0, newEntities: 0, removals: 0 });
+    })();
+    expect(noWay.ok).toBe(false);
+    expect(listPlans(t.ctx)).toHaveLength(1);
+    expect((await t.run('plan_edit', { plan: plan.id, delete: true })).ok).toBe(true);
+    expect(listPlans(t.ctx)).toHaveLength(0);
+  });
+});
