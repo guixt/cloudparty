@@ -283,6 +283,18 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+function WorldGrass({ shell }: Props) {
+  const store = shell.ctx.store;
+  const grass = useStore(store, (s) => s.world.environment.grass !== false);
+  const canBuild = useStore(store, (s) => s.canBuild);
+  return (
+    <label className="cp-row" title={canBuild ? 'Gras auf dieser Insel ein- oder ausblenden (gilt für alle Besucher)' : 'Nur mit Baurecht änderbar'}>
+      <input type="checkbox" data-testid="world-grass" checked={grass} disabled={!canBuild} onChange={(e) => store.getState().setEnvironment({ ...store.getState().world.environment, grass: e.target.checked }, { source: 'local' })} />
+      <span>Gras auf dieser Insel anzeigen</span>
+    </label>
+  );
+}
+
 function ExportBlender({ shell }: Props) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
@@ -365,6 +377,7 @@ function ThisTab({ shell }: Props) {
         <dt>Adresse</dt>
         <dd className="cps-id">{islandId}</dd>
       </dl>
+      <WorldGrass shell={shell} />
       <ExportBlender shell={shell} />
       <label className="cp-label" htmlFor="cps-link">
         Link zu diesem Ort
@@ -492,6 +505,7 @@ const HELP: { title: string; rows: [string, string][] }[] = [
       ['Rennen', 'Shift'],
       ['Springen', 'Leertaste'],
       ['Fliegen', 'F'],
+      ['Ich-Perspektive ein/aus', 'V'],
       ['Kamera', 'Maus ziehen, Mausrad zum Zoomen'],
       ['Gesten', '1 – 4'],
       ['Chat', 'Enter'],

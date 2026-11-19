@@ -22,6 +22,8 @@ export interface AvatarVisual {
   setMotion(motion: AvatarMotion): void;
   setEmotes(emotes: Record<string, EmoteState>): void;
   setAppearance(appearance: AvatarAppearance): void;
+  /** Optional: Darstellungsart (normal = farbig, neutral = einfarbige Maßstabsfigur). */
+  setStyle?(style: 'normal' | 'neutral'): void;
   /** Pro Frame aufrufen; dt in Sekunden. */
   update(dt: number): void;
   dispose(): void;

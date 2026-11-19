@@ -148,6 +148,8 @@ export interface EnvironmentSpec {
   dayCycle?: DayCycleSpec;
   /** Wetter (Standard: none). */
   weather?: WeatherKind;
+  /** Gras auf der Insel anzeigen (Standard: an). */
+  grass?: boolean;
 }
 
 export type MovementMode = 'grounded' | 'flying' | 'noclip';

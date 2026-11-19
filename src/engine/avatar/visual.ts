@@ -73,9 +73,12 @@ class ProceduralAvatar implements AvatarVisual {
   private lastX = NaN;
   private lastZ = NaN;
   private disposed = false;
+  private style: 'normal' | 'neutral' = 'normal';
+  private appearance: AvatarAppearance;
 
   constructor(private readonly ctx: Pick<GameContext, 'scene' | 'shadows'>, appearance: AvatarAppearance) {
     const { scene } = ctx;
+    this.appearance = appearance;
     this.root = new TransformNode('avatar', scene);
     this.palette = {
       skin: material(scene, 'skin', hex(appearance.skin, '#e0b089')),
@@ -248,10 +251,43 @@ class ProceduralAvatar implements AvatarVisual {
   }
 
   setAppearance(a: AvatarAppearance): void {
-    setColor(this.palette.skin, hex(a.skin, '#e0b089'));
-    setColor(this.palette.hair, hex(a.hair, '#3b2a1e'), 0.15);
-    setColor(this.palette.shirt, hex(a.shirt, '#3f8f4f'));
-    setColor(this.palette.pants, hex(a.pants, '#2f4468'));
+    this.appearance = a;
+    this.refreshColors();
+  }
+
+  /** normal = bunte Figur; neutral = einfarbige helle Maßstabsfigur ohne Gesicht (wirkt in Entwürfen ruhiger). */
+  setStyle(style: 'normal' | 'neutral'): void {
+    if (this.style === style) return;
+    this.style = style;
+    this.refreshColors();
+  }
+
+  private refreshColors(): void {
+    const a = this.appearance;
+    const P = this.palette;
+    if (this.style === 'neutral') {
+      const body = Color3.FromHexString('#d3d7de');
+      const dark = Color3.FromHexString('#b4bac4');
+      setColor(P.skin, body);
+      setColor(P.hair, body, 0.15);
+      setColor(P.shirt, body);
+      setColor(P.pants, dark);
+      setColor(P.shoe, dark);
+      setColor(P.sole, dark);
+      setColor(P.white, body, 0.22);
+      setColor(P.dark, body, 0.22);
+      setColor(P.mouth, body, 0.22);
+      return;
+    }
+    setColor(P.skin, hex(a.skin, '#e0b089'));
+    setColor(P.hair, hex(a.hair, '#3b2a1e'), 0.15);
+    setColor(P.shirt, hex(a.shirt, '#3f8f4f'));
+    setColor(P.pants, hex(a.pants, '#2f4468'));
+    setColor(P.shoe, new Color3(0.16, 0.14, 0.14));
+    setColor(P.sole, new Color3(0.9, 0.9, 0.88));
+    setColor(P.white, new Color3(0.97, 0.97, 0.97), 0.5);
+    setColor(P.dark, new Color3(0.08, 0.07, 0.1), 0.3);
+    setColor(P.mouth, new Color3(0.62, 0.28, 0.27));
   }
 
   update(dt: number): void {

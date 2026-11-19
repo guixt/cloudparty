@@ -198,6 +198,7 @@ const environmentSchema = z
     look: z.enum(['standard', 'filmisch', 'warm', 'kuehl', 'comic', 'retro']).optional(),
     dayCycle: z.object({ enabled: z.boolean(), minutesPerDay: finite.min(1, 'muss zwischen 1 und 240 liegen').max(240, 'muss zwischen 1 und 240 liegen') }).optional(),
     weather: z.enum(['none', 'rain', 'snow', 'fog', 'fireflies']).optional(),
+    grass: z.boolean().optional(),
   });
 
 const rulesSchema = z.object({

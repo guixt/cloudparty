@@ -8,6 +8,7 @@ import type { GameContext, GameModule } from '../core/context';
 import { ChatPanel } from './chat';
 import { parseHashIsland } from './chatLogic';
 import { TagLayer } from './nameTags';
+import { avatarView, figureShown } from '../engine/avatar/view';
 import { netStore } from './netStore';
 import { StatusBadge } from './status';
 import type { SocketLike } from './connection';
@@ -44,6 +45,7 @@ function start(ctx: GameContext): () => void {
     variant: 'self',
     getName: () => ctx.localAvatar.identity.displayName,
     getWorld: (o) => {
+      if (!figureShown(avatarView.getState(), ctx.store.getState().mode)) return false; // lokal ausgeblendet
       const p = ctx.localAvatar.presence.position;
       o.set(p[0], p[1] + 1.75 + 0.25, p[2]);
       return true;

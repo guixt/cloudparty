@@ -207,3 +207,9 @@ Neue Werkzeuge, damit die KI nicht mehr Koordinaten raten muss:
 ## Blender-Export: Namen und Gruppen
 
 Knoten heißen im Export wie das Objekt (sonst wie der Baustein, z. B. „box“), nicht mehr `entity.e_…`. Jede Gruppe wird ein Eltern-Knoten mit dem Gruppennamen (z. B. „Bett“); die Namen in der Szene werden danach zurückgesetzt.
+
+## Figur, Ich-Perspektive und Gras
+
+- **Figur (nur lokal):** Menü „Aussehen“ › Figur: *Normal*, *Neutral* (einfarbige helle Maßstabsfigur ohne Gesicht) oder *Ausgeblendet* (Figur und Namensschild). Andere Besucher sehen deine Figur weiterhin. Gespeichert pro Browser (`cloudparty.avatar.view`).
+- **Ich-Perspektive:** Taste **V** oder Knopf „Ich-Sicht“ in der Leiste (auch im Aussehen-Dialog). Die Kamera sitzt auf Augenhöhe, die Figur ist dabei ausgeblendet; Blick mit gedrückter Maustaste ziehen, Bewegung wie gewohnt mit WASD. Im Baumodus gilt nur die Figur-Einstellung.
+- **Gras pro Insel:** Menü › Diese Insel › „Gras auf dieser Insel anzeigen“ (nur mit Baurecht; gilt für alle Besucher, gespeichert in der Welt als `environment.grass`). Die KI kann es mit `set_environment` (`grass`) setzen. Die grüne Bodenfläche bleibt, nur die 3D-Grashalme entfallen.

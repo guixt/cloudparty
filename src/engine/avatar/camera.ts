@@ -10,6 +10,8 @@ import type { Scene } from '@babylonjs/core/scene';
 
 export const CAMERA_NAME = 'avatar.camera';
 const MIN_CAMERA_Y = 0.35;
+const FIRST_PERSON_RADIUS = 0.05;
+const FIRST_PERSON_SENSIBILITY = 600;
 
 /** Größte Neigung (beta), bei der die Kamera noch über `minY` bleibt. Rein rechnerisch, getestet. */
 export function maxBetaAboveGround(targetY: number, radius: number, minY: number): number {
@@ -24,6 +26,8 @@ export class AvatarCamera {
   private attached = false;
   private readonly desired = new Vector3();
   private snapNext = true;
+  firstPerson = false;
+  private savedRadius = 5.5;
 
   constructor(
     private readonly scene: Scene,
@@ -44,6 +48,37 @@ export class AvatarCamera {
     camera.fov = 0.9;
     camera.inputs.removeByType('ArcRotateCameraKeyboardMoveInput'); // Pfeiltasten steuern den Avatar
     this.camera = camera;
+  }
+
+  /** Ich-Perspektive: Kamera auf Augenhöhe im Avatar, Blickrichtung per Maus (ziehen). */
+  setFirstPerson(on: boolean): void {
+    if (this.firstPerson === on) return;
+    const c = this.camera;
+    this.firstPerson = on;
+    if (on) {
+      this.savedRadius = c.radius;
+      c.lowerRadiusLimit = FIRST_PERSON_RADIUS;
+      c.upperRadiusLimit = FIRST_PERSON_RADIUS;
+      c.radius = FIRST_PERSON_RADIUS;
+      c.lowerBetaLimit = 0.12;
+      c.upperBetaLimit = Math.PI - 0.12;
+      // Mausblick: nach rechts ziehen = nach rechts schauen, nach oben ziehen = nach oben schauen (im Browser gemessen).
+      c.angularSensibilityX = FIRST_PERSON_SENSIBILITY;
+      c.angularSensibilityY = FIRST_PERSON_SENSIBILITY;
+      c.minZ = 0.03;
+      c.inertia = 0.6;
+    } else {
+      c.lowerRadiusLimit = 1.6;
+      c.upperRadiusLimit = 30;
+      c.radius = Math.min(30, Math.max(1.6, this.savedRadius));
+      c.lowerBetaLimit = 0.2;
+      c.upperBetaLimit = Math.PI / 2 + 0.35;
+      c.angularSensibilityX = 700;
+      c.angularSensibilityY = 700;
+      c.minZ = 0.1;
+      c.inertia = 0.82;
+    }
+    this.snapNext = true;
   }
 
   /** Kamera hinter den Avatar drehen (yaw = Blickrichtung des Avatars). */
@@ -84,6 +119,11 @@ export class AvatarCamera {
   update(dt: number, feet: readonly [number, number, number], focusHeight: number): void {
     this.desired.set(feet[0], feet[1] + focusHeight, feet[2]);
     const target = this.camera.target;
+    if (this.firstPerson) {
+      target.copyFrom(this.desired);
+      this.snapNext = false;
+      return;
+    }
     if (this.snapNext) {
       target.copyFrom(this.desired);
       this.snapNext = false;

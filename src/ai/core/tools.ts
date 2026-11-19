@@ -457,6 +457,11 @@ const handlers: Record<string, Handler> = {
       next.weather = oneOf(input.weather, 'weather', WEATHER_KINDS) as WeatherKind;
       any = true;
     }
+    if (input.grass !== undefined) {
+      if (typeof input.grass !== 'boolean') fail('grass muss true oder false sein.');
+      next.grass = input.grass as boolean;
+      any = true;
+    }
     if (input.day_cycle_enabled !== undefined || input.day_cycle_minutes !== undefined) {
       const cycle = { enabled: false, minutesPerDay: 20, ...(next.dayCycle ?? {}) };
       if (input.day_cycle_enabled !== undefined) {

@@ -39,6 +39,8 @@ export function createNatureFeature(handle: EnvironmentHandle): EnvironmentFeatu
   let trees: TreeSway | null = guard('Bäume', () => createTreeSway(handle)) ?? null;
   let islandSpec: { radius: number; seed: number } | null = null;
   let density = ctx.quality.features().grassDensity;
+  let grassOn = true;
+  const effectiveDensity = () => (grassOn ? density : 0);
   let footprintTimer = -1;
 
   // Tageszyklus
@@ -105,6 +107,14 @@ export function createNatureFeature(handle: EnvironmentHandle): EnvironmentFeatu
     apply(env) {
       if (applying) return;
       base = storeEnv() ?? env;
+      const wantGrass = base.grass !== false;
+      if (wantGrass !== grassOn) {
+        grassOn = wantGrass;
+        guard('Gras', () => {
+          grass?.configure(islandSpec, effectiveDensity());
+          scheduleFootprints();
+        });
+      }
       if (base.dayCycle?.enabled) {
         const dir = parseLightDirection(base.light?.direction);
         const key = `${Math.round(dir.azimuth)}/${Math.round(dir.elevation)}`;
@@ -121,7 +131,7 @@ export function createNatureFeature(handle: EnvironmentHandle): EnvironmentFeatu
     islandChanged(island: Island | null) {
       const spec = ctx.store.getState().world.island;
       islandSpec = island ? { radius: spec?.radius ?? DEFAULT_ISLAND.radius, seed: spec?.seed ?? DEFAULT_ISLAND.seed } : null;
-      guard('Gras', () => grass?.configure(islandSpec, density));
+      guard('Gras', () => grass?.configure(islandSpec, effectiveDensity()));
       scheduleFootprints();
     },
     update(dt, time) {
@@ -147,7 +157,7 @@ export function createNatureFeature(handle: EnvironmentHandle): EnvironmentFeatu
     onQuality(features: QualityFeatures) {
       density = features.grassDensity;
       guard('Gras', () => {
-        grass?.configure(islandSpec, density);
+        grass?.configure(islandSpec, effectiveDensity());
         scheduleFootprints();
       });
     },

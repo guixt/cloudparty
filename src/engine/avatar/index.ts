@@ -26,6 +26,7 @@ import {
 import { AppearanceDialog, GesturesPanel } from './ui';
 import { avatarActions, avatarUi } from './uiState';
 import { createAvatarFactory } from './visual';
+import { avatarView, figureShown, setAvatarView } from './view';
 
 const SPAWN_REF = 'EntitySpec.avatar-spawn';
 
@@ -224,6 +225,21 @@ const avatar: GameModule = {
       }
     };
 
+    // ---- Figur und Perspektive (nur lokal; andere sehen die Figur weiterhin)
+    const applyView = () => {
+      const v = avatarView.getState();
+      cam.setFirstPerson(v.camera === 'first');
+      visual.setStyle?.(v.figure === 'neutral' ? 'neutral' : 'normal');
+      visual.root.setEnabled(figureShown(v, store.getState().mode));
+    };
+    cleanups.push(avatarView.subscribe(applyView), bus.on('mode.changed', applyView));
+    const onViewKey = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyV' || e.ctrlKey || e.altKey || e.metaKey || e.repeat || isTyping() || store.getState().mode !== 'play') return;
+      setAvatarView({ camera: avatarView.getState().camera === 'first' ? 'third' : 'first' });
+    };
+    window.addEventListener('keydown', onViewKey);
+    cleanups.push(() => window.removeEventListener('keydown', onViewKey));
+
     // ---- Oberfläche
     cleanups.push(
       ctx.ui.register({ id: 'avatar.gestures', slot: 'toolbar', order: 20, component: GesturesPanel }),
@@ -239,6 +255,7 @@ const avatar: GameModule = {
     spawn();
     scene.activeCamera = cam.camera;
     applyMode(store.getState().mode);
+    applyView();
 
     // ---- Frame
     let flyShown = false;
@@ -259,7 +276,7 @@ const avatar: GameModule = {
       syncState();
       visual.setMotion(controller.motion);
       visual.update(dt);
-      cam.update(dt, controller.feet, controller.motion === 'sit' ? 1.1 : 1.45);
+      cam.update(dt, controller.feet, cam.firstPerson ? (controller.motion === 'sit' ? 1.2 : 1.62) : controller.motion === 'sit' ? 1.1 : 1.45);
 
       if (flyShown !== controller.flying || avatarUi.getState().sitting !== !!controller.seat) {
         flyShown = controller.flying;

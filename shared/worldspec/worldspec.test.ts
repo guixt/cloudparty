@@ -310,3 +310,15 @@ describe('serializeWorldSpec', () => {
     expect(second).toEqual(first);
   });
 });
+
+describe('Gras ein/aus', () => {
+  it('environment.grass wird angenommen, Nicht-Boolean abgewiesen', () => {
+    const w = createDefaultWorld();
+    w.environment.grass = false;
+    const ok = validateWorldSpec(w);
+    expect(ok.ok).toBe(true);
+    if (ok.ok) expect(ok.world.environment.grass).toBe(false);
+    (w.environment as unknown as { grass: unknown }).grass = 'nein';
+    expect(validateWorldSpec(w).ok).toBe(false);
+  });
+});

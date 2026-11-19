@@ -246,6 +246,7 @@ export const AI_TOOLS: AiToolDefinition[] = [
         sea_waves: { type: 'number', minimum: 0, maximum: 1 },
         look: { enum: ['standard', 'filmisch', 'warm', 'kuehl', 'comic', 'retro'], description: 'Stimmungsvorlage (Farbkorrektur)' },
         weather: { enum: ['none', 'rain', 'snow', 'fog', 'fireflies'] },
+        grass: { type: 'boolean', description: 'Grashalme (3D-Büschel) auf der Insel anzeigen; false = nur die grüne Bodenfläche, z. B. für Entwürfe und Grundrisse' },
         day_cycle_enabled: { type: 'boolean', description: 'Sonne und Himmel wandern durch den Tag' },
         day_cycle_minutes: { type: 'number', minimum: 1, maximum: 240, description: 'Dauer eines Tages in Minuten' },
       },
