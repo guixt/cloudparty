@@ -7,7 +7,7 @@ import type { Observer } from '@babylonjs/core/Misc/observable';
 import type { Scene } from '@babylonjs/core/scene';
 import type { GameContext } from '../core/context';
 import { isTyping } from './state';
-import { dragModeFor, numpadView, orbitStep, panStep, presetView, zoomStep, type DragMode } from './cameraControls';
+import { dragModeFor, numpadView, orbitStep, panSpeed, panStep, presetView, zoomStep, type DragMode } from './cameraControls';
 
 export const BUILD_CAMERA_NAME = 'build.camera';
 
@@ -20,6 +20,8 @@ export class BuildCamera {
   private previous: Camera | null = null;
   private active = false;
   private keys = new Set<string>();
+  /** Umschalttaste gehalten: schneller bewegen. */
+  private fast = false;
   private frameObserver: Observer<Scene> | null = null;
   private drag: { mode: DragMode; x: number; y: number } | null = null;
   /** true, wenn der letzte Mausdruck eine Kamerabewegung war (kein Auswahlklick). */
@@ -66,6 +68,7 @@ export class BuildCamera {
     this.keys.clear();
 
     const onKeyDown = (e: KeyboardEvent) => {
+      this.fast = e.shiftKey;
       if (e.ctrlKey || e.metaKey || e.altKey || isTyping()) return;
       const dir = PAN_KEYS[e.key.toLowerCase()];
       if (dir) {
@@ -74,10 +77,14 @@ export class BuildCamera {
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
+      this.fast = e.shiftKey;
       const dir = PAN_KEYS[e.key.toLowerCase()];
       if (dir) this.keys.delete(dir);
     };
-    const onBlur = () => this.keys.clear();
+    const onBlur = () => {
+      this.keys.clear();
+      this.fast = false;
+    };
     const onDown = (e: PointerEvent) => {
       this.suppressTap = false;
       const mode = dragModeFor(e.button, { shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
@@ -179,7 +186,7 @@ export class BuildCamera {
   private pan(): void {
     if (this.keys.size === 0) return;
     const dt = Math.min(0.1, this.ctx.engine.getDeltaTime() / 1000);
-    const speed = Math.max(3, this.camera.radius * 0.9) * dt;
+    const speed = panSpeed(this.camera.radius, this.fast) * dt;
     const forward = this.camera.getForwardRay().direction.clone();
     forward.y = 0;
     if (forward.lengthSquared() < 1e-6) forward.set(0, 0, 1);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dragModeFor, numpadView, orbitStep, panStep, presetView, zoomStep } from './cameraControls';
+import { FAST_FACTOR, dragModeFor, panSpeed, numpadView, orbitStep, panStep, presetView, zoomStep } from './cameraControls';
 
 const none = { shift: false, ctrl: false, alt: false };
 
@@ -36,5 +36,13 @@ describe('Baukamera (Blender-Steuerung)', () => {
     expect(presetView('top', 0.05, 2.3).beta).toBe(0.05);
     expect(presetView('front', 0.05, 2.3).beta).toBeCloseTo(Math.PI / 2);
     expect(presetView('bottom', 0.05, 2.3).beta).toBe(2.3);
+  });
+});
+
+describe('Schnell bewegen mit Shift', () => {
+  it('Shift macht die Tastenbewegung dreimal so schnell, Grundtempo bleibt', () => {
+    expect(panSpeed(2, false)).toBe(3);
+    expect(panSpeed(2, true)).toBe(3 * FAST_FACTOR);
+    expect(panSpeed(20, true)).toBeCloseTo(20 * 0.9 * FAST_FACTOR);
   });
 });

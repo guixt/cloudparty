@@ -57,3 +57,9 @@ export function numpadView(code: string, ctrl: boolean): ViewName | null {
   if (code === 'Numpad7') return ctrl ? 'bottom' : 'top';
   return null;
 }
+
+/** Tastenbewegung der Baukamera in Metern pro Sekunde; mit Umschalttaste (Shift) dreimal so schnell. */
+export const FAST_FACTOR = 3;
+export function panSpeed(radius: number, fast: boolean): number {
+  return Math.max(3, radius * 0.9) * (fast ? FAST_FACTOR : 1);
+}
