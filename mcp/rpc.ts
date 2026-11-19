@@ -15,7 +15,7 @@ export interface AppResult {
 export interface RpcBackend {
   /** Führt ein Werkzeug in der App aus; wirft, wenn keine App verbunden ist. */
   callApp(name: string, input: unknown): Promise<AppResult>;
-  status(): { connected: boolean; world?: string };
+  status(): { connected: boolean; world?: string } | Promise<{ connected: boolean; world?: string }>;
 }
 
 export interface RpcMessage {
@@ -61,7 +61,7 @@ export async function handleRpc(msg: RpcMessage, backend: RpcBackend): Promise<o
       if (typeof name !== 'string' || !mcpTools().some((t) => t.name === name)) return error(id, -32602, `Unbekanntes Werkzeug: ${String(name).slice(0, 60)}`);
       const input = msg.params?.arguments ?? {};
       if (name === STATUS_TOOL) {
-        const s = backend.status();
+        const s = await backend.status();
         return reply(id, textResult(s.connected ? `Verbunden${s.world ? `, geöffnete Welt: „${s.world}“` : ''}.` : 'Die Cloudparty-App ist nicht verbunden. Öffne die App (gleicher Rechner) und schalte unter KI-Einstellungen › Externe Steuerung (MCP) die Steuerung ein; Token und Port müssen stimmen.'));
       }
       try {

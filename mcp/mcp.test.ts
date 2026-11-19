@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { mcpTools } from '../shared/mcpBridge';
-import { startBridge, type Bridge } from './bridge';
+import { connectRelay, startBridge, type Bridge } from './bridge';
 import { handleRpc, type RpcBackend } from './rpc';
 
 const backend = (over: Partial<RpcBackend> = {}): RpcBackend => ({
@@ -125,5 +125,37 @@ describe('Brücke zur App', () => {
     const b2 = await connect(p, 'tokentokentoken2');
     expect(await b1.closed).toBe(4000);
     b2.ws.close();
+  });
+
+  it('zweite MCP-Instanz hängt sich an den laufenden Server (Relay) und erreicht die App', async () => {
+    const p = port();
+    bridge = await startBridge({ port: p, token: 'tokentokentoken3' });
+    await expect(startBridge({ port: p, token: 'tokentokentoken3' })).rejects.toMatchObject({ code: 'EADDRINUSE' });
+    const { ws } = await connect(p, 'tokentokentoken3');
+    ws.on('message', (d) => {
+      const m = JSON.parse(String(d));
+      if (m.type === 'call') ws.send(JSON.stringify({ type: 'result', id: m.id, ok: m.name !== 'kaputt', content: `relay ${m.name}`, summary: '', image: 'QQ==' }));
+    });
+    await new Promise((r) => setTimeout(r, 30));
+    ws.send(JSON.stringify({ type: 'hello', world: 'Relay-Welt' }));
+    await new Promise((r) => setTimeout(r, 30));
+    const relay = await connectRelay({ port: p, token: 'tokentokentoken3' });
+    expect(await relay.status()).toEqual({ connected: true, world: 'Relay-Welt' });
+    expect(await relay.callApp('get_world', {})).toMatchObject({ ok: true, content: 'relay get_world', image: 'QQ==' });
+    expect(await relay.callApp('kaputt', {})).toMatchObject({ ok: false });
+    // die App bleibt dieselbe Verbindung: ein Relay ersetzt sie nicht
+    expect(bridge.status().connected).toBe(true);
+    relay.close();
+    ws.close();
+  });
+
+  it('Relay mit falschem Token wird abgelehnt; ohne App kommt der Fehler über das Relay', async () => {
+    const p = port();
+    bridge = await startBridge({ port: p, token: 'tokentokentoken4' });
+    await expect(connectRelay({ port: p, token: 'falsch' })).rejects.toThrow('Token');
+    const relay = await connectRelay({ port: p, token: 'tokentokentoken4' });
+    await expect(relay.callApp('look', {})).rejects.toThrow('nicht verbunden');
+    expect(await relay.status()).toEqual({ connected: false });
+    relay.close();
   });
 });
