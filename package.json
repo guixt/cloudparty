@@ -12,6 +12,8 @@
     "test": "vitest run",
     "server": "tsx server/index.ts",
     "server:watch": "tsx watch server/index.ts",
+    "mcp": "tsx mcp/server.ts",
+    "mcp:token": "tsx mcp/server.ts --show-token",
     "e2e": "node scripts/e2e-smoke.cjs",
     "previews": "node scripts/previews.cjs"
   },

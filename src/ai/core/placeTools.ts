@@ -242,6 +242,25 @@ export function diffEntities(before: EntitySpec, after: EntitySpec): string[] {
   return fields;
 }
 
+/** Merkt sich den Stand der Welt und liefert später, was neu, entfernt oder geändert ist. */
+export function trackChanges(store: ToolContext['store']): { createdSince(): string[]; changedSince(): ChangeSet } {
+  const start = new Map(Object.entries(store.getState().entities));
+  const createdSince = () => store.getState().order.filter((id) => !start.has(id));
+  const changedSince = (): ChangeSet => {
+    const { entities } = store.getState();
+    const removed = [...start].filter(([id]) => !entities[id]).map(([id, e]) => ({ id, name: e.name, group: e.group, groupName: e.groupName }));
+    const modified: ChangeSet['modified'] = [];
+    for (const [id, before] of start) {
+      const after = entities[id];
+      if (!after || after === before) continue;
+      const fields = diffEntities(before, after);
+      if (fields.length > 0) modified.push({ id, fields });
+    }
+    return { created: createdSince(), removed, modified };
+  };
+  return { createdSince, changedSince };
+}
+
 // ---------------------------------------------------------------- Handler
 
 export const placeHandlers: Record<string, Handler> = {

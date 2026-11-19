@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent } from 'react';
 import { AI_MODELS, AI_TOKEN_LIMITS } from '../../../shared/aiTools';
 import type { AssistantApi } from '../api';
+import { BridgeSettings } from './BridgeSettings';
 import { LOG_LEVELS, clearLog, exportLog, getLogEntries, getLogLevel, setLogLevel, type LogLevel } from '../core/log';
 
 const LOG_LABELS: Record<LogLevel, string> = { off: 'Aus', normal: 'Normal (Werkzeuge, Tokens, Fehler)', detail: 'Ausführlich (auch Aufträge, Eingaben und Ergebnisse)' };
@@ -212,6 +213,7 @@ export function SettingsDialog({ api, explain, onClose }: { api: AssistantApi; e
             force((n) => n + 1);
           }}
         />
+        <BridgeSettings />
         <div className="cp-label">Screenshots</div>
         <label className="ai-radio">
           <input

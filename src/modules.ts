@@ -22,6 +22,7 @@ import water from './world/water';
 import materials from './world/materials';
 import graphics from './ui/graphics';
 import aiCore from './ai/core';
+import aiBridge from './ai/bridge';
 import aiUi from './ai/ui';
 import planRun from './plan/run';
 
@@ -45,6 +46,7 @@ export const modules: GameModule[] = [
   graphEditor, // 19
   planEditor, // 28
   aiCore, // 13
+  aiBridge, // MCP-Brücke (Claude Desktop)
   aiUi, // 14
   planRun, // 29
 ];

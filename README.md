@@ -213,3 +213,26 @@ Knoten heißen im Export wie das Objekt (sonst wie der Baustein, z. B. „box“
 - **Figur (nur lokal):** Menü „Aussehen“ › Figur: *Normal*, *Neutral* (einfarbige helle Maßstabsfigur ohne Gesicht) oder *Ausgeblendet* (Figur und Namensschild). Andere Besucher sehen deine Figur weiterhin. Gespeichert pro Browser (`cloudparty.avatar.view`).
 - **Ich-Perspektive:** Taste **V** oder Knopf „Ich-Sicht“ in der Leiste (auch im Aussehen-Dialog). Die Kamera sitzt auf Augenhöhe, die Figur ist dabei ausgeblendet; Blick mit gedrückter Maustaste ziehen, Bewegung wie gewohnt mit WASD. Im Baumodus gilt nur die Figur-Einstellung.
 - **Gras pro Insel:** Menü › Diese Insel › „Gras auf dieser Insel anzeigen“ (nur mit Baurecht; gilt für alle Besucher, gespeichert in der Welt als `environment.grass`). Die KI kann es mit `set_environment` (`grass`) setzen. Die grüne Bodenfläche bleibt, nur die 3D-Grashalme entfallen.
+
+## Claude Desktop baut live in der App (MCP)
+
+Ein kleiner lokaler MCP-Server (`mcp/server.ts`) verbindet Claude Desktop mit der geöffneten App. Claude ruft dieselben Werkzeuge auf wie der KI-Chat (`add_wall`, `fill_bricks`, `fit_to_opening`, `verify`, `look` …) und bekommt auch Screenshots zurück. Die Werkzeuge laufen in der App mit denselben Prüfungen, Limits und Überschneidungsmeldungen; jeder verändernde Aufruf ist ein eigener Undo-Schritt.
+
+**Einrichten (einmalig)**
+1. Im Projektordner `npm install`, dann `npm run mcp:token` – zeigt Token und Port (Standard 8765). Das Token liegt in `~/.cloudparty-mcp/token`.
+2. Claude Desktop › Einstellungen › Entwickler › „Konfiguration bearbeiten“ und eintragen (Pfad anpassen, unter Windows `C:/…` mit Schrägstrichen):
+   ```json
+   {
+     "mcpServers": {
+       "cloudparty": {
+         "command": "npx",
+         "args": ["--prefix", "/PFAD/ZU/cloudparty", "tsx", "/PFAD/ZU/cloudparty/mcp/server.ts"]
+       }
+     }
+   }
+   ```
+   Claude Desktop danach neu starten (Node.js muss installiert sein).
+3. In der App: KI-Einstellungen › „Externe Steuerung (MCP)“ einschalten, Token einfügen (Port nur ändern, wenn nötig). Status zeigt „Verbunden“.
+4. In Claude Desktop z. B.: „Rufe cloudparty_guide auf und baue ein Haus mit Fenster und einem Bild im Fenster.“
+
+**Sicherheit:** Der Server hört nur auf `127.0.0.1` und verlangt das Token; die Steuerung ist standardmäßig aus und nur mit Baurecht wirksam. Rückfragen bei großen Bauten erscheinen als Bestätigungsdialog im Browser (oder entfallen im Freigabe-Modus „alles erlaubt“). Screenshots gehen an Claude Desktop. Inhalte aus der Welt bleiben Daten. Der Port lässt sich mit `CLOUDPARTY_MCP_PORT`, das Token mit `CLOUDPARTY_MCP_TOKEN` überschreiben. Die App und Claude Desktop müssen auf demselben Rechner laufen.

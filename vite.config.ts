@@ -10,7 +10,7 @@ export default defineConfig({
   build: { chunkSizeWarningLimit: 6000 },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.{ts,tsx}', 'shared/**/*.test.ts', 'server/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}', 'shared/**/*.test.ts', 'server/**/*.test.ts', 'mcp/**/*.test.ts'],
     passWithNoTests: true,
     testTimeout: 15000,
   },
