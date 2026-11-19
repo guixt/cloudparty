@@ -115,12 +115,12 @@ describe('Mengengrenzen', () => {
       w.counters.newEntities = 0; // neue „Aufträge“
       expect((await w.run('add_bricks', { bricks: bricks(500) })).ok).toBe(true);
     }
-    w.counters.newEntities = 0;
-    expect((await w.run('add_bricks', { bricks: bricks(AI_LIMITS.maxWorldEntities - w.store.getState().order.length) })).ok).toBe(true);
-    w.counters.newEntities = 0;
-    const full = await w.run('add_bricks', { bricks: bricks(10) });
-    expect(full.ok).toBe(false);
-    expect(full.content).toContain('Die Welt hat höchstens');
+    // Es gibt keine Obergrenze je Welt mehr: auch jenseits von 2000 Objekten geht es weiter.
+    for (let i = 0; i < 2; i++) {
+      w.counters.newEntities = 0;
+      expect((await w.run('add_bricks', { bricks: bricks(500) })).ok).toBe(true);
+    }
+    expect(w.store.getState().order.length).toBeGreaterThan(2000);
   });
 });
 

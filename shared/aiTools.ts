@@ -16,8 +16,6 @@ export const AI_LIMITS = {
   maxNewEntities: 1000,
   /** Ab dieser Zahl neuer Objekte in einem Auftrag fragt die KI den Nutzer einmal um Erlaubnis (Freigabe-Modus „fragen“). */
   confirmNewEntitiesAt: 300,
-  /** Obergrenze aller Objekte einer Welt für KI-Aufträge (Leistung; der Server erlaubt 2000). */
-  maxWorldEntities: 2000,
   /** Obergrenze je Aufruf für Steine und Anordnungen. */
   maxPerCall: 500,
   /** Ab dieser Anzahl Löschungen pro Auftrag wird der Nutzer gefragt. */

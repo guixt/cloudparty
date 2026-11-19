@@ -7,7 +7,8 @@ import { MAX_AVATARS_PER_ISLAND, MAX_CHAT_LENGTH, type ClientMessage, type Remot
 import type { WorldSpec } from '../../shared/types';
 import { RateLimiter } from './rateLimit';
 
-export const MAX_ENTITIES_PER_ISLAND = 2000;
+/** Höchstzahl Objekte je Insel auf dem Server (Umgebungsvariable CLOUDPARTY_MAX_ENTITIES überschreibt). */
+export const MAX_ENTITIES_PER_ISLAND = Number(process.env.CLOUDPARTY_MAX_ENTITIES) > 0 ? Number(process.env.CLOUDPARTY_MAX_ENTITIES) : 20000;
 
 export interface Outgoing {
   to: string[];

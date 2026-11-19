@@ -95,7 +95,7 @@ describe('REST-API', () => {
 
   it('zu große Anfrage ergibt 413', async () => {
     const user = await login('Gross');
-    const res = await call('POST', '/api/islands', { token: user.token, raw: JSON.stringify({ pad: 'x'.repeat(5_100_000) }) });
+    const res = await call('POST', '/api/islands', { token: user.token, raw: JSON.stringify({ pad: 'x'.repeat(25_100_000) }) });
     expect(res.status).toBe(413);
   });
 });

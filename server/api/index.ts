@@ -18,7 +18,7 @@ class ApiError extends Error {
   }
 }
 
-const MAX_BODY = 5_000_000;
+const MAX_BODY = 25_000_000;
 
 async function body(req: IncomingMessage): Promise<Record<string, unknown>> {
   try {
