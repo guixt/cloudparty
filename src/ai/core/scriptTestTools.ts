@@ -8,7 +8,7 @@ import type { EntitySpec } from '../../../shared/types';
 import type { EventBus } from '../../core/events';
 import { clip } from './log';
 import { wrapData } from './summary';
-import { fail, getEntity, ok, str, ToolError, type Handler, type ToolContext } from './tools';
+import { HIDDEN_TEXT, appHidden, fail, getEntity, ok, str, ToolError, type Handler, type ToolContext } from './tools';
 
 interface LogLine {
   level: 'log' | 'error';
@@ -103,6 +103,7 @@ export const scriptTestHandlers: Record<string, Handler> = {
   },
 
   async script_test(input, ctx, counters) {
+    if (appHidden()) return { ok: false, content: HIDDEN_TEXT, summary: 'App-Fenster im Hintergrund', mutated: false };
     if ((counters.scriptTests ?? 0) >= AI_LIMITS.maxScriptTestsPerRun) {
       return { ok: false, content: `Limit erreicht: höchstens ${AI_LIMITS.maxScriptTestsPerRun} Skripttests pro Auftrag.`, summary: 'Testlimit erreicht', mutated: false };
     }

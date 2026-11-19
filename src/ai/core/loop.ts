@@ -10,7 +10,7 @@ import { clip, logEvent } from './log';
 import { toImageBlocks } from './userImages';
 import { buildSystemPrompt } from './prompt';
 import * as settings from './settings';
-import { executeTool, type RunCounters } from './tools';
+import { executeTool, type RunCounters, type ToolOutcome } from './tools';
 import { trackChanges } from './placeTools';
 
 /** Höchstens so viele Nachrichten (≈ 20 Gesprächsrunden) bleiben zwischen Aufträgen erhalten. */
@@ -18,6 +18,46 @@ export const MAX_HISTORY_MESSAGES = 40;
 
 /** So oft darf die Antwort in einem Auftrag abgeschnitten werden, bevor der Assistent aufgibt. */
 export const MAX_TRUNCATIONS = 4;
+
+/**
+ * Werkzeuge, die auf Bilddarstellung, Zeitgeber oder das Netz warten, dürfen nicht endlos hängen:
+ * Läuft das App-Fenster im Hintergrund, pausiert der Browser Bildschirmaufnahmen und drosselt Zeitgeber stark.
+ */
+export const TOOL_TIMEOUT_MS: Record<string, number> = { look: 30_000, script_test: 40_000, search_images: 30_000, use_image: 40_000, use_texture: 40_000 };
+const TIMEOUT_TEXT = 'Zeitüberschreitung: Das Werkzeug hat nicht rechtzeitig geantwortet (oft, weil das App-Fenster im Hintergrund war und der Browser Bilder und Zeitgeber anhält). Prüfe mit get_world oder what_changed, was schon passiert ist, und mache ohne dieses Werkzeug weiter.';
+
+/** Wartet auf das Werkzeug, bricht aber bei Stopp (null) oder Zeitüberschreitung ab. */
+export function raceTool(task: Promise<ToolOutcome>, signal: AbortSignal | undefined, timeoutMs: number | undefined): Promise<ToolOutcome | null> {
+  return new Promise((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const done = () => {
+      if (timer) clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    };
+    const onAbort = () => {
+      done();
+      resolve(null);
+    };
+    if (signal?.aborted) return resolve(null);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (timeoutMs !== undefined) {
+      timer = setTimeout(() => {
+        done();
+        resolve({ ok: false, content: TIMEOUT_TEXT, summary: 'Werkzeug antwortet nicht (Zeitüberschreitung)', mutated: false });
+      }, timeoutMs);
+    }
+    task.then(
+      (v) => {
+        done();
+        resolve(v);
+      },
+      (e) => {
+        done();
+        reject(e);
+      },
+    );
+  });
+}
 const CONTINUE_TEXT = 'Deine letzte Antwort wurde wegen der Ausgabegrenze abgeschnitten. Mache genau dort weiter, wo du aufgehört hast, und fasse dich kürzer: höchstens wenige Werkzeugaufrufe pro Antwort, lieber mehrere kleine Schritte. Ist ein Plan-Knoten zu groß, teile ihn mit plan_add_node in kleinere Knoten und baue nur den ersten Teil.';
 const TRUNCATED_CALL_TEXT = 'Dein Werkzeugaufruf wurde wegen der Ausgabegrenze abgeschnitten und NICHT ausgeführt. Wiederhole genau diesen Schritt in kleineren Teilen (weniger Objekte pro Antwort bzw. ein kürzeres Skript) und fahre dann fort.';
 
@@ -34,6 +74,8 @@ export interface AssistantDeps {
   captureView?(req: import('./capture').ViewRequest): Promise<string | null>;
   /** Lädt ein Bild und liefert eine verkleinerte JPEG-Daten-URL (Werkzeug use_image). */
   fetchImage?(url: string): Promise<{ dataUrl: string; width: number; height: number } | null>;
+  /** Überschreibt die Zeitgrenzen einzelner Werkzeuge (Tests). */
+  toolTimeoutMs?: Record<string, number>;
 }
 
 const TOOLS: ApiTool[] = AI_TOOLS.map(({ name, description, input_schema }) => ({ name, description, input_schema }));
@@ -179,7 +221,13 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
               bus.emit('history.group.begin', {});
             }
             const t0 = Date.now();
-            outcome = await executeTool(use.name, use.input, toolCtx, counters);
+            const raced = await raceTool(executeTool(use.name, use.input, toolCtx, counters), signal, (deps.toolTimeoutMs ?? TOOL_TIMEOUT_MS)[use.name]);
+            if (raced === null) {
+              stopped = true;
+              logEvent('tool.aborted', { run: runId, name: use.name, ms: Date.now() - t0 });
+              break;
+            }
+            outcome = raced;
             logEvent('tool', { run: runId, name: use.name, ok: outcome.ok, ms: Date.now() - t0, summary: clip(outcome.summary, 200), toolCalls: counters.toolCalls, newEntities: counters.newEntities }, { input: clip(use.input), result: clip(outcome.content) });
           }
           if (outcome.mutated) changed = true;

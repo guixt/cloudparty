@@ -171,3 +171,55 @@ describe('Einstellung', () => {
     expect(getVision()).toBe(false);
   });
 });
+
+describe('Hängende Werkzeuge', () => {
+  const lookCall = () => toolResponse([{ id: 'l1', name: 'look', input: {} }]);
+
+  it('Stopp beendet den Auftrag sofort, auch wenn der Screenshot nie fertig wird', async () => {
+    installLocalStorage({ 'cloudparty.ai.key': 'sk-ant-test-0123456789', 'cloudparty.ai.vision': '1' });
+    const bus = new EventBus();
+    const store = createWorldStore(bus);
+    const history = new History(store, bus);
+    history.attach();
+    const assistant = createAssistant({ store, bus, getAvatar: () => null, getHistory: () => history, captureView: () => new Promise<string | null>(() => {}) });
+    const events: AssistantEvent[] = [];
+    const ac = new AbortController();
+    mockFetch([lookCall(), textResponse('nie erreicht')]);
+    const done = assistant.run('schau', { signal: ac.signal, onEvent: (e) => void events.push(e), confirm: async () => true });
+    await new Promise((r) => setTimeout(r, 30));
+    ac.abort();
+    await Promise.race([done, new Promise((_, rej) => setTimeout(() => rej(new Error('hängt')), 1000))]);
+    expect(events.at(-1)).toMatchObject({ type: 'done', stopped: true });
+  });
+
+  it('Zeitüberschreitung: das Werkzeug meldet einen Fehler und der Auftrag läuft weiter', async () => {
+    installLocalStorage({ 'cloudparty.ai.key': 'sk-ant-test-0123456789', 'cloudparty.ai.vision': '1' });
+    const bus = new EventBus();
+    const store = createWorldStore(bus);
+    const history = new History(store, bus);
+    history.attach();
+    const assistant = createAssistant({ store, bus, getAvatar: () => null, getHistory: () => history, captureView: () => new Promise<string | null>(() => {}), toolTimeoutMs: { look: 40 } });
+    const events: AssistantEvent[] = [];
+    mockFetch([lookCall(), textResponse('ohne Bild weiter')]);
+    await assistant.run('schau', { onEvent: (e) => void events.push(e), confirm: async () => true });
+    const tool = events.find((e) => e.type === 'tool') as { ok: boolean; summary: string };
+    expect(tool.ok).toBe(false);
+    expect(tool.summary).toContain('Zeitüberschreitung');
+    expect(events.at(-1)).toMatchObject({ type: 'done', stopped: false });
+  });
+
+  it('look und script_test melden sofort, wenn das App-Fenster im Hintergrund ist', async () => {
+    const s = setup(true);
+    (globalThis as { document?: unknown }).document = { visibilityState: 'hidden' };
+    try {
+      const look = await executeTool('look', {}, toolCtx(s), counters());
+      expect(look.ok).toBe(false);
+      expect(look.content).toContain('Hintergrund');
+      expect(s.captureView).not.toHaveBeenCalled();
+      const test = await executeTool('script_test', { id: 'x' }, toolCtx(s), counters());
+      expect(test.content).toContain('Hintergrund');
+    } finally {
+      delete (globalThis as { document?: unknown }).document;
+    }
+  });
+});

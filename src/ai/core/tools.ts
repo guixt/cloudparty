@@ -86,6 +86,11 @@ export interface ToolOutcome {
 }
 
 export class ToolError extends Error {}
+/** Ist das App-Fenster im Hintergrund oder verdeckt? Dann pausiert der Browser Bildaufnahmen und drosselt Zeitgeber. */
+export function appHidden(): boolean {
+  return typeof document !== 'undefined' && document.visibilityState === 'hidden';
+}
+export const HIDDEN_TEXT = 'Das App-Fenster ist gerade im Hintergrund oder verdeckt; der Browser pausiert dann Bildaufnahmen und drosselt Zeitgeber, deshalb ist dieses Werkzeug jetzt nicht möglich. Arbeite ohne es weiter und bitte den Nutzer, das App-Fenster sichtbar zu lassen.';
 export const fail = (message: string): never => {
   throw new ToolError(message);
 };

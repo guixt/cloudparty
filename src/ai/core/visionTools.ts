@@ -4,7 +4,7 @@ import type { Vec3 } from '../../../shared/types';
 import { VIEW_NAMES, type ViewName } from './capture';
 import { entityBox } from './buildTools';
 import { unionBox } from './buildGeometry';
-import { fail, getEntityOrGroup, resolveTargets, num, ok, type Handler, type ToolContext } from './tools';
+import { HIDDEN_TEXT, appHidden, fail, getEntityOrGroup, resolveTargets, num, ok, type Handler, type ToolContext } from './tools';
 
 /** Mittelpunkt und Radius um ein Objekt (bei Gruppen: um alle Mitglieder). */
 export function boundsFor(ctx: ToolContext, id: unknown): { center: Vec3; radius: number } {
@@ -23,6 +23,7 @@ export const visionHandlers: Record<string, Handler> = {
       return { ok: false, content: 'Screenshots sind ausgeschaltet. Bitte den Nutzer, sie in den KI-Einstellungen („KI darf Screenshots der Welt ansehen“) zu erlauben, und arbeite bis dahin ohne Bild weiter.', summary: 'Screenshots sind ausgeschaltet', mutated: false };
     }
     const capture = ctx.captureView ?? fail('Screenshots sind hier nicht verfügbar.');
+    if (appHidden()) return { ok: false, content: HIDDEN_TEXT, summary: 'App-Fenster im Hintergrund', mutated: false };
     if ((counters.screenshots ?? 0) >= AI_LIMITS.maxScreenshotsPerRun) {
       return { ok: false, content: `Limit erreicht: höchstens ${AI_LIMITS.maxScreenshotsPerRun} Screenshots pro Auftrag. Arbeite mit den Daten aus get_world weiter oder beende den Auftrag.`, summary: 'Screenshot-Limit erreicht', mutated: false };
     }
