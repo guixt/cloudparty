@@ -46,7 +46,7 @@ Gruppen-ids (`grp_…`) gelten jetzt auch für `remove_entity` (ganze Gruppe, z�
 
 ## Mengengrenzen der KI
 
-Je Aufruf bis zu 500 Steine/Teile, je Auftrag bis zu 1000 neue Objekte (ab 300 fragt die KI den Nutzer einmal um Erlaubnis, außer im Modus „alles erlaubt“) und keine Obergrenze je Welt mehr (der Server begrenzt eine Insel auf 20000 Objekte, änderbar mit `CLOUDPARTY_MAX_ENTITIES`). Über dem Auftragslimit meldet das Werkzeug der KI den Grund und rät, die Arbeit aufzuteilen oder größere Teile zu nehmen. Die Zahlen stehen in `AI_LIMITS` (`shared/aiTools.ts`). Ob der Browser mehrere tausend Steine mit Noppen flüssig darstellt, hängt von der Grafikkarte ab und ist nicht getestet.
+Je Aufruf bis zu 500 Steine/Teile, je Auftrag bis zu 1000 neue Objekte (ab 300 fragt die KI den Nutzer einmal um Erlaubnis, außer im Modus „alles erlaubt“) und keine Obergrenze je Welt mehr (der Server begrenzt eine Insel auf 20000 Objekte, änderbar mit `CLOUDPARTY_MAX_ENTITIES`). Über dem Auftragslimit meldet das Werkzeug der KI den Grund und rät, die Arbeit aufzuteilen oder größere Teile zu nehmen. Die Zahlen stehen in `AI_LIMITS` (`shared/aiTools/limits.ts`). Ob der Browser mehrere tausend Steine mit Noppen flüssig darstellt, hängt von der Grafikkarte ab und ist nicht getestet.
 
 ### Nach dem Testsuite-Lauf
 

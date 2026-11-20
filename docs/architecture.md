@@ -37,7 +37,7 @@ Außerdem: `src/world/export/` (Blender-Export, wird über die Menüs aufgerufen
 |------|--------|-----------|
 | `shared/types.ts`, `avatar.ts`, `protocol.ts`, `scriptApi.ts`, `defaultWorld.ts` | Datentypen und Protokolle für Client und Server | nur Koordinator |
 | `shared/worldspec/` | Validierung der WorldSpec | Weltformat |
-| `shared/aiTools.ts`, `mcpBridge.ts`, `plan.ts`, `bricks.ts`, `graph*.ts`, `library.ts` | Verträge für KI-Werkzeuge, MCP, Pläne, Klemmbausteine, Logik-Graph, Bibliothek | |
+| `shared/aiTools/`, `mcpBridge.ts`, `plan.ts`, `bricks.ts`, `graph*.ts`, `library.ts` | Verträge für KI-Werkzeuge, MCP, Pläne, Klemmbausteine, Logik-Graph, Bibliothek | |
 | `src/core/` | `events.ts` (Bus + Ereigniskatalog), `store.ts` (WorldStore), `context.ts` (GameContext, GameModule), `ui.ts` (UI-Slots) | nur Koordinator |
 | `src/engine/bootstrap.ts`, `sideEffects.ts`, `src/modules.ts`, `src/App.tsx`, `src/styles.css` | Start, Modulreihenfolge, Layout | nur Koordinator |
 | `server/index.ts`, `server/context.ts` | Server-Einstieg und -Verträge | nur Koordinator |
@@ -84,7 +84,7 @@ Außerdem: `src/world/export/` (Blender-Export, wird über die Menüs aufgerufen
 
 ## KI-Kern
 
-`src/ai/core/` enthält den Claude-Client (`client.ts`, Streaming), die Tool-Use-Schleife mit Warteschlange (`loop.ts`), den Systemprompt (`prompt.ts`), Einstellungen (`settings.ts`), Laufzeit-Grenzen (`runLimits.ts`, Token-Budget in `budget.ts`), das Protokoll (`log.ts`) und die Werkzeuge (`tools.ts` sowie `buildTools`, `brickTools`, `placeTools`, `groupTools`, `libraryTools`, `graphTools`, `planTools`, `imageTools`, `scriptTestTools`). Die Werkzeugdefinitionen und `AI_LIMITS` liegen in `shared/aiTools.ts`, damit auch der MCP-Server sie kennt. `overlap.ts` meldet Überschneidungen nach bauenden Werkzeugen, `capture.ts` erzeugt Screenshots für `look`. Die Oberfläche (`src/ai/ui/`) hängt am Vertrag `src/ai/api.ts`. Details: [ki-werkzeuge.md](ki-werkzeuge.md).
+`src/ai/core/` enthält den Claude-Client (`client.ts`, Streaming), die Tool-Use-Schleife mit Warteschlange (`loop.ts`), den Systemprompt (`prompt.ts`), Einstellungen (`settings.ts`), Laufzeit-Grenzen (`runLimits.ts`, Token-Budget in `budget.ts`), das Protokoll (`log.ts`) und die Werkzeuge (`tools.ts` sowie `buildTools`, `brickTools`, `placeTools`, `groupTools`, `libraryTools`, `graphTools`, `planTools`, `imageTools`, `scriptTestTools`). Die Werkzeug-Schemas (je Gruppe eine Datei) und `AI_LIMITS` liegen in `shared/aiTools/`, damit auch der MCP-Server sie kennt; die Handler registrieren sich über `registry.ts`, Validierung steht in `validate.ts`, Ziel-Auflösung in `targets.ts`. `overlap.ts` meldet Überschneidungen nach bauenden Werkzeugen, `capture.ts` erzeugt Screenshots für `look`. Die Oberfläche (`src/ai/ui/`) hängt am Vertrag `src/ai/api.ts`. Details: [ki-werkzeuge.md](ki-werkzeuge.md).
 
 ## Plan-Board
 

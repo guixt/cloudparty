@@ -26,7 +26,7 @@ Browser-Nachbau von Cloud Party: React + Vite + TypeScript, Babylon.js 9 + Havok
 - `src/library/` – Bibliothek wiederverwendbarer Objekte und Gruppen.
 - `src/net/` – Client-Netz: Verbindung, Synchronisation, Chat, entfernte Avatare.
 - `src/ui/shell/` – Shell mit Menüs, Weltwahl und Anmeldung; `src/ui/graphics/` Grafik-Einstellungen.
-- `shared/` – Verträge für Client, Server und MCP: Typen, Protokoll, `aiTools.ts`, `scriptApi.ts`, Graph, Steine, `worldspec/`.
+- `shared/` – Verträge für Client, Server und MCP: Typen, Protokoll, `aiTools/` (Werkzeug-Schemas), `scriptApi.ts`, Graph, Steine, `worldspec/`.
 - `server/` – `index.ts`, `context.ts`, `api/` (REST), `realtime/` (WebSocket).
 - `mcp/` – MCP-Server (`server.ts`, `bridge.ts`, `rpc.ts`).
 - `docs/` – `architecture.md`, `worldspec.md`, `style-reference.md`, `reference/` (Bilder).
@@ -44,11 +44,11 @@ Browser-Nachbau von Cloud Party: React + Vite + TypeScript, Babylon.js 9 + Havok
 ## Bekannte Fallen
 
 - `src/ai/core/prompt.ts`: Prompt-Texte sind Template-Literale. Keine unmaskierten Backticks; Anführungen mit „…“ oder `\`` schreiben.
-- `shared/aiTools.ts` ist der Vertrag für KI-Werkzeuge (Client, Server und MCP lesen ihn).
-- Neues KI-Werkzeug, aktueller Stand: Namen in `AiToolName` eintragen, Schema in `AI_TOOLS` ergänzen, Handler in einer Handler-Tabelle in `src/ai/core/*Tools.ts` ablegen (die Tabellen werden in `executeTool` in `src/ai/core/tools.ts` per `??` verkettet; bei einer neuen Tabelle dort ergänzen), Hinweis in `prompt.ts` und einen Test hinzufügen. (Dieser Absatz beschreibt den heutigen Stand und wird nach einem Umbau vom Koordinator angepasst.)
+- `shared/aiTools/` ist der Vertrag für KI-Werkzeuge (Client, Server und MCP lesen ihn; Import weiter über `shared/aiTools`). Schemas liegen je Gruppe in einer Datei (`core`, `plan`, `build`, `bricks`, `place` …), gemeinsame Bausteine in `schemaParts.ts`, Grenzen in `limits.ts`.
+- Neues KI-Werkzeug: (1) Namen in die Union `AiToolName` (`shared/aiTools/types.ts`) und ans Ende von `TOOL_ORDER` (`shared/aiTools/index.ts`; die Reihenfolge hängt am Prompt-Cache der API), (2) Schema in die passende Gruppen-Datei unter `shared/aiTools/`, (3) Handler in die Tabelle der Gruppe in `src/ai/core/*Tools.ts` (läuft über `registerHandlers` in `src/ai/core/registry.ts`; bei einer neuen Datei per `import` in `tools.ts` einbinden), (4) Hinweis in `prompt.ts`, (5) Test. `registry.test.ts` prüft, dass Schema und Handler zusammenpassen; ein neues Werkzeug ändert den dort festgehaltenen Hash von `AI_TOOLS` absichtlich, dann `EXPECTED_ORDER`, Länge und SHA im Test anpassen. Validierungshelfer stehen in `validate.ts`, Ziel-Auflösung (ids, Namen, Gruppen) in `targets.ts`.
 - Gruppen-ids und Namen löst man mit `resolveTargets` / `getEntityOrGroup` (`src/ai/core/tools.ts`) auf, nicht von Hand.
 - Grenzen in Prompts kommen aus `getRunLimits` (`src/ai/core/runLimits.ts`), nie als feste Zahlen.
-- `localStorage`-Schlüssel der KI stehen in `AI_STORAGE_KEYS` (`shared/aiTools.ts`).
+- `localStorage`-Schlüssel der KI stehen in `AI_STORAGE_KEYS` (`shared/aiTools/limits.ts`).
 
 ## So prüfst du eine Änderung
 
