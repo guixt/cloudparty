@@ -10,6 +10,7 @@ import { isQueueable, isRunnable, queueableOrder, runOrder } from '../../../shar
 import { AI_TOKEN_LIMITS } from '../../../shared/aiTools';
 import { outputBudget } from '../../ai/core/prompt';
 import { getTokenLimits } from '../../ai/core/settings';
+import { getRunLimits } from '../../ai/core/runLimits';
 import { PlanError, getPlan, updateNode, type PlanCtx } from '../core/api';
 
 /**
@@ -108,6 +109,7 @@ export async function runPlan(ctx: PlanCtx, planId: string, nodeId: string | und
     deps.notify('Es gibt nichts auszuführen: alle Knoten sind fertig oder deaktiviert.');
     return report;
   }
+  const limits = getRunLimits();
   let spent = 0;
   let count = 0;
 
@@ -130,8 +132,8 @@ export async function runPlan(ctx: PlanCtx, planId: string, nodeId: string | und
     if (node.status === 'done' || node.status === 'disabled' || node.status === 'running') continue;
     if (!ctx.store.getState().canBuild) return stop(i, 'Du hast hier kein Baurecht.');
     if (!isRunnable(plan, id)) return stop(i, 'Die Vorgänger eines Knotens sind nicht fertig geworden; der Lauf hält an.');
-    if (count >= MAX_NODES_PER_RUN) return stop(i, `Pro Lauf werden höchstens ${MAX_NODES_PER_RUN} Knoten ausgeführt. Starte „Alle ausführen“ erneut für den Rest.`, 'info');
-    if (spent > RUN_TOKEN_LIMIT) return stop(i, 'Das Token-Limit für einen Lauf ist erreicht. Starte „Alle ausführen“ erneut für den Rest.');
+    if (count >= limits.planNodesPerRun) return stop(i, `Pro Lauf werden höchstens ${limits.planNodesPerRun} Knoten ausgeführt (einstellbar in den KI-Einstellungen unter „Limits“). Starte „Alle ausführen“ erneut für den Rest.`, 'info');
+    if (spent > limits.planTokensPerRun) return stop(i, 'Das Token-Limit für einen Lauf ist erreicht (einstellbar in den KI-Einstellungen unter „Limits“). Starte „Alle ausführen“ erneut für den Rest.');
 
     const created = new Set<string>();
     const off = ctx.bus.on('entity.added', ({ entity, source, transient }) => {

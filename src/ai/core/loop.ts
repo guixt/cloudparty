@@ -12,6 +12,7 @@ import { buildSystemPrompt } from './prompt';
 import * as settings from './settings';
 import { executeTool, type RunCounters, type ToolOutcome } from './tools';
 import { trackChanges } from './placeTools';
+import { getRunLimits } from './runLimits';
 
 /** Höchstens so viele Nachrichten (≈ 20 Gesprächsrunden) bleiben zwischen Aufträgen erhalten. */
 export const MAX_HISTORY_MESSAGES = 40;
@@ -150,12 +151,13 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
     // Freigabe-Modus einmal pro Auftrag lesen, damit eine Umstellung mitten im Auftrag nicht halb wirkt.
     const startIds = new Set(store.getState().order);
     const createdSince = () => store.getState().order.filter((id) => !startIds.has(id));
+    const runLimits = getRunLimits();
     const { changedSince } = trackChanges(store);
     const toolCtx = { store, bus, createdSince, changedSince, getAvatar: deps.getAvatar, confirm, autoApprove: settings.getApproval() === 'auto', vision: settings.getVision(), captureView: deps.captureView, imageSearch: settings.getImageSearch(), fetchImage: deps.fetchImage };
 
     try {
       let finished = false;
-      for (let round = 0; round < AI_LIMITS.maxRounds; round++) {
+      for (let round = 0; round < runLimits.maxRounds; round++) {
         if (signal?.aborted) {
           stopped = true;
           break;
@@ -211,8 +213,8 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
           let outcome;
           if (truncated && (use.input as { __invalidJson?: boolean } | null)?.__invalidJson) {
             outcome = { ok: false, content: TRUNCATED_CALL_TEXT, summary: 'Aufruf abgeschnitten – wird in kleineren Teilen wiederholt', mutated: false };
-          } else if (counters.toolCalls >= AI_LIMITS.maxToolCalls) {
-            outcome = { ok: false, content: `Limit erreicht: höchstens ${AI_LIMITS.maxToolCalls} Werkzeugaufrufe pro Auftrag. Beende den Auftrag jetzt.`, summary: 'Werkzeuglimit erreicht', mutated: false };
+          } else if (counters.toolCalls >= runLimits.maxToolCalls) {
+            outcome = { ok: false, content: `Limit erreicht: höchstens ${runLimits.maxToolCalls} Werkzeugaufrufe pro Auftrag. Beende den Auftrag jetzt.`, summary: 'Werkzeuglimit erreicht', mutated: false };
           } else {
             counters.toolCalls += 1;
             const def = AI_TOOLS.find((t) => t.name === use.name);
@@ -251,7 +253,7 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
       }
       if (!finished && !stopped) {
         stopped = true;
-        emit({ type: 'error', message: `Der Auftrag war zu umfangreich (Grenze von ${AI_LIMITS.maxRounds} Runden erreicht). Das Bisherige bleibt erhalten.` });
+        emit({ type: 'error', message: `Der Auftrag war zu umfangreich (Grenze von ${runLimits.maxRounds} Runden erreicht; sie lässt sich in den KI-Einstellungen unter „Limits“ erhöhen). Das Bisherige bleibt erhalten.` });
       }
     } catch (error) {
       stopped = true;

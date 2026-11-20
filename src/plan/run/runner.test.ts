@@ -172,6 +172,20 @@ describe('Plan-Ausführung', () => {
     expect(r2.stoppedBecause).toMatch(/Token/);
   });
 
+  it('Knoten pro Lauf und Token-Obergrenze kommen aus den Einstellungen', async () => {
+    (globalThis as { localStorage?: unknown }).localStorage = { getItem: (k: string) => (k === 'cloudparty.ai.runLimits' ? JSON.stringify({ planNodesPerRun: 3 }) : null), setItem: () => {}, removeItem: () => {} };
+    try {
+      const t = setup();
+      const plan = createPlan(t.ctx, 'Lang', [{ id: 'k0', title: 'k0' }]);
+      for (let i = 1; i < 6; i++) addNode(t.ctx, plan.id, { title: `k${i}` });
+      const report = await runPlan(t.ctx, plan.id, undefined, { ...t.base, runPrompt: completing(t.ctx, plan.id) });
+      expect(report.completed).toHaveLength(3);
+      expect(report.stoppedBecause).toMatch(/höchstens 3 Knoten/);
+    } finally {
+      delete (globalThis as { localStorage?: unknown }).localStorage;
+    }
+  });
+
   it('wird der Plan mitten im Lauf gelöscht, endet der Lauf sauber', async () => {
     const t = setup();
     const plan = createPlan(t.ctx, 'Haus', house);

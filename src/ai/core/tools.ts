@@ -26,6 +26,7 @@ import { PREFABS, createEntityFromPrefab, getPrefab } from '../../world/entities
 import { eulerToQuat } from '../../scripting/runtime/commands';
 import { yawToward } from '../../../shared/front';
 import { buildWorldSummary, wrapData } from './summary';
+import { getRunLimits } from './runLimits';
 import { groupHandlers } from './groupTools';
 import { libraryHandlers } from './libraryTools';
 import { graphHandlers } from './graphTools';
@@ -329,10 +330,11 @@ export function expandTargets(ctx: ToolContext, raw: unknown[]): EntitySpec[] {
  */
 export async function reserveEntities(ctx: ToolContext, counters: RunCounters, count: number, what: string): Promise<void> {
   const total = counters.newEntities + count;
-  if (total > AI_LIMITS.maxNewEntities) {
-    fail(`Limit: höchstens ${AI_LIMITS.maxNewEntities} neue Objekte pro Auftrag (${what} braucht ${count}, schon neu: ${counters.newEntities}). Teile die Arbeit auf mehrere Aufträge auf oder frage den Nutzer.`);
+  const limits = getRunLimits();
+  if (total > limits.maxNewEntities) {
+    fail(`Limit: höchstens ${limits.maxNewEntities} neue Objekte pro Auftrag (${what} braucht ${count}, schon neu: ${counters.newEntities}). Teile die Arbeit auf mehrere Aufträge auf oder frage den Nutzer.`);
   }
-  if (!ctx.autoApprove && !counters.bigBuildApproved && total >= AI_LIMITS.confirmNewEntitiesAt) {
+  if (!ctx.autoApprove && !counters.bigBuildApproved && total >= limits.confirmNewEntitiesAt) {
     const yes = await ctx.confirm(`Die KI möchte in diesem Auftrag insgesamt ${total} neue Objekte anlegen (${what}). Erlauben?`);
     if (!yes) fail('Nutzer hat abgelehnt');
     counters.bigBuildApproved = true;
@@ -438,7 +440,7 @@ const handlers: Record<string, Handler> = {
   async remove_entity(input, ctx, counters) {
     const { targets, isGroup } = resolveTargets(ctx, input.id);
     const first = targets[0];
-    if (!ctx.autoApprove && !counters.removalsApproved && counters.removals + 1 >= AI_LIMITS.confirmRemovalsAt) {
+    if (!ctx.autoApprove && !counters.removalsApproved && counters.removals + 1 >= getRunLimits().confirmRemovalsAt) {
       const what = isGroup ? `die Gruppe „${(first.groupName || 'Gruppe').slice(0, 40)}“ mit ${targets.length} Objekten` : 'ein weiteres Objekt';
       const yes = await ctx.confirm(`Die KI möchte ${what} entfernen (Aktion ${counters.removals + 1} in diesem Auftrag). Erlauben?`, first.name || first.ref);
       if (!yes) fail('Nutzer hat abgelehnt');

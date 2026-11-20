@@ -95,3 +95,6 @@
 .ai-drop { outline: 2px dashed var(--cp-accent); outline-offset: -4px; border-radius: 8px; }
 .ai-user-images { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
 .ai-user-image { max-width: 120px; max-height: 90px; border-radius: 6px; display: block; }
+
+.ai-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+.ai-longrun { padding: 8px 10px; border: 1px solid var(--cp-border, #3a4256); border-radius: 8px; margin-bottom: 8px; }

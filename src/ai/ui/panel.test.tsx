@@ -132,6 +132,46 @@ describe('AssistantPanel', () => {
 });
 
 describe('SettingsDialog', () => {
+  it('Tabs: Zugang zuerst, Limits mit Laufzeit-Feldern, Funktionen, Protokoll', () => {
+    const api = makeApi();
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+    act(() => root!.render(<SettingsDialog api={api} explain onClose={() => {}} />));
+    expect(q('ai-model')).not.toBeNull();
+    expect(q('ai-run-maxRounds')).toBeNull();
+    act(() => q('ai-tab-limits')!.click());
+    expect(q('ai-model')).toBeNull();
+    for (const k of ['maxRounds', 'maxToolCalls', 'maxNewEntities', 'planNodesPerRun', 'planTokensPerRun']) expect(q(`ai-run-${k}`)).not.toBeNull();
+    expect(q('ai-max-output')).not.toBeNull();
+    act(() => q('ai-tab-features')!.click());
+    expect(q('ai-vision')).not.toBeNull();
+    act(() => q('ai-tab-log')!.click());
+    expect(q('ai-log-level')).not.toBeNull();
+  });
+  it('Lange Pläne (temporär) und eigene Werte wirken auf getRunLimits', async () => {
+    const { getRunLimits, setLongRunMode } = await import('../core/runLimits');
+    setLongRunMode(false);
+    localStorage.removeItem('cloudparty.ai.runLimits');
+    const api = makeApi();
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+    act(() => root!.render(<SettingsDialog api={api} explain onClose={() => {}} />));
+    act(() => q('ai-tab-limits')!.click());
+    expect(getRunLimits().maxRounds).toBe(12);
+    type(q<HTMLInputElement>('ai-run-maxRounds')!, '40');
+    act(() => void q<HTMLInputElement>('ai-run-maxRounds')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+    expect(getRunLimits().maxRounds).toBe(40);
+    act(() => q('ai-long-run')!.click());
+    expect(getRunLimits().maxToolCalls).toBe(400);
+    expect(getRunLimits().maxRounds).toBe(60);
+    expect(q('ai-run-maxRounds')!.closest('.ai-limit')!.textContent).toContain('wirksam: 60');
+    act(() => q('ai-long-run')!.click());
+    expect(getRunLimits().maxRounds).toBe(40);
+    act(() => q('ai-run-reset')!.click());
+    expect(getRunLimits().maxRounds).toBe(12);
+  });
   function mountSettings(api: AssistantApi) {
     host = document.createElement('div');
     document.body.append(host);
@@ -159,6 +199,7 @@ describe('SettingsDialog', () => {
   it('Freigabe: Standard fragen; alles erlauben erst nach Warnung und Bestätigung', () => {
     const api = makeApi();
     mountSettings(api);
+    act(() => q('ai-tab-features')!.click());
     expect(q<HTMLInputElement>('ai-approval-ask')!.checked).toBe(true);
     expect(q<HTMLInputElement>('ai-approval-auto')!.checked).toBe(false);
     act(() => q('ai-approval-auto')!.click());
@@ -178,6 +219,7 @@ describe('SettingsDialog', () => {
     api.setApproval('auto');
     api.setApproval.mockClear();
     mountSettings(api);
+    act(() => q('ai-tab-features')!.click());
     expect(q<HTMLInputElement>('ai-approval-auto')!.checked).toBe(true);
     act(() => q('ai-approval-ask')!.click());
     expect(api.setApproval).toHaveBeenLastCalledWith('ask');

@@ -55,7 +55,31 @@ export const AI_STORAGE_KEYS = {
   log: 'cloudparty.ai.log',
   vision: 'cloudparty.ai.vision',
   imageSearch: 'cloudparty.ai.imageSearch',
+  /** JSON mit den Laufzeit-Grenzen (localStorage). */
+  runLimits: 'cloudparty.ai.runLimits',
+  /** „Lange Pläne“-Modus (sessionStorage: gilt nur bis zum Schließen des Tabs). */
+  longRun: 'cloudparty.ai.longRun',
 } as const;
+
+/**
+ * Einstellbare Laufzeit-Grenzen (pro Auftrag bzw. pro Plan-Lauf). `default` entspricht den Werten in AI_LIMITS;
+ * `long` gilt, solange der temporäre Modus „Lange Pläne“ an ist (nur bis zum Neuladen bzw. Schließen des Tabs).
+ */
+export const AI_RUN_LIMITS = {
+  maxRounds: { min: 2, max: 300, default: 12, long: 60, label: 'Schritte (Modellaufrufe) pro Auftrag', hint: 'So oft darf die KI in einem Auftrag antworten und Werkzeuge nutzen. Ein Plan-Knoten ist ein Auftrag.' },
+  maxToolCalls: { min: 5, max: 2000, default: 60, long: 400, label: 'Werkzeugaufrufe pro Auftrag', hint: 'Gesamtzahl aller Werkzeugaufrufe in einem Auftrag.' },
+  maxNewEntities: { min: 50, max: 50000, default: 1000, long: 10000, label: 'Neue Objekte pro Auftrag', hint: 'Mehr legt die KI in einem Auftrag nicht an.' },
+  confirmNewEntitiesAt: { min: 20, max: 50000, default: 300, long: 5000, label: 'Rückfrage ab so vielen neuen Objekten', hint: 'Ab dieser Zahl fragt die KI einmal pro Auftrag um Erlaubnis (nicht im Modus „alles erlauben“).' },
+  confirmRemovalsAt: { min: 1, max: 1000, default: 5, long: 50, label: 'Rückfrage ab so vielen Löschungen', hint: 'Ab dieser Zahl Löschungen pro Auftrag fragt die KI nach.' },
+  maxScreenshots: { min: 1, max: 30, default: 2, long: 6, label: 'Screenshots pro Auftrag', hint: 'Jeder Screenshot kostet zusätzliche Tokens.' },
+  maxImageSearches: { min: 1, max: 40, default: 4, long: 12, label: 'Bildsuchen pro Auftrag', hint: '' },
+  maxImageDownloads: { min: 1, max: 60, default: 6, long: 20, label: 'Bilder laden pro Auftrag', hint: '' },
+  maxScriptTests: { min: 1, max: 60, default: 6, long: 20, label: 'Skripttests pro Auftrag', hint: '' },
+  planNodesPerRun: { min: 1, max: 500, default: 20, long: 120, label: 'Knoten pro „Alle ausführen“', hint: 'Danach hält der Plan-Lauf an; mit „Alle ausführen“ geht es weiter.' },
+  planTokensPerRun: { min: 50000, max: 20000000, default: 600000, long: 5000000, label: 'Token-Obergrenze pro Plan-Lauf', hint: 'Ein- plus Ausgabe-Tokens aller Knoten eines Laufs. Danach hält er zwischen zwei Knoten an. Schützt vor unerwarteten Kosten.' },
+} as const;
+export type AiRunLimitKey = keyof typeof AI_RUN_LIMITS;
+export type AiRunLimits = Record<AiRunLimitKey, number>;
 
 /**
  * Einstellbare Längengrenzen pro Anfrage (in Tokens; ein Token sind etwa 3-4 Zeichen).

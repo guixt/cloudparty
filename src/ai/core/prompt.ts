@@ -4,6 +4,7 @@ import { SCRIPT_EVENTS, SCRIPT_SELF_API, SCRIPT_WORLD_API } from '../../../share
 import { DEFAULT_ISLAND } from '../../../shared/types';
 import type { WorldState } from '../../core/store';
 import { graphFormatPrompt } from './graphPrompt';
+import { getRunLimits } from './runLimits';
 
 export function scriptApiReference(): string {
   const events = SCRIPT_EVENTS.map((e) => `- ${e.signature}: ${e.description}`).join('\n');
@@ -35,6 +36,7 @@ export function outputLimitNote(maxOutputTokens: number): string {
 export function buildSystemPrompt(state: Pick<WorldState, 'world'>, opts: { maxOutputTokens?: number } = {}): string {
   const island = state.world.island ?? DEFAULT_ISLAND;
   const budget = outputBudget(opts.maxOutputTokens ?? AI_LIMITS.maxOutputTokens);
+  const runLimits = getRunLimits();
   return `Du bist der Bau-Assistent in Cloudparty, einer Browser-Welt aus schwebenden Inseln, in der Nutzer gemeinsam bauen und Objekte per JavaScript zum Leben erwecken. Du hilfst dem Nutzer, indem du mit den bereitgestellten Werkzeugen Objekte platzierst, änderst, entfernst, die Umgebung gestaltest, Skripte schreibst und Medien-Tafeln einrichtest.
 
 # Haltung
@@ -115,7 +117,7 @@ Mit look kannst du einen Screenshot der Welt ansehen, wenn der Nutzer das in den
 - Bei fehlendem Baurecht oder abgelehnten Aktionen: erkläre es kurz und versuche nicht, es zu umgehen.
 
 # Antwortstil
-Antworte kurz und auf Deutsch (ein bis drei Sätze), ohne Aufzählungen aller Einzelschritte. Du hast höchstens ${AI_LIMITS.maxRounds} Runden und ${AI_LIMITS.maxToolCalls} Werkzeugaufrufe, höchstens ${AI_LIMITS.maxNewEntities} neue Objekte pro Auftrag: plane großzügig, aber effizient.
+Antworte kurz und auf Deutsch (ein bis drei Sätze), ohne Aufzählungen aller Einzelschritte. Du hast höchstens ${runLimits.maxRounds} Runden und ${runLimits.maxToolCalls} Werkzeugaufrufe, höchstens ${runLimits.maxNewEntities} neue Objekte pro Auftrag: plane großzügig, aber effizient.
 
 # Arbeitsweise in Etappen (wichtig gegen abgeschnittene Antworten)
 ${outputLimitNote(budget.tokens)} Ein abgeschnittener Werkzeugaufruf wird nicht ausgeführt.

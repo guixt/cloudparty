@@ -8,6 +8,7 @@ import type { EntitySpec } from '../../../shared/types';
 import type { EventBus } from '../../core/events';
 import { clip } from './log';
 import { wrapData } from './summary';
+import { getRunLimits } from './runLimits';
 import { HIDDEN_TEXT, appHidden, fail, getEntity, ok, str, ToolError, type Handler, type ToolContext } from './tools';
 
 interface LogLine {
@@ -104,8 +105,9 @@ export const scriptTestHandlers: Record<string, Handler> = {
 
   async script_test(input, ctx, counters) {
     if (appHidden()) return { ok: false, content: HIDDEN_TEXT, summary: 'App-Fenster im Hintergrund', mutated: false };
-    if ((counters.scriptTests ?? 0) >= AI_LIMITS.maxScriptTestsPerRun) {
-      return { ok: false, content: `Limit erreicht: höchstens ${AI_LIMITS.maxScriptTestsPerRun} Skripttests pro Auftrag.`, summary: 'Testlimit erreicht', mutated: false };
+    const maxTests = getRunLimits().maxScriptTests;
+    if ((counters.scriptTests ?? 0) >= maxTests) {
+      return { ok: false, content: `Limit erreicht: höchstens ${maxTests} Skripttests pro Auftrag.`, summary: 'Testlimit erreicht', mutated: false };
     }
     const entity = getEntity(ctx, input.id);
     if (!entityScriptSource(entity)) fail('Dieses Objekt hat kein Skript (und keinen Logik-Graph). Hänge zuerst eines an.');

@@ -3,6 +3,7 @@ import { AI_LIMITS } from '../../../shared/aiTools';
 import type { MediaSpec } from '../../../shared/types';
 import { aspectForImage } from '../../world/media/helpers';
 import { getHit, searchImages, type ImageSource } from './imageSearch';
+import { getRunLimits } from './runLimits';
 import { wrapData } from './summary';
 import { fail, getEntity, getEntityOrGroup, num, ok, opts, str, type Handler } from './tools';
 
@@ -14,8 +15,8 @@ export const imageHandlers: Record<string, Handler> = {
   async use_texture(input, ctx, counters) {
     if (!ctx.imageSearch) off();
     if (!ctx.fetchImage) fail('Bilder herunterladen ist hier nicht verfügbar.');
-    if ((counters.imageDownloads ?? 0) >= AI_LIMITS.maxImageDownloads) {
-      return { ok: false, content: `Limit erreicht: höchstens ${AI_LIMITS.maxImageDownloads} Bilder pro Auftrag.`, summary: 'Bild-Limit erreicht', mutated: false };
+    if ((counters.imageDownloads ?? 0) >= getRunLimits().maxImageDownloads) {
+      return { ok: false, content: `Limit erreicht: höchstens ${getRunLimits().maxImageDownloads} Bilder pro Auftrag.`, summary: 'Bild-Limit erreicht', mutated: false };
     }
     const entity = getEntityOrGroup(ctx, input.id);
     const uv = input.uv_scale === undefined ? 1 : num(input.uv_scale, 'uv_scale', 0.1, 50);
@@ -37,8 +38,8 @@ export const imageHandlers: Record<string, Handler> = {
 
   async search_images(input, ctx, counters) {
     if (!ctx.imageSearch) return { ok: false, content: 'Die Bildsuche ist ausgeschaltet. Bitte den Nutzer, sie in den KI-Einstellungen („KI darf im Internet nach Bildern suchen“) zu erlauben, und arbeite bis dahin ohne Fotos weiter.', summary: 'Bildsuche ist ausgeschaltet', mutated: false };
-    if ((counters.imageSearches ?? 0) >= AI_LIMITS.maxImageSearches) {
-      return { ok: false, content: `Limit erreicht: höchstens ${AI_LIMITS.maxImageSearches} Bildsuchen pro Auftrag. Wähle aus den bisherigen Treffern.`, summary: 'Limit der Bildsuchen erreicht', mutated: false };
+    if ((counters.imageSearches ?? 0) >= getRunLimits().maxImageSearches) {
+      return { ok: false, content: `Limit erreicht: höchstens ${getRunLimits().maxImageSearches} Bildsuchen pro Auftrag. Wähle aus den bisherigen Treffern.`, summary: 'Limit der Bildsuchen erreicht', mutated: false };
     }
     const query = str(input.query, 'query', 120).trim();
     const source = input.source === undefined ? 'auto' : input.source;
@@ -59,8 +60,8 @@ export const imageHandlers: Record<string, Handler> = {
   async use_image(input, ctx, counters) {
     if (!ctx.imageSearch) off();
     if (!ctx.fetchImage) fail('Bilder herunterladen ist hier nicht verfügbar.');
-    if ((counters.imageDownloads ?? 0) >= AI_LIMITS.maxImageDownloads) {
-      return { ok: false, content: `Limit erreicht: höchstens ${AI_LIMITS.maxImageDownloads} Bilder pro Auftrag.`, summary: 'Bild-Limit erreicht', mutated: false };
+    if ((counters.imageDownloads ?? 0) >= getRunLimits().maxImageDownloads) {
+      return { ok: false, content: `Limit erreicht: höchstens ${getRunLimits().maxImageDownloads} Bilder pro Auftrag.`, summary: 'Bild-Limit erreicht', mutated: false };
     }
     const entity = getEntity(ctx, input.id);
     const kind = entity.media?.kind ?? (/^EntitySpec\.media-(image|slides)$/.exec(entity.ref)?.[1] as 'image' | 'slides' | undefined);

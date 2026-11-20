@@ -4,6 +4,7 @@ import type { Vec3 } from '../../../shared/types';
 import { VIEW_NAMES, type ViewName } from './capture';
 import { entityBox } from './buildTools';
 import { unionBox } from './buildGeometry';
+import { getRunLimits } from './runLimits';
 import { HIDDEN_TEXT, appHidden, fail, getEntityOrGroup, resolveTargets, num, ok, type Handler, type ToolContext } from './tools';
 
 /** Mittelpunkt und Radius um ein Objekt (bei Gruppen: um alle Mitglieder). */
@@ -24,8 +25,9 @@ export const visionHandlers: Record<string, Handler> = {
     }
     const capture = ctx.captureView ?? fail('Screenshots sind hier nicht verfügbar.');
     if (appHidden()) return { ok: false, content: HIDDEN_TEXT, summary: 'App-Fenster im Hintergrund', mutated: false };
-    if ((counters.screenshots ?? 0) >= AI_LIMITS.maxScreenshotsPerRun) {
-      return { ok: false, content: `Limit erreicht: höchstens ${AI_LIMITS.maxScreenshotsPerRun} Screenshots pro Auftrag. Arbeite mit den Daten aus get_world weiter oder beende den Auftrag.`, summary: 'Screenshot-Limit erreicht', mutated: false };
+    const maxShots = getRunLimits().maxScreenshots;
+    if ((counters.screenshots ?? 0) >= maxShots) {
+      return { ok: false, content: `Limit erreicht: höchstens ${maxShots} Screenshots pro Auftrag. Arbeite mit den Daten aus get_world weiter oder beende den Auftrag.`, summary: 'Screenshot-Limit erreicht', mutated: false };
     }
     const view = input.view === undefined ? 'iso' : input.view;
     if (typeof view !== 'string' || !(VIEW_NAMES as readonly string[]).includes(view)) fail(`view muss eines von ${VIEW_NAMES.join(', ')} sein.`);
@@ -57,7 +59,7 @@ export const visionHandlers: Record<string, Handler> = {
     counters.screenshots = (counters.screenshots ?? 0) + 1;
     const data = await capture({ center, radius, view: (views ? views[0] : view) as ViewName, ...(views ? { views } : {}), ...(highlight ? { highlight } : {}), ...(distance !== undefined ? { distance } : {}) });
     if (!data) return fail('Der Screenshot ist fehlgeschlagen.');
-    const left = AI_LIMITS.maxScreenshotsPerRun - counters.screenshots;
+    const left = maxShots - counters.screenshots;
     return { ok: true, content: `Screenshot (${views ? `${views[0]} links, ${views[1]} rechts` : view}${highlight ? ', Ziel magenta markiert' : ''}) um [${center.map((n) => Math.round(n * 10) / 10).join(', ')}]. Noch ${left} Screenshot(s) in diesem Auftrag erlaubt.`, summary: 'Welt angesehen', mutated: false, image: data };
   },
 };

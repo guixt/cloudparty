@@ -244,3 +244,11 @@ Ein kleiner lokaler MCP-Server (`mcp/server.ts`) verbindet Claude Desktop mit de
 Zusätzlich zu `plan_create`, `plan_get`, `plan_add_node`, `plan_update_node`, `plan_remove_node` und `plan_complete_node` kann die KI jetzt: **`plan_connect`** (Abhängigkeiten nachträglich setzen oder lösen: `chain` für eine Kette, `edges` für einzelne Verbindungen, Kreise werden abgelehnt), **`plan_add_node`** mit `before` (Knoten in eine bestehende Kette einfügen) und **`plan_edit`** (Plan umbenennen oder löschen, Löschen fragt nach). `plan_get` weist auf Knoten ohne Verbindungen hin. Die Werkzeuge stehen auch über MCP zur Verfügung.
 
 **Baumodus:** Mit gedrückter Shift-Taste bewegt sich die Kamera per W A S D / Q E dreimal so schnell.
+
+## KI-Einstellungen: Tabs und Laufzeit-Limits
+
+Der Einstellungsdialog ist in vier Tabs gegliedert: **Zugang** (API-Key, Modell), **Limits**, **Funktionen** (Freigaben, Screenshots, Bildsuche, Externe Steuerung per MCP) und **Protokoll**.
+
+Unter **Limits** lassen sich neben den Token-Längen jetzt auch die Laufzeit-Grenzen einstellen (Standardwerte wie bisher): Schritte (Modellaufrufe) und Werkzeugaufrufe pro Auftrag, neue Objekte pro Auftrag, ab wann die KI nachfragt (neue Objekte, Löschungen), Screenshots, Bildsuchen, Bilder und Skripttests pro Auftrag sowie für „Alle ausführen“ die Knoten pro Lauf und die Token-Obergrenze pro Plan-Lauf. Die Werte gelten pro Browser; „Alle Limits auf Standard“ setzt sie zurück.
+
+**Lange Pläne (temporär):** Ein Schalter hebt alle Laufzeit-Grenzen auf großzügige Werte an (mindestens 60 Schritte, 400 Werkzeugaufrufe, 10000 neue Objekte, 120 Knoten, 5 Mio. Tokens pro Lauf …), aber nur bis zum Neuladen bzw. Schließen des Tabs (`sessionStorage`). Die gespeicherten Werte bleiben unverändert. Das kann deutlich mehr Tokens und Kosten verursachen.
