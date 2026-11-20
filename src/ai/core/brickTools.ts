@@ -9,6 +9,7 @@ import { yawQuat } from './buildGeometry';
 import { describeOpening, nameOpenings, saveOpenings, type OpeningInfo } from './anchors';
 import { createEntityFromPrefab } from '../../world/entities/prefabs';
 import { applyCommon, coord, reserveEntities, fail, int, obj, ok, opts, str, type Handler, type RunCounters, type ToolContext } from './tools';
+import { registerHandlers } from './registry';
 
 const MAX_BRICKS = AI_LIMITS.maxPerCall;
 /** Größtes Wand-/Boden-Rechteck von fill_bricks (Noppen je Seite) und größte Zahl Öffnungen je Aufruf. Der Systemprompt nennt beide. */
@@ -102,7 +103,7 @@ function inOpening(fp: Footprint, layer: number, cols: number, rows: number, ope
   });
 }
 
-export const brickHandlers: Record<string, Handler> = {
+export const brickHandlers: Record<string, Handler> = registerHandlers({
   async bricks_profile(input, ctx, counters) {
     const gx0 = int(input.x, 'x', -500, 500);
     const gz0 = int(input.z, 'z', -500, 500);
@@ -222,4 +223,4 @@ export const brickHandlers: Record<string, Handler> = {
     }
     return ok(`${ids.length} Steine gemauert: group="${group}". ${bounds}${doors.length ? ` Öffnungen (Welt-Koordinaten; north = kleineres z, south = größeres z, west = kleineres x, east = größeres x): ${doors.join('; ')}.` : ''}${openingInfoText}`, `${name} gemauert (${ids.length} Steine)`, true);
   },
-};
+});

@@ -28,6 +28,7 @@ import { mediaKindOfRef, boardSize } from '../../world/media/helpers';
 import { wrapData } from './summary';
 import { describeOpening, nameOpenings, openingsOfGroup, saveOpenings, type OpeningInfo } from './anchors';
 import { applyCommon, coord, reserveEntities, fail, getEntityOrGroup, resolveTargets, num, obj, ok, opts, str, vec, type Handler, type RunCounters, type ToolContext } from './tools';
+import { registerHandlers } from './registry';
 
 const MAX_WALL_PIECES = 100;
 const MAX_ARRAY_ITEMS = AI_LIMITS.maxPerCall;
@@ -112,7 +113,7 @@ function membersOf(ctx: ToolContext, e: EntitySpec): EntitySpec[] {
   return e.group ? order.map((id) => entities[id]).filter((x): x is EntitySpec => !!x && x.group === e.group) : [e];
 }
 
-export const buildHandlers: Record<string, Handler> = {
+export const buildHandlers: Record<string, Handler> = registerHandlers({
   check_overlaps(input, ctx) {
     const { entities, order } = ctx.store.getState();
     const ids = input.id === undefined ? [...order] : resolveTargets(ctx, input.id).targets.map((e) => e.id);
@@ -327,4 +328,4 @@ export const buildHandlers: Record<string, Handler> = {
     const result = { x, z, aufDerInsel: dist <= island.radius, abstandZumRand: round(island.radius - dist), hoehe: round(top), liegtAuf: on };
     return ok(wrapData(JSON.stringify(result)), `Höhe bei (${round(x)}, ${round(z)}): ${round(top)} m`, false);
   },
-};
+});

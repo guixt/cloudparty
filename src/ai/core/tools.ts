@@ -7,16 +7,11 @@ import type { EventBus } from '../../core/events';
 import type { WorldStore } from '../../core/store';
 import {
   LOOK_IDS,
-  MATERIAL_PATTERNS,
-  MATERIAL_PRESETS,
   WEATHER_KINDS,
   type EntitySpec,
   type LookId,
-  type MaterialSpec,
   type MediaKind,
   type MediaSpec,
-  type ParticleSpec,
-  type PhysicsSpec,
   type SeaMode,
   type SkyPreset,
   type Vec3,
@@ -27,16 +22,23 @@ import { eulerToQuat } from '../../scripting/runtime/commands';
 import { yawToward } from '../../../shared/front';
 import { buildWorldSummary, wrapData } from './summary';
 import { getRunLimits } from './runLimits';
-import { groupHandlers } from './groupTools';
-import { libraryHandlers } from './libraryTools';
-import { graphHandlers } from './graphTools';
-import { planHandlers } from './planTools';
-import { visionHandlers } from './visionTools';
-import { buildHandlers } from './buildTools';
-import { brickHandlers } from './brickTools';
-import { placeHandlers } from './placeTools';
-import { scriptTestHandlers } from './scriptTestTools';
-import { imageHandlers } from './imageTools';
+import './groupTools';
+import './libraryTools';
+import './graphTools';
+import './planTools';
+import './visionTools';
+import './buildTools';
+import './brickTools';
+import './placeTools';
+import './scriptTestTools';
+import './imageTools';
+import { getHandler, registerHandlers } from './registry';
+import { ToolError, fail, isObj, num, vec, coord, size, color, str, oneOf, int, obj, checkUrl, parseMaterial, parsePhysics, parseParticles, parseState } from './validate';
+import { getEntity, resolveTargets, getEntityOrGroup, expandTargets, didYouMean, groupMembers } from './targets';
+
+// Alte Importpfade bleiben gültig: Validierung (validate.ts) und Zielauflösung (targets.ts) werden hier weitergereicht.
+export { ToolError, fail, isObj, num, vec, coord, str, int, obj } from './validate';
+export { getEntity, resolveTargets, getEntityOrGroup, expandTargets, didYouMean, groupMembers } from './targets';
 import { baseEntityFor, isKnownRef, knownRefs } from './refs';
 import { belowSurface, describeBelowSurface, describeOverlaps, findOverlaps } from './overlap';
 
@@ -86,132 +88,14 @@ export interface ToolOutcome {
   image?: string;
 }
 
-export class ToolError extends Error {}
 /** Ist das App-Fenster im Hintergrund oder verdeckt? Dann pausiert der Browser Bildaufnahmen und drosselt Zeitgeber. */
 export function appHidden(): boolean {
   return typeof document !== 'undefined' && document.visibilityState === 'hidden';
 }
 export const HIDDEN_TEXT = 'Das App-Fenster ist gerade im Hintergrund oder verdeckt; der Browser pausiert dann Bildaufnahmen und drosselt Zeitgeber, deshalb ist dieses Werkzeug jetzt nicht möglich. Arbeite ohne es weiter und bitte den Nutzer, das App-Fenster sichtbar zu lassen.';
-export const fail = (message: string): never => {
-  throw new ToolError(message);
-};
 
 const FORBIDDEN_SCRIPT = [/\bfetch\b/, /\bXMLHttpRequest\b/, /\bWebSocket\b/, /\bimport\s*\(/, /\beval\b/, /\bFunction\s*\(/, /\bimportScripts\b/];
 
-// ---------------------------------------------------------------- Validierung
-
-export const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-
-export function num(v: unknown, label: string, min: number, max: number): number {
-  if (typeof v !== 'number' || !Number.isFinite(v)) return fail(`${label} muss eine endliche Zahl sein.`);
-  if (v < min || v > max) return fail(`${label} muss zwischen ${min} und ${max} liegen (war ${v}).`);
-  return v;
-}
-export function vec(v: unknown, label: string, min: number, max: number): Vec3 {
-  if (!Array.isArray(v) || v.length !== 3) return fail(`${label} muss ein Array aus genau 3 Zahlen sein.`);
-  return [num(v[0], `${label}[0]`, min, max), num(v[1], `${label}[1]`, min, max), num(v[2], `${label}[2]`, min, max)];
-}
-export const coord = (v: unknown, label: string) => vec(v, label, -AI_LIMITS.maxCoordinate, AI_LIMITS.maxCoordinate);
-function size(v: unknown, label: string): Vec3 {
-  const s = vec(v, label, -AI_LIMITS.maxSize, AI_LIMITS.maxSize);
-  for (const c of s) if (Math.abs(c) < AI_LIMITS.minSize) return fail(`${label}: Beträge müssen mindestens ${AI_LIMITS.minSize} sein (auch flache Platten brauchen eine Dicke, z. B. [4, ${AI_LIMITS.minSize}, 4]; 0 ist nicht erlaubt).`);
-  return s;
-}
-function color(v: unknown, label: string): string {
-  if (typeof v !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(v)) return fail(`${label} muss eine Farbe im Format #RRGGBB sein.`);
-  return v.toLowerCase();
-}
-export function str(v: unknown, label: string, max: number, allowEmpty = false): string {
-  if (typeof v !== 'string') return fail(`${label} muss Text sein.`);
-  if (v.length > max) return fail(`${label} ist zu lang (max. ${max} Zeichen).`);
-  if (!allowEmpty && v.trim() === '') return fail(`${label} darf nicht leer sein.`);
-  return v;
-}
-function oneOf<T extends string>(v: unknown, label: string, options: readonly T[]): T {
-  if (typeof v !== 'string' || !options.includes(v as T)) return fail(`${label} muss eines von ${options.join(', ')} sein.`);
-  return v as T;
-}
-/** Ganze Zahl in [min, max]. */
-export function int(v: unknown, label: string, min: number, max: number): number {
-  const n = num(v, label, min, max);
-  if (!Number.isInteger(n)) fail(`${label} muss eine ganze Zahl sein.`);
-  return n;
-}
-
-export function obj(v: unknown, label: string): Record<string, unknown> {
-  return isObj(v) ? v : fail(`${label} muss ein Objekt sein.`);
-}
-function checkUrl(v: unknown, label: string): string {
-  const s = str(v, label, 2000);
-  let u: URL;
-  try {
-    u = new URL(s);
-  } catch {
-    return fail(`${label} ist keine gültige Adresse.`);
-  }
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') return fail(`${label} muss mit http:// oder https:// beginnen.`);
-  return s;
-}
-
-function parseMaterial(v: unknown, base?: MaterialSpec): MaterialSpec {
-  const m = obj(v, 'material');
-  const out: MaterialSpec = { ...(base ?? {}) };
-  if (m.color !== undefined) out.color = color(m.color, 'material.color');
-  if (m.emissive !== undefined) out.emissive = color(m.emissive, 'material.emissive');
-  if (m.metallic !== undefined) out.metallic = num(m.metallic, 'material.metallic', 0, 1);
-  if (m.roughness !== undefined) out.roughness = num(m.roughness, 'material.roughness', 0, 1);
-  if (m.alpha !== undefined) out.alpha = num(m.alpha, 'material.alpha', 0, 1);
-  if (m.preset !== undefined) {
-    out.preset = oneOf(m.preset, 'material.preset', MATERIAL_PRESETS);
-    // Voreinstellung ohne eigene Farbe/Werte: die Standardfarbe des Bausteins darf sie nicht überstimmen (Gold wäre sonst rot).
-    if (m.color === undefined) delete out.color;
-    if (m.metallic === undefined) delete out.metallic;
-    if (m.roughness === undefined) delete out.roughness;
-  }
-  if (m.reflect !== undefined) out.reflect = num(m.reflect, 'material.reflect', 0, 1);
-  if (m.clearcoat !== undefined) out.clearcoat = num(m.clearcoat, 'material.clearcoat', 0, 1);
-  if (m.glass !== undefined) out.glass = num(m.glass, 'material.glass', 0, 1);
-  if (m.ior !== undefined) out.ior = num(m.ior, 'material.ior', 1, 2.5);
-  if (m.mirror !== undefined) {
-    if (typeof m.mirror !== 'boolean') fail('material.mirror muss true oder false sein.');
-    out.mirror = m.mirror as boolean;
-  }
-  if (m.emissive_intensity !== undefined) out.emissiveIntensity = num(m.emissive_intensity, 'material.emissive_intensity', 0, 5);
-  if (m.pattern !== undefined) out.pattern = oneOf(m.pattern, 'material.pattern', MATERIAL_PATTERNS);
-  if (m.pattern_color !== undefined) out.patternColor = color(m.pattern_color, 'material.pattern_color');
-  if (m.uv_scale !== undefined) out.uvScale = num(m.uv_scale, 'material.uv_scale', 0.1, 50);
-  return out;
-}
-function parsePhysics(v: unknown): PhysicsSpec {
-  const p = obj(v, 'physics');
-  const out: PhysicsSpec = { mode: oneOf(p.mode, 'physics.mode', ['none', 'static', 'dynamic', 'trigger'] as const) };
-  if (p.mass !== undefined) out.mass = num(p.mass, 'physics.mass', 0.01, 100_000);
-  if (p.friction !== undefined) out.friction = num(p.friction, 'physics.friction', 0, 5);
-  if (p.restitution !== undefined) out.restitution = num(p.restitution, 'physics.restitution', 0, 1);
-  return out;
-}
-function parseParticles(v: unknown): ParticleSpec {
-  const p = obj(v, 'particles');
-  if (typeof p.enabled !== 'boolean') fail('particles.enabled muss true oder false sein.');
-  const out: ParticleSpec = {
-    preset: oneOf(p.preset, 'particles.preset', ['fire', 'sparks', 'smoke', 'confetti'] as const),
-    enabled: p.enabled as boolean,
-  };
-  if (p.rate !== undefined) out.rate = num(p.rate, 'particles.rate', 1, 500);
-  return out;
-}
-function parseState(v: unknown): Record<string, unknown> {
-  const s = obj(v, 'state');
-  let json: string;
-  try {
-    json = JSON.stringify(s);
-  } catch {
-    return fail('state ist nicht als JSON darstellbar.');
-  }
-  if (json.length > AI_LIMITS.maxTextLength * 2) return fail('state ist zu groß.');
-  if ('__proto__' in s && Object.prototype.hasOwnProperty.call(s, '__proto__')) return fail('Ungültiger state-Schlüssel.');
-  return JSON.parse(json) as Record<string, unknown>;
-}
 
 // ---------------------------------------------------------------- Hilfen
 
@@ -222,107 +106,6 @@ const fmt = (n: number) => {
 const fmtPos = (p: Vec3) => `(${fmt(p[0])}, ${fmt(p[1])}, ${fmt(p[2])})`;
 export const opts = { source: 'local' as const };
 
-/** Mitglieder einer Gruppe (in Weltreihenfolge); leer, wenn es die Gruppe nicht gibt. */
-export function groupMembers(ctx: ToolContext, groupId: string): EntitySpec[] {
-  const { entities, order } = ctx.store.getState();
-  return order.map((eid) => entities[eid]).filter((e): e is EntitySpec => !!e && e.group === groupId);
-}
-
-/** Eindeutiger Treffer nach Objektname (ohne Groß/Kleinschreibung); bei mehreren Treffern Fehler mit den ersten ids. */
-function byName(ctx: ToolContext, sid: string): EntitySpec | undefined {
-  const needle = sid.trim().toLowerCase();
-  if (!needle) return undefined;
-  const { entities, order } = ctx.store.getState();
-  const hits = order.map((i) => entities[i]).filter((e): e is EntitySpec => !!e && (e.name ?? '').trim().toLowerCase() === needle);
-  if (hits.length === 1) return hits[0];
-  if (hits.length > 1) fail(`Der Name "${sid.slice(0, 60)}" ist nicht eindeutig (${hits.length} Objekte, z. B. ${hits.slice(0, 5).map((h) => h.id).join(', ')}). Nimm eine id.`);
-  return undefined;
-}
-
-/** Gruppe nach Gruppenname (eindeutig), sonst leer. */
-function groupByName(ctx: ToolContext, sid: string): EntitySpec[] {
-  const needle = sid.trim().toLowerCase();
-  if (!needle) return [];
-  const { entities, order } = ctx.store.getState();
-  const hits = order.map((i) => entities[i]).filter((e): e is EntitySpec => !!e && !!e.group && (e.groupName ?? '').trim().toLowerCase() === needle);
-  return new Set(hits.map((h) => h.group)).size === 1 ? hits : [];
-}
-
-function editDistance(a: string, b: string): number {
-  if (Math.abs(a.length - b.length) > 3) return 99;
-  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    const cur = [i];
-    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-    prev = cur;
-  }
-  return prev[b.length];
-}
-
-/** Hinweis „Meintest du …?“ bei falsch abgetippten ids oder Namen (Leerzeichen, Tippfehler, Teilnamen). */
-export function didYouMean(ctx: ToolContext, sid: string): string {
-  const needle = sid.replace(/\s+/g, '').toLowerCase();
-  const text = sid.trim().toLowerCase();
-  const words = text.split(/[^a-zäöüß0-9]+/).filter((w) => w.length >= 5);
-  if (!needle) return '';
-  const { entities, order } = ctx.store.getState();
-  const hits: string[] = [];
-  const seenGroups = new Set<string>();
-  for (const id of order) {
-    const e = entities[id];
-    if (!e) continue;
-    const name = (e.name ?? '').trim().toLowerCase();
-    const close = id.toLowerCase() === needle || editDistance(id.toLowerCase(), needle) <= 2;
-    const partial = text.length >= 4 && name.length >= 4 && (name.includes(text) || text.includes(name) || words.some((w) => name.includes(w)));
-    if (close || partial) hits.push(`${id}${e.name ? ` („${e.name}“)` : ''}`);
-    const gname = (e.groupName ?? '').trim().toLowerCase();
-    if (e.group && !seenGroups.has(e.group) && text.length >= 4 && gname.length >= 4 && (gname.includes(text) || text.includes(gname) || words.some((w) => gname.includes(w)))) {
-      seenGroups.add(e.group);
-      hits.push(`${e.group} (Gruppe „${e.groupName}“)`);
-    }
-    if (hits.length >= 4) break;
-  }
-  return hits.length > 0 ? ` Meintest du: ${hits.join(', ')}?` : '';
-}
-
-export function getEntity(ctx: ToolContext, id: unknown): EntitySpec {
-  const sid = str(id, 'id', 200);
-  const entity = ctx.store.getState().entities[sid];
-  if (entity) return entity;
-  const members = groupMembers(ctx, sid);
-  if (members.length > 0) {
-    return fail(`"${sid.slice(0, 60)}" ist eine Gruppen-id, kein Objekt. Nimm die id eines Mitglieds (z. B. "${members[0].id}"); get_bounds, clone_group, use_texture, look, remove_entity und update_entity (material, physics, particles, move_by) akzeptieren auch Gruppen-ids.`);
-  }
-  return byName(ctx, sid) ?? fail(`Kein Objekt mit der id "${sid.slice(0, 60)}" gefunden.${didYouMean(ctx, sid)} Kopiere ids exakt aus einem Werkzeugergebnis oder rufe get_world auf.`);
-}
-
-/** Ziel eines Werkzeugs: ein Objekt oder (bei einer Gruppen-id oder einem eindeutigen Gruppennamen) alle Mitglieder der Gruppe. */
-export function resolveTargets(ctx: ToolContext, id: unknown): { targets: EntitySpec[]; isGroup: boolean } {
-  const sid = str(id, 'id', 200);
-  const entity = ctx.store.getState().entities[sid];
-  if (entity) return { targets: [entity], isGroup: false };
-  const members = groupMembers(ctx, sid);
-  if (members.length > 0) return { targets: members, isGroup: true };
-  const named = byName(ctx, sid);
-  if (named) return { targets: [named], isGroup: false };
-  const byGroupName = groupByName(ctx, sid);
-  if (byGroupName.length > 0) return { targets: byGroupName, isGroup: true };
-  return { targets: [getEntity(ctx, id)], isGroup: false };
-}
-
-/** Wie getEntity, akzeptiert aber auch eine Gruppen-id (liefert dann das erste Mitglied). */
-export function getEntityOrGroup(ctx: ToolContext, id: unknown): EntitySpec {
-  return resolveTargets(ctx, id).targets[0];
-}
-
-/** Liste von ids (Objekt-ids, Gruppen-ids oder Namen) zu Objekten; Gruppen werden zu ihren Mitgliedern, ohne Doppelte. */
-export function expandTargets(ctx: ToolContext, raw: unknown[]): EntitySpec[] {
-  const out = new Map<string, EntitySpec>();
-  raw.forEach((v) => {
-    for (const e of resolveTargets(ctx, str(v, 'id', 200)).targets) out.set(e.id, e);
-  });
-  return [...out.values()];
-}
 
 /**
  * Prüft vor dem Anlegen von `count` Objekten die Grenze je Auftrag (maxNewEntities); eine Obergrenze je Welt gibt es hier nicht
@@ -388,7 +171,7 @@ export function applyCommon(entity: EntitySpec, input: Record<string, unknown>, 
   return next;
 }
 
-const handlers: Record<string, Handler> = {
+registerHandlers({
   get_world(_input, ctx) {
     const summary = buildWorldSummary(ctx.store.getState(), ctx.getAvatar(), {
       ...(typeof _input.group === 'string' ? { group: _input.group.slice(0, 100) } : {}),
@@ -580,12 +363,12 @@ const handlers: Record<string, Handler> = {
     ctx.bus.emit('chat.message', { from: 'system', name: 'KI-Assistent', text, ts: Date.now(), kind: 'system' });
     return ok('Nachricht angezeigt.', 'Nachricht gesendet', false);
   },
-};
+});
 
 /** Führt ein Werkzeug aus. Wirft nie; Fehler kommen als `ok: false` zurück. */
 export async function executeTool(name: string, rawInput: unknown, ctx: ToolContext, counters: RunCounters): Promise<ToolOutcome> {
   const def = getToolDefinition(name);
-  const handler = def ? (handlers[name] ?? groupHandlers[name] ?? libraryHandlers[name] ?? graphHandlers[name] ?? planHandlers[name] ?? visionHandlers[name] ?? buildHandlers[name] ?? brickHandlers[name] ?? scriptTestHandlers[name] ?? imageHandlers[name] ?? placeHandlers[name]) : undefined;
+  const handler = def ? getHandler(name) : undefined;
   if (!def || !handler) {
     const msg = `Unbekanntes Werkzeug "${name.slice(0, 40)}".`;
     return { ok: false, content: msg, summary: msg, mutated: false };

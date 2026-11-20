@@ -6,12 +6,13 @@ import { getHit, searchImages, type ImageSource } from './imageSearch';
 import { getRunLimits } from './runLimits';
 import { wrapData } from './summary';
 import { fail, getEntity, getEntityOrGroup, num, ok, opts, str, type Handler } from './tools';
+import { registerHandlers } from './registry';
 
 const MAX_SLIDES = 50;
 const off = (): never =>
   fail('Die Bildsuche ist ausgeschaltet. Bitte den Nutzer, sie in den KI-Einstellungen („KI darf im Internet nach Bildern suchen“) zu erlauben, und arbeite bis dahin ohne Fotos weiter.');
 
-export const imageHandlers: Record<string, Handler> = {
+export const imageHandlers: Record<string, Handler> = registerHandlers({
   async use_texture(input, ctx, counters) {
     if (!ctx.imageSearch) off();
     if (!ctx.fetchImage) fail('Bilder herunterladen ist hier nicht verfügbar.');
@@ -95,4 +96,4 @@ export const imageHandlers: Record<string, Handler> = {
     ctx.store.getState().updateEntity(entity.id, { media, state }, opts);
     return ok(`Bild gesetzt: ${credit}.${aspect !== null && (kind === 'image' || media.urls?.length === 1) ? ` Die Tafel hat jetzt das Seitenverhältnis des Bildes (${aspect}).` : ''}`, `Bild „${hit.title.slice(0, 40)}“ gesetzt`, true);
   },
-};
+});

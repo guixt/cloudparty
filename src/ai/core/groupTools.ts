@@ -2,13 +2,14 @@
 import { migrateOpenings } from './anchors';
 import { newEntityId } from '../../../shared/types';
 import { expandTargets, fail, getEntityOrGroup, isObj, ok, opts, str, type Handler, type ToolContext } from './tools';
+import { registerHandlers } from './registry';
 
 function groupMembers(ctx: ToolContext, group: string): string[] {
   const { entities, order } = ctx.store.getState();
   return order.filter((id) => entities[id]?.group === group);
 }
 
-export const groupHandlers: Record<string, Handler> = {
+export const groupHandlers: Record<string, Handler> = registerHandlers({
   group_entities(input, ctx) {
     if (!Array.isArray(input.ids)) fail('ids muss eine Liste von Objekt-ids sein.');
     const raw = input.ids as unknown[];
@@ -39,4 +40,4 @@ export const groupHandlers: Record<string, Handler> = {
     for (const id of members) ctx.store.getState().updateEntity(id, { group: undefined, groupName: undefined }, opts);
     return ok('Gruppe aufgelöst.', `Gruppe aufgelöst (${members.length} Objekte)`, true);
   },
-};
+});

@@ -2,6 +2,7 @@
 import { PLAN_LIMITS, compactPlan, type PlanSpec } from '../../../shared/plan';
 import { PlanError, addEdge, addNode, createPlan, deletePlan, getPlan, listPlans, removeEdge, removeNode, renamePlan, updateNode, type PlanCtx } from '../../plan/core/api';
 import { fail, ok, str, ToolError, type Handler, type ToolContext } from './tools';
+import { registerHandlers } from './registry';
 import { wrapData } from './summary';
 
 function pctx(ctx: ToolContext): PlanCtx {
@@ -65,7 +66,7 @@ function edgeList(v: unknown, plan: PlanSpec): Array<{ from: string; to: string 
   });
 }
 
-export const planHandlers: Record<string, Handler> = {
+export const planHandlers: Record<string, Handler> = registerHandlers({
   plan_connect(input, ctx) {
     const plan = needPlan(ctx, input.plan);
     const remove = input.remove === true;
@@ -210,4 +211,4 @@ export const planHandlers: Record<string, Handler> = {
     const note = (dropped > 0 ? ` (${dropped} unbekannte ids ignoriert)` : '') + (fromRun ? ' (die in diesem Auftrag neu gebauten Objekte wurden automatisch zugeordnet)' : '');
     return ok(`Knoten als fertig gespeichert mit ${entityIds.length} Objekten${note}.`, `Knoten fertig (${entityIds.length} Objekte)`, true);
   },
-};
+});
