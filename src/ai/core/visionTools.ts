@@ -6,6 +6,7 @@ import { entityBox } from './buildTools';
 import { unionBox } from './buildGeometry';
 import { getRunLimits } from './runLimits';
 import { HIDDEN_TEXT, appHidden, fail, getEntityOrGroup, resolveTargets, num, ok, type Handler, type ToolContext } from './tools';
+import { registerHandlers } from './registry';
 
 /** Mittelpunkt und Radius um ein Objekt (bei Gruppen: um alle Mitglieder). */
 export function boundsFor(ctx: ToolContext, id: unknown): { center: Vec3; radius: number } {
@@ -18,7 +19,7 @@ export function boundsFor(ctx: ToolContext, id: unknown): { center: Vec3; radius
   return { center, radius };
 }
 
-export const visionHandlers: Record<string, Handler> = {
+export const visionHandlers: Record<string, Handler> = registerHandlers({
   async look(input, ctx, counters) {
     if (!ctx.vision) {
       return { ok: false, content: 'Screenshots sind ausgeschaltet. Bitte den Nutzer, sie in den KI-Einstellungen („KI darf Screenshots der Welt ansehen“) zu erlauben, und arbeite bis dahin ohne Bild weiter.', summary: 'Screenshots sind ausgeschaltet', mutated: false };
@@ -62,4 +63,4 @@ export const visionHandlers: Record<string, Handler> = {
     const left = maxShots - counters.screenshots;
     return { ok: true, content: `Screenshot (${views ? `${views[0]} links, ${views[1]} rechts` : view}${highlight ? ', Ziel magenta markiert' : ''}) um [${center.map((n) => Math.round(n * 10) / 10).join(', ')}]. Noch ${left} Screenshot(s) in diesem Auftrag erlaubt.`, summary: 'Welt angesehen', mutated: false, image: data };
   },
-};
+});

@@ -11,6 +11,7 @@ import { rotateVec, unionBox, yawQuat, type Box } from './buildGeometry';
 import { describeOverlaps, findOverlaps, obbOf } from './overlap';
 import { wrapData } from './summary';
 import { fail, int, isObj, num, obj, ok, opts, resolveTargets, str, type Handler, type ToolContext } from './tools';
+import { registerHandlers } from './registry';
 
 const round = (n: number) => Math.round(n * 100) / 100;
 const fmt = (v: readonly number[]) => v.map(round).join(', ');
@@ -263,7 +264,7 @@ export function trackChanges(store: ToolContext['store']): { createdSince(): str
 
 // ---------------------------------------------------------------- Handler
 
-export const placeHandlers: Record<string, Handler> = {
+export const placeHandlers: Record<string, Handler> = registerHandlers({
   place_relative(input, ctx) {
     const mover = unitOf(ctx, input.id);
     const ref = unitOf(ctx, input.relative_to);
@@ -481,7 +482,7 @@ export const placeHandlers: Record<string, Handler> = {
     }
     return ok(wrapData(lines.length > 0 ? lines.join('\n') : 'Seit Beginn dieses Auftrags hat sich nichts geändert.'), lines.length > 0 ? 'Änderungen zusammengefasst' : 'Nichts geändert', false);
   },
-};
+});
 
 export function isPlaceTool(name: string): boolean {
   return name in placeHandlers;

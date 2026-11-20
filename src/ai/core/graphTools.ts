@@ -5,6 +5,7 @@ import { compactToGraph } from '../../../shared/graphCompact';
 import { compileGraph } from '../../../shared/graphCompile';
 import { NODE_DEFS, getNodeDef } from '../../../shared/graphNodes';
 import { fail, getEntity, isObj, ok, opts, str, type Handler } from './tools';
+import { registerHandlers } from './registry';
 
 void AI_LIMITS;
 
@@ -18,7 +19,7 @@ function portHint(types: string[]): string {
   return [known.length ? `Gültige Ports: ${known.join('; ')}.` : '', unknown.length ? `Unbekannte Typen: ${unknown.join(', ')}. Gültige Typen: ${NODE_DEFS.map((d) => d.type).join(', ')}.` : ''].filter(Boolean).join(' ');
 }
 
-export const graphHandlers: Record<string, Handler> = {
+export const graphHandlers: Record<string, Handler> = registerHandlers({
   set_graph(input, ctx) {
     const entity = getEntity(ctx, input.id);
     if (!Array.isArray(input.nodes) || input.nodes.length > 120) fail('nodes muss eine Liste mit höchstens 120 Knoten sein.');
@@ -61,4 +62,4 @@ export const graphHandlers: Record<string, Handler> = {
     ctx.store.getState().updateEntity(entity.id, { graph }, opts);
     return ok('Graph gesetzt.', `Graph an ${entity.name || 'Objekt'} gesetzt (${graph.nodes.length} Knoten)`, true);
   },
-};
+});

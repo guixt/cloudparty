@@ -4,13 +4,14 @@ import { LIBRARY_LIMITS } from '../../../shared/library';
 import { getLibrary } from '../../library';
 import type { LibraryApi } from '../../library/api';
 import { coord, expandTargets, reserveEntities, fail, getEntity, num, obj, ok, str, type Handler } from './tools';
+import { registerHandlers } from './registry';
 import { wrapData } from './summary';
 
 function lib(): LibraryApi {
   return getLibrary() ?? fail('Die Bibliothek ist nicht verfügbar.');
 }
 
-export const libraryHandlers: Record<string, Handler> = {
+export const libraryHandlers: Record<string, Handler> = registerHandlers({
   async library_list(input) {
     const api = lib();
     const query = input.query === undefined ? '' : str(input.query, 'query', 100, true).trim();
@@ -56,4 +57,4 @@ export const libraryHandlers: Record<string, Handler> = {
     const meta = await api.save({ name, ...(description !== undefined ? { description } : {}), ...(tags ? { tags } : {}), ids });
     return ok(`Baustein gespeichert, id="${meta.id}".`, `Baustein „${name.slice(0, 40)}“ gespeichert`, false);
   },
-};
+});

@@ -10,6 +10,7 @@ import { clip } from './log';
 import { wrapData } from './summary';
 import { getRunLimits } from './runLimits';
 import { HIDDEN_TEXT, appHidden, fail, getEntity, ok, str, ToolError, type Handler, type ToolContext } from './tools';
+import { registerHandlers } from './registry';
 
 interface LogLine {
   level: 'log' | 'error';
@@ -81,7 +82,7 @@ export function describeChanges(prev: EntitySpec, next: EntitySpec): string[] {
   return out;
 }
 
-export const scriptTestHandlers: Record<string, Handler> = {
+export const scriptTestHandlers: Record<string, Handler> = registerHandlers({
   script_log(input, ctx) {
     if (input.id === undefined) {
       const rows: unknown[] = [];
@@ -194,5 +195,5 @@ export const scriptTestHandlers: Record<string, Handler> = {
       if (previousMode !== 'play' && store.getState().mode === 'play') store.getState().setMode(previousMode);
     }
   },
-};
+});
 export type { ToolContext };
