@@ -1,5 +1,5 @@
 /**
- * Avatar-Zustand gemäß AVATAR_SPEC.md, erweitert um Aussehen und Bewegungsart.
+ * Avatar-Zustand gemäß docs/avatar-spec.md, erweitert um Aussehen und Bewegungsart.
  * VERTRAG: Diese Datei wird nur vom Koordinator geändert.
  */
 import type { Vec3 } from './types';
