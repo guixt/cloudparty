@@ -11,6 +11,9 @@ import { createEntityFromPrefab } from '../../world/entities/prefabs';
 import { applyCommon, coord, reserveEntities, fail, int, obj, ok, opts, str, type Handler, type RunCounters, type ToolContext } from './tools';
 
 const MAX_BRICKS = AI_LIMITS.maxPerCall;
+/** Größtes Wand-/Boden-Rechteck von fill_bricks (Noppen je Seite) und größte Zahl Öffnungen je Aufruf. Der Systemprompt nennt beide. */
+export const FILL_BRICKS_MAX_STUDS = 128;
+export const FILL_BRICKS_MAX_OPENINGS = 16;
 
 /** `rot` (0/90/180/270) oder der alte Schalter `rot90`. */
 function parseRot(r: Record<string, unknown>): number {
@@ -156,14 +159,14 @@ export const brickHandlers: Record<string, Handler> = {
     if (mode !== 'wall' && mode !== 'floor') fail('mode muss wall oder floor sein.');
     const gx0 = int(input.x, 'x', -500, 500);
     const gz0 = int(input.z, 'z', -500, 500);
-    const cols = int(input.cols, 'cols', 1, 128);
-    const rows = int(input.rows, 'rows', 1, 128);
+    const cols = int(input.cols, 'cols', 1, FILL_BRICKS_MAX_STUDS);
+    const rows = int(input.rows, 'rows', 1, FILL_BRICKS_MAX_STUDS);
     const layers = int(input.layers, 'layers', 1, 40);
     if (mode === 'wall' && (cols < 3 || rows < 3)) fail('Eine Wand braucht mindestens 3 × 3 Noppen.');
     const origin = originOf(input);
     const color = colorOf(input.color, 'color');
     const rawOpenings = input.openings === undefined ? [] : input.openings;
-    if (!Array.isArray(rawOpenings) || rawOpenings.length > 16) fail('openings muss eine Liste mit höchstens 16 Einträgen sein (für mehr Fenster teile die Wand in zwei Aufrufe).');
+    if (!Array.isArray(rawOpenings) || rawOpenings.length > FILL_BRICKS_MAX_OPENINGS) fail(`openings muss eine Liste mit höchstens ${FILL_BRICKS_MAX_OPENINGS} Einträgen sein (für mehr Fenster teile die Wand in zwei Aufrufe).`);
     const openings: Opening[] = (rawOpenings as unknown[]).map((o, i) => {
       const r = obj(o, `openings[${i}]`);
       if (!['north', 'south', 'east', 'west'].includes(String(r.side))) fail(`openings[${i}].side muss north, south, east oder west sein.`);
