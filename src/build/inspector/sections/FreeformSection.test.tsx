@@ -88,7 +88,9 @@ describe('FreeformSection', () => {
     type('freeform-height-end', '1');
     expect((log.at(-1)!.state as { heightEnd: number }).heightEnd).toBe(1);
     type('freeform-height-end', '');
-    expect('heightEnd' in (log.at(-1)!.state as object)).toBe(false);
+    // Leer = kein Höhenverlauf: die Prüfung setzt heightEnd auf die Höhe.
+    const last = log.at(-1)!.state as { height: number; heightEnd?: number };
+    expect(last.heightEnd ?? last.height).toBe(last.height);
     act(() => root.unmount());
   });
 

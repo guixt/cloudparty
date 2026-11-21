@@ -10,7 +10,7 @@ describe('Katalog', () => {
     expect(new Set(CATALOG.map((i) => i.key)).size).toBe(CATALOG.length);
     for (const item of CATALOG) {
       expect(CATEGORIES).toContain(item.category);
-      expect([...PREFAB_REFS, 'EntitySpec.freeform'] as readonly string[]).toContain(item.ref);
+      expect(PREFAB_REFS as readonly string[]).toContain(item.ref);
       expect(item.label.length).toBeGreaterThan(0);
     }
   });
