@@ -26,10 +26,10 @@ Browser-Nachbau von Cloud Party: React + Vite + TypeScript, Babylon.js 9 + Havok
 - `src/library/` – Bibliothek wiederverwendbarer Objekte und Gruppen.
 - `src/net/` – Client-Netz: Verbindung, Synchronisation, Chat, entfernte Avatare.
 - `src/ui/shell/` – Shell mit Menüs, Weltwahl und Anmeldung; `src/ui/graphics/` Grafik-Einstellungen.
-- `shared/` – Verträge für Client, Server und MCP: Typen, Protokoll, `aiTools/` (Werkzeug-Schemas), `scriptApi.ts`, Graph, Steine, `worldspec/`.
+- `shared/` – Verträge für Client, Server und MCP: Typen, Protokoll, `freeform/` (Netze aus Parametern), `aiTools/` (Werkzeug-Schemas), `scriptApi.ts`, Graph, Steine, `worldspec/`.
 - `server/` – `index.ts`, `context.ts`, `api/` (REST), `realtime/` (WebSocket).
 - `mcp/` – MCP-Server (`server.ts`, `bridge.ts`, `rpc.ts`).
-- `docs/` – `architecture.md`, `worldspec.md`, `style-reference.md`, `reference/` (Bilder).
+- `docs/` – `freiform.md` (gekrümmte Flächen), `architecture.md`, `worldspec.md`, `style-reference.md`, `reference/` (Bilder).
 - `scripts/` – E2E- und Vorschau-Skripte.
 
 ## Konventionen

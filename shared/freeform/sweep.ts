@@ -33,7 +33,7 @@ export function buildSweep(params: SweepParams): MeshData {
 
   // Verdichtung so wählen, dass maxVertices nicht überschritten wird.
   let segments = Math.max(1, Math.floor(params.segments ?? 12));
-  let maxStep = wave ? Math.max(wave.length / 8, 0.005) : 0;
+  let maxStep = wave ? Math.max(wave.length / 20, 0.005) : 0; // 20 Stützstellen je Welle: glatt statt stufig
   let poly: PathPolyline = buildPolyline(params.path, { closed, segments, maxStep });
   for (let attempt = 0; attempt < 24; attempt++) {
     const est = (poly.pts.length + poly.corner.filter(Boolean).length + 1) * VERTS_PER_COL + 8;

@@ -44,3 +44,4 @@ Ohne Server läuft alles im Einzelspieler-Modus mit lokaler Speicherung (Indexed
 - [Weltformat](docs/worldspec.md)
 - [Optik-Vorgaben](docs/style-reference.md)
 - [Avatar-Spezifikation](docs/avatar-spec.md)
+- [Freiform: gekrümmte Flächen](docs/freiform.md)
