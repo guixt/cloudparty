@@ -51,9 +51,14 @@ const EXPECTED_ORDER: Array<[string, boolean]> = [
   ['verify', false],
   ['find_free_spot', false],
   ['what_changed', false],
+  ['add_curved_wall', true],
+  ['add_lathe', true],
+  ['add_surface', true],
+  ['add_wavy_wall', true],
+  ['update_freeform', true],
 ];
-const EXPECTED_JSON_LENGTH = 48688;
-const EXPECTED_JSON_SHA256 = '61f7ad359bddb2efb5bf41c7ea13a360633f1986d5430533db2d8d74504172d0';
+const EXPECTED_JSON_LENGTH = 53687;
+const EXPECTED_JSON_SHA256 = '959e0f31b3b970ded77583121ee4c11cc48dcb080f669457eab003dfe05300f4';
 
 describe('Werkzeug-Registry', () => {
   const schemaNames = AI_TOOLS.map((t) => t.name);

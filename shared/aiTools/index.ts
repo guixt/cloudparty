@@ -14,6 +14,7 @@ import { imageToolDefs } from './images';
 import { brickToolDefs } from './bricks';
 import { scriptTestToolDefs } from './scriptTest';
 import { placeToolDefs } from './place';
+import { freeformToolDefs } from './freeform';
 
 export * from './limits';
 export * from './types';
@@ -68,11 +69,16 @@ export const TOOL_ORDER: readonly AiToolName[] = [
   'verify',
   'find_free_spot',
   'what_changed',
+  'add_curved_wall',
+  'add_lathe',
+  'add_surface',
+  'add_wavy_wall',
+  'update_freeform',
 ];
 
 function assemble(): AiToolDefinition[] {
   const byName = new Map<string, AiToolDefinition>();
-  for (const def of [...coreToolDefs, ...groupToolDefs, ...libraryToolDefs, ...graphToolDefs, ...planToolDefs, ...visionToolDefs, ...buildToolDefs, ...imageToolDefs, ...brickToolDefs, ...scriptTestToolDefs, ...placeToolDefs]) {
+  for (const def of [...coreToolDefs, ...groupToolDefs, ...libraryToolDefs, ...graphToolDefs, ...planToolDefs, ...visionToolDefs, ...buildToolDefs, ...imageToolDefs, ...brickToolDefs, ...scriptTestToolDefs, ...placeToolDefs, ...freeformToolDefs]) {
     if (byName.has(def.name)) throw new Error(`Doppeltes Werkzeug-Schema: ${def.name}`);
     byName.set(def.name, def);
   }
