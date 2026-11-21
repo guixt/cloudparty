@@ -32,6 +32,7 @@ import './brickTools';
 import './placeTools';
 import './scriptTestTools';
 import './imageTools';
+import './freeformTools';
 import { getHandler, registerHandlers } from './registry';
 import { ToolError, fail, isObj, num, vec, coord, size, color, str, oneOf, int, obj, checkUrl, parseMaterial, parsePhysics, parseParticles, parseState } from './validate';
 import { getEntity, resolveTargets, getEntityOrGroup, expandTargets, didYouMean, groupMembers } from './targets';

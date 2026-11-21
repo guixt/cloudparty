@@ -42,6 +42,11 @@ export type AiToolName =
   | 'verify'
   | 'find_free_spot'
   | 'what_changed'
+  | 'add_curved_wall'
+  | 'add_lathe'
+  | 'add_surface'
+  | 'add_wavy_wall'
+  | 'update_freeform'
   | 'plan_connect'
   | 'plan_edit';
 
