@@ -14,6 +14,11 @@ describe('shapeKindForRef', () => {
     expect(shapeKindForRef('EntitySpec.cone', 'dynamic')).toBe('convex');
     expect(shapeKindForRef('EntitySpec.tree', 'static')).toBe('mesh');
   });
+  it('Freiform: statisch Netz, dynamisch konvexe Hülle', () => {
+    expect(shapeKindForRef('EntitySpec.freeform', 'static')).toBe('mesh');
+    expect(shapeKindForRef('EntitySpec.freeform', 'dynamic')).toBe('convex');
+    expect(shapeKindForRef('EntitySpec.freeform', 'trigger')).toBe('box');
+  });
   it('Trigger sind immer Boxen', () => {
     expect(shapeKindForRef('EntitySpec.tree', 'trigger')).toBe('box');
   });

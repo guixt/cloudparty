@@ -12,8 +12,8 @@
 import { newEntityId, type EntitySpec, type Vec3 } from '../../shared/types';
 import type { PlacementAnchor } from './logic';
 
-export type CatalogCategory = 'Grundformen' | 'Klemmbausteine' | 'Möbel' | 'Natur' | 'Licht' | 'Technik' | 'Medien';
-export const CATEGORIES: CatalogCategory[] = ['Grundformen', 'Klemmbausteine', 'Möbel', 'Natur', 'Licht', 'Technik', 'Medien'];
+export type CatalogCategory = 'Grundformen' | 'Klemmbausteine' | 'Möbel' | 'Natur' | 'Licht' | 'Technik' | 'Medien' | 'Freiform';
+export const CATEGORIES: CatalogCategory[] = ['Grundformen', 'Klemmbausteine', 'Möbel', 'Natur', 'Licht', 'Technik', 'Medien', 'Freiform'];
 
 export interface CatalogItem {
   /** Eindeutiger Schlüssel (mehrere Einträge dürfen dieselbe ref nutzen). */
@@ -136,6 +136,20 @@ export const CATALOG: CatalogItem[] = [
     defaults: { name: 'Spiegel', material: { preset: 'spiegel', mirror: true }, physics: solid } },
   { key: 'waterfall', ref: 'EntitySpec.waterfall', label: 'Wasserfall', category: 'Natur', anchor: 'ground', scale: [1, 1, 1],
     defaults: { name: 'Wasserfall', material: { color: '#a8def5' }, physics: { mode: 'none' } } },
+  // Freiform: gekrümmte Flächen aus Parametern (shared/freeform). Ursprung am Boden.
+  { key: 'freeform-arc-wall', ref: 'EntitySpec.freeform', label: 'Freiform: Bogenwand', category: 'Freiform', anchor: 'ground', scale: [1, 1, 1],
+    defaults: { name: 'Bogenwand', material: { preset: 'holz' }, physics: solid,
+      state: { kind: 'sweep', path: [{ p: [0, 0], bulge: 1 }, { p: [4, 0] }], height: 2.4, thickness: 0.2 } } },
+  { key: 'freeform-bowl', ref: 'EntitySpec.freeform', label: 'Freiform: Schale (Drehkörper)', category: 'Freiform', anchor: 'ground', scale: [1, 1, 1],
+    defaults: { name: 'Schale', material: { color: '#d8c7a0', preset: 'lack' }, physics: solid,
+      state: { kind: 'lathe', profile: [[0, 0], [0.5, 0], [0.9, 0.3], [1.2, 0.7], [1.3, 0.8]], segments: 48 } } },
+  { key: 'freeform-canopy', ref: 'EntitySpec.freeform', label: 'Freiform: Decke (Fläche)', category: 'Freiform', anchor: 'ground', scale: [1, 1, 1],
+    defaults: { name: 'Decke', material: { color: '#9bb7d4' }, physics: solid,
+      state: { kind: 'patch', degree: 2, thickness: 0.1, subdivisions: [24, 24], grid: [
+        [[0, 2, 0], [2, 3, 0], [4, 2, 0]],
+        [[0, 2.8, 2], [2, 4, 2], [4, 2.8, 2]],
+        [[0, 2, 4], [2, 3, 4], [4, 2, 4]],
+      ] } } },
 ];
 
 export function getCatalogItem(key: string): CatalogItem | undefined {
@@ -145,6 +159,7 @@ export function catalogRefs(): string[] {
   return [...new Set(CATALOG.map((item) => item.ref))];
 }
 export function labelForRef(ref: string): string {
+  if (ref === 'EntitySpec.freeform') return 'Freiform';
   return CATALOG.find((item) => item.ref === ref && item.key === ref.replace('EntitySpec.', ''))?.label ?? CATALOG.find((item) => item.ref === ref)?.label ?? ref;
 }
 
