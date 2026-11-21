@@ -5,6 +5,7 @@
  */
 import { BRICK_REF, brickSize, brickState } from '../../../shared/bricks';
 import type { EntitySpec, Quat, Vec3 } from '../../../shared/types';
+import { FREEFORM_REF, freeformBounds, sanitizeFreeformState } from '../../../shared/freeform';
 import { rotateVec } from './buildGeometry';
 
 export interface Obb {
@@ -19,6 +20,27 @@ const PRIMITIVES = new Set(['EntitySpec.box', 'EntitySpec.sphere', 'EntitySpec.c
 /** Dinge ohne feste Körper (Zonen, Lichter, Startpunkte). */
 const IGNORED_REFS = new Set(['EntitySpec.light', 'EntitySpec.avatar-spawn']);
 
+/**
+ * Lokale Hülle einer Freiform in Weltmaßen: Mitte (Welt) und volle Größe (mit Skalierung, ohne Drehung). Null bei unbrauchbarem State.
+ * Hinweis: Bei stark gekrümmten Formen ist die Hülle grob; Überschneidungen werden eher zu viel als zu wenig gemeldet.
+ */
+export function freeformHull(e: EntitySpec): { center: Vec3; size: Vec3 } | null {
+  let b: { min: Vec3; max: Vec3 };
+  try {
+    b = freeformBounds(sanitizeFreeformState(e.state));
+  } catch {
+    return null;
+  }
+  const [sx, sy, sz] = e.transform.scale;
+  const lc: Vec3 = [((b.min[0] + b.max[0]) / 2) * sx, ((b.min[1] + b.max[1]) / 2) * sy, ((b.min[2] + b.max[2]) / 2) * sz];
+  const off = rotateVec(e.transform.rot as Quat, lc);
+  const p = e.transform.pos;
+  return { center: [p[0] + off[0], p[1] + off[1], p[2] + off[2]], size: [Math.abs((b.max[0] - b.min[0]) * sx), Math.abs((b.max[1] - b.min[1]) * sy), Math.abs((b.max[2] - b.min[2]) * sz)] };
+}
+
+/** Freiform-Paare melden erst ab dieser Eindringtiefe (die Hülle ist grob). */
+export const FREEFORM_MIN_DEPTH = 0.15;
+
 export function obbOf(e: EntitySpec): Obb | null {
   if (IGNORED_REFS.has(e.ref) || e.physics?.mode === 'trigger') return null;
   const rot = e.transform.rot as Quat;
@@ -29,6 +51,10 @@ export function obbOf(e: EntitySpec): Obb | null {
     const up = axes[1];
     const c: Vec3 = [e.transform.pos[0] + (up[0] * size[1]) / 2, e.transform.pos[1] + (up[1] * size[1]) / 2, e.transform.pos[2] + (up[2] * size[1]) / 2];
     return { id: e.id, center: c, half: [size[0] / 2, size[1] / 2, size[2] / 2], axes };
+  }
+  if (e.ref === FREEFORM_REF) {
+    const h = freeformHull(e);
+    return h ? { id: e.id, center: h.center, half: [h.size[0] / 2, h.size[1] / 2, h.size[2] / 2], axes } : null;
   }
   if (!PRIMITIVES.has(e.ref)) return null;
   const thin = e.ref === 'EntitySpec.plane' ? 0.05 : 1;
@@ -105,6 +131,7 @@ export function findOverlaps(entities: Record<string, EntitySpec>, order: readon
       if (seen.has(key)) continue;
       const eb = entities[otherId];
       if (ea.group && ea.group === eb?.group) continue;
+      const freeform = ea.ref === FREEFORM_REF || eb?.ref === FREEFORM_REF;
       // Grobe Vorprüfung über Hüllkugeln
       const d = Math.hypot(a.center[0] - b.center[0], a.center[1] - b.center[1], a.center[2] - b.center[2]);
       if (d > ra + radius(b)) continue;
@@ -113,7 +140,7 @@ export function findOverlaps(entities: Record<string, EntitySpec>, order: readon
       // Ecken, an denen zwei dünne Wände oder Balken einander um ihre halbe Dicke durchdringen, sind normale Verbindungen.
       const thinnest = Math.min(Math.min(...a.half), Math.min(...b.half)) * 2;
       const joint = Math.min(0.5 * thinnest, 0.2);
-      if (p && p.depth >= OVERLAP_MIN_DEPTH && p.depth > joint + 1e-6) found.push({ a: id, b: otherId, depth: p.depth, axis: p.axis });
+      if (p && p.depth >= OVERLAP_MIN_DEPTH && p.depth > joint + 1e-6 && (!freeform || p.depth > FREEFORM_MIN_DEPTH)) found.push({ a: id, b: otherId, depth: p.depth, axis: p.axis });
     }
   }
   found.sort((x, y) => y.depth - x.depth);

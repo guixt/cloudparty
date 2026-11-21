@@ -2,6 +2,7 @@
  * Laufzeit-Validierung eingehender Client-Nachrichten. Alle Fehlertexte sind Deutsch.
  */
 import { DEFAULT_APPEARANCE, type AvatarAppearance, type AvatarMotion, type AvatarNetState, type EmoteState } from '../../shared/avatar';
+import { FREEFORM_REF, sanitizeFreeformState } from '../../shared/freeform';
 import { MAX_CHAT_LENGTH, type ClientMessage } from '../../shared/protocol';
 import type { EntitySpec, EnvironmentSpec } from '../../shared/types';
 
@@ -86,6 +87,13 @@ export function validateEntity(value: unknown): Validated<EntitySpec> {
     if (value[key] !== undefined && (typeof value[key] !== 'string' || (value[key] as string).length > 200)) return fail(`Ungültiges Feld „${key}".`);
   }
   if (isObj(value.graph) && (!Array.isArray(value.graph.nodes) || !Array.isArray(value.graph.edges) || value.graph.nodes.length > 300 || value.graph.edges.length > 600)) return fail('Ungültiger Logik-Graph.');
+  if (value.ref === FREEFORM_REF) {
+    try {
+      sanitizeFreeformState(value.state);
+    } catch (err) {
+      return fail(err instanceof Error && err.message ? err.message : 'Ungültiger Freiform-State.');
+    }
+  }
   let size: number;
   try {
     size = JSON.stringify(value).length;

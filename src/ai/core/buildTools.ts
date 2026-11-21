@@ -3,10 +3,11 @@
  * Die Rechnung steckt in buildGeometry.ts; hier werden Eingaben geprüft und Objekte angelegt.
  */
 import { AI_LIMITS } from '../../../shared/aiTools';
+import { FREEFORM_REF } from '../../../shared/freeform';
 import { BRICK_REF, brickSize, brickState } from '../../../shared/bricks';
 import { DEFAULT_ISLAND, newEntityId, type EntitySpec, type Quat, type Vec3 } from '../../../shared/types';
 import { createEntityFromPrefab, getPrefab } from '../../world/entities/prefabs';
-import { belowSurface, describeBelowSurface, describeOverlaps, findOverlaps } from './overlap';
+import { belowSurface, freeformHull, describeBelowSurface, describeOverlaps, findOverlaps } from './overlap';
 import { baseEntityFor, isKnownRef, knownRefs } from './refs';
 import {
   GeometryError,
@@ -75,6 +76,10 @@ export function entityBox(e: EntitySpec): { box: Box; approx: boolean } {
     const size = brickSize(brickState(e.state));
     const center: Vec3 = [e.transform.pos[0], e.transform.pos[1] + size[1] / 2, e.transform.pos[2]];
     return { box: rotatedBox(center, size, e.transform.rot), approx: false };
+  }
+  if (e.ref === FREEFORM_REF) {
+    const h = freeformHull(e);
+    if (h) return { box: rotatedBox(h.center, h.size, e.transform.rot), approx: false };
   }
   const [sx, sy, sz] = e.transform.scale;
   const mediaKind = mediaKindOfRef(e.ref);
