@@ -25,8 +25,10 @@ import { buildModel } from './model';
 import { getBrickMaster } from './brickMaster';
 import { BRICK_REF, STUD, STUD_DIAMETER, STUD_HEIGHT, brickSize, brickState, studSpots } from '../../../shared/bricks';
 import { markBuildOnly, place, post, slab } from './parts';
+import { FREEFORM_REF } from '../../../shared/freeform';
+import { buildFreeform } from './freeformMesh';
 
-export type PrefabCategory = 'Grundformen' | 'Klemmbausteine' | 'Möbel' | 'Natur' | 'Licht' | 'Technik' | 'Medien';
+export type PrefabCategory = 'Grundformen' | 'Klemmbausteine' | 'Möbel' | 'Natur' | 'Licht' | 'Technik' | 'Medien' | 'Freiform';
 
 export interface PrefabDef {
   /** z. B. "EntitySpec.bench". */
@@ -493,6 +495,23 @@ const BUILTIN: PrefabDef[] = [
     stateKeys: [],
     defaults: { physics: solid },
     build: (ctx, entity, root) => buildModel(ctx, entity, root),
+  },
+  {
+    ref: FREEFORM_REF,
+    label: 'Freiform',
+    category: 'Freiform',
+    icon: '🌊',
+    groundOffset: 0,
+    // stateKeys bewusst weggelassen: jede State-Änderung baut das Netz neu.
+    // Material lebt am Netz (backFaceCulling aus) und wird beim Wechsel neu gebaut.
+    rebuildOnMaterial: true,
+    defaults: {
+      name: 'Bogenwand',
+      material: { preset: 'holz' },
+      physics: solid,
+      state: { kind: 'sweep', path: [{ p: [0, 0], bulge: 1 }, { p: [4, 0] }], height: 2.4, thickness: 0.2 },
+    },
+    build: buildFreeform,
   },
 ];
 

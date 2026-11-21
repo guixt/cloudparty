@@ -27,6 +27,9 @@ export function shapeKindForRef(ref: string, mode: PhysicsMode): ShapeKind {
       return 'sphere';
     case 'EntitySpec.cylinder':
       return 'cylinder';
+    case 'EntitySpec.freeform':
+      // Gekrümmte Flächen: statisch exakt (Mesh-Collider), dynamisch konvexe Hülle.
+      return mode === 'dynamic' ? 'convex' : 'mesh';
     default:
       return mode === 'dynamic' ? 'convex' : 'mesh';
   }
