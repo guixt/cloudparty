@@ -57,8 +57,8 @@ const EXPECTED_ORDER: Array<[string, boolean]> = [
   ['add_wavy_wall', true],
   ['update_freeform', true],
 ];
-const EXPECTED_JSON_LENGTH = 53687;
-const EXPECTED_JSON_SHA256 = '959e0f31b3b970ded77583121ee4c11cc48dcb080f669457eab003dfe05300f4';
+const EXPECTED_JSON_LENGTH = 53856;
+const EXPECTED_JSON_SHA256 = 'acf077a8881648ebb483c9782d90eaa0e1f7024ed8ca2af1bf9cfe5d76a7202e';
 
 describe('Werkzeug-Registry', () => {
   const schemaNames = AI_TOOLS.map((t) => t.name);

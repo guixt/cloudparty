@@ -132,7 +132,7 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
     const currentFrom = conversation.length;
     const runStart = Date.now();
     const runId = `r${runStart.toString(36)}`;
-    logEvent('run.start', { run: runId, model: settings.getModel(), maxOutput: limits.maxOutputTokens, maxInput: limits.maxInputTokens, entities: store.getState().order.length, images: userImages.length }, { prompt: clip(text) });
+    logEvent('run.start', { run: runId, model: options.model || settings.getModel(), ...(options.mode ? { mode: options.mode } : {}), maxOutput: limits.maxOutputTokens, maxInput: limits.maxInputTokens, entities: store.getState().order.length, images: userImages.length }, { prompt: clip(text) });
     let answer = '';
     let changed = false;
     let stopped = false;
@@ -162,12 +162,13 @@ export function createAssistant(deps: AssistantDeps): AssistantApi {
           stopped = true;
           break;
         }
-        const system = buildSystemPrompt(store.getState(), { maxOutputTokens: limits.maxOutputTokens });
+        const system = buildSystemPrompt(store.getState(), { maxOutputTokens: limits.maxOutputTokens, ...(options.mode ? { mode: options.mode } : {}) });
         const result = await streamMessage({
           system,
           messages: fitToBudget({ system, tools: TOOLS, messages, currentFrom, budget: limits.maxInputTokens }),
           tools: TOOLS,
           maxTokens: limits.maxOutputTokens,
+          ...(options.model ? { model: options.model } : {}),
           signal,
           onText: (delta) => {
             answer += delta;

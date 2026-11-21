@@ -2,6 +2,7 @@ import { useState, type KeyboardEvent } from 'react';
 import { AI_MODELS, AI_RUN_LIMITS, AI_TOKEN_LIMITS, type AiRunLimitKey } from '../../../shared/aiTools';
 import type { AssistantApi } from '../api';
 import { BridgeSettings } from './BridgeSettings';
+import { getReviewAfterRun, getRoleModel, setReviewAfterRun, setRoleModel, type ModelRole } from '../core/settings';
 import { getRunLimits, getStoredRunLimits, isLongRunMode, resetRunLimits, setLongRunMode, setStoredRunLimits } from '../core/runLimits';
 import { LOG_LEVELS, clearLog, exportLog, getLogEntries, getLogLevel, setLogLevel, type LogLevel } from '../core/log';
 
@@ -104,9 +105,10 @@ function LimitField({
   );
 }
 
-type Tab = 'access' | 'limits' | 'features' | 'log';
+type Tab = 'access' | 'models' | 'limits' | 'features' | 'log';
 const TABS: [Tab, string][] = [
   ['access', 'Zugang'],
+  ['models', 'Modelle'],
   ['limits', 'Limits'],
   ['features', 'Funktionen'],
   ['log', 'Protokoll'],
@@ -242,6 +244,89 @@ export function SettingsDialog({ api, explain, onClose }: { api: AssistantApi; e
                 .
               </li>
             </ul>
+          </>
+        )}
+
+        {tab === 'models' && (
+          <>
+            <p className="cp-muted" data-testid="ai-models-intro">
+              Sparen mit zwei Modellen: Ein stärkeres Modell plant ausführlich (Maße, Koordinaten, nummerierte Werkzeugaufrufe je Knoten), ein günstigeres führt die Knoten nur aus, und bei Bedarf prüft ein starkes Modell das Ergebnis. Ablauf: im Chat „Planen“ drücken, den Plan im Plan-Fenster ansehen, „Alle ausführen“, danach „Prüfen“. Leer = das Hauptmodell aus dem Tab Zugang (jetzt: {AI_MODELS.find((m) => m.id === settings.model)?.label ?? settings.model}).
+            </p>
+            {(
+              [
+                ['plan', 'Planungsmodell', 'Wird beim Drücken von „Planen“ im Chat verwendet.'],
+                ['exec', 'Ausführungsmodell', 'Führt jeden Plan-Knoten aus (auch „Alle ausführen“).'],
+                ['review', 'Prüfmodell', 'Kontrolliert das Ergebnis eines Plans („Prüfen“ im Plan-Fenster oder automatisch).'],
+              ] as [ModelRole, string, string][]
+            ).map(([role, label, hint]) => (
+              <div key={role}>
+                <label className="cp-label" htmlFor={`ai-role-${role}`}>
+                  {label}
+                </label>
+                <select
+                  id={`ai-role-${role}`}
+                  className="cp-select"
+                  data-testid={`ai-role-${role}`}
+                  value={getRoleModel(role)}
+                  onChange={(e) => {
+                    setRoleModel(role, e.target.value);
+                    force((n) => n + 1);
+                  }}
+                >
+                  <option value="">Hauptmodell</option>
+                  {AI_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="ai-limit-hint cp-muted">{hint}</div>
+              </div>
+            ))}
+            <label className="ai-radio">
+              <input
+                type="checkbox"
+                data-testid="ai-review-after"
+                checked={getReviewAfterRun()}
+                disabled={!getRoleModel('review')}
+                onChange={(e) => {
+                  setReviewAfterRun(e.target.checked);
+                  force((n) => n + 1);
+                }}
+              />
+              <span>Nach „Alle ausführen“ automatisch mit dem Prüfmodell prüfen (nur mit gesetztem Prüfmodell; kostet zusätzliche Tokens)</span>
+            </label>
+            <div className="cp-row">
+              <button
+                type="button"
+                className="cp-button"
+                data-testid="ai-roles-preset"
+                title="Planen mit Sonnet, Ausführen mit Haiku, Prüfen mit Sonnet (nicht automatisch)"
+                onClick={() => {
+                  setRoleModel('plan', 'claude-sonnet-5-5');
+                  setRoleModel('exec', 'claude-haiku-5-5');
+                  setRoleModel('review', 'claude-sonnet-5-5');
+                  setReviewAfterRun(false);
+                  force((n) => n + 1);
+                }}
+              >
+                Sparmodus einrichten
+              </button>
+              <button
+                type="button"
+                className="cp-button"
+                data-testid="ai-roles-reset"
+                onClick={() => {
+                  setRoleModel('plan', '');
+                  setRoleModel('exec', '');
+                  setRoleModel('review', '');
+                  setReviewAfterRun(false);
+                  force((n) => n + 1);
+                }}
+              >
+                Alle auf Hauptmodell
+              </button>
+            </div>
           </>
         )}
 

@@ -87,3 +87,13 @@ Unter **Limits** lassen sich neben den Token-Längen jetzt auch die Laufzeit-Gre
 
 **Lange Pläne (temporär):** Ein Schalter hebt alle Laufzeit-Grenzen auf großzügige Werte an (mindestens 60 Schritte, 400 Werkzeugaufrufe, 10000 neue Objekte, 120 Knoten, 5 Mio. Tokens pro Lauf …), aber nur bis zum Neuladen bzw. Schließen des Tabs (`sessionStorage`). Die gespeicherten Werte bleiben unverändert. Das kann deutlich mehr Tokens und Kosten verursachen.
 
+
+## Planen, Ausführen, Prüfen mit verschiedenen Modellen
+
+Damit sich teure Modelle nur dort lohnen, wo sie gebraucht werden, gibt es drei Rollen (KI-Einstellungen › Modelle; leer = Hauptmodell aus dem Tab Zugang):
+
+- **Planungsmodell** (Knopf **Planen** im Chat): Die KI plant nur und baut nichts. Im Planungsmodus (`planModePrompt` in `src/ai/core/prompt.ts`) schreibt sie in die Notizen jedes Knotens eine vollständige Bauanleitung (bis 6000 Zeichen): Ziel, feste Maße und Koordinaten (alles vorab ausgerechnet), nummerierte Werkzeugaufrufe mit Parametern, Prüfung und was der Knoten für Nachfolger festhält. Der Auftrag bekommt mindestens 8000 Ausgabetokens.
+- **Ausführungsmodell** (Plan-Knoten, „Alle ausführen“): führt jeden Knoten einzeln aus. Der Auftragstext (`buildNodePrompt`) sagt, dass die Anleitung Schritt für Schritt wörtlich auszuführen ist (nichts umrechnen, nur bei Fehlern die kleinste Korrektur, am Ende die genannte Prüfung). Der Knoten selbst sieht seine Notizen voll, Vorgänger und Übersichten nur gekürzt (400 Zeichen), das spart Tokens.
+- **Prüfmodell** („Prüfen“ im Plan-Fenster oder automatisch nach „Alle ausführen“, wenn eingeschaltet): kontrolliert das Ergebnis im Prüfmodus (`reviewModePrompt`) mit `what_changed`, `get_world`, `get_bounds`, `check_overlaps`, `verify` und `look`, behebt kleine Fehler direkt und trägt größere Mängel als neue Knoten mit vollständiger Bauanleitung ein, die dann wieder das günstige Modell ausführt.
+
+„Sparmodus einrichten“ setzt Planen und Prüfen auf Sonnet und Ausführen auf Haiku (automatische Prüfung aus). Die Modelle gelten je Auftrag (`RunOptions.model`/`mode` in `src/ai/api.ts`); im Protokoll steht pro Auftrag, welches Modell lief.

@@ -54,6 +54,12 @@ export const AI_STORAGE_KEYS = {
   log: 'cloudparty.ai.log',
   vision: 'cloudparty.ai.vision',
   imageSearch: 'cloudparty.ai.imageSearch',
+  /** Modelle je Rolle (leer = Hauptmodell): Planen, Ausführen, Prüfen. */
+  planModel: 'cloudparty.ai.planModel',
+  execModel: 'cloudparty.ai.execModel',
+  reviewModel: 'cloudparty.ai.reviewModel',
+  /** Nach „Alle ausführen“ automatisch mit dem Prüfmodell prüfen. */
+  reviewAfterRun: 'cloudparty.ai.reviewAfterRun',
   /** JSON mit den Laufzeit-Grenzen (localStorage). */
   runLimits: 'cloudparty.ai.runLimits',
   /** „Lange Pläne“-Modus (sessionStorage: gilt nur bis zum Schließen des Tabs). */

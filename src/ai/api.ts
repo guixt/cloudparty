@@ -23,6 +23,10 @@ export interface RunOptions {
   images?: string[];
   /** Ausgabegrenze nur für diesen Auftrag (Tokens, wird auf den erlaubten Bereich begrenzt); z. B. größere Grenze für Plan-Knoten. */
   maxOutputTokens?: number;
+  /** Modell nur für diesen Auftrag (z. B. Planungs- oder Ausführungsmodell). */
+  model?: string;
+  /** plan = nur planen (ausführliche Bauanleitungen), review = Ergebnis prüfen und korrigieren. */
+  mode?: 'plan' | 'review';
   onEvent: (event: AssistantEvent) => void;
   /** Wird für `confirm`-Ereignisse aufgerufen; true = ausführen. */
   confirm: (question: string, detail?: string) => Promise<boolean>;

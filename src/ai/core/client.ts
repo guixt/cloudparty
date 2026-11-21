@@ -32,6 +32,8 @@ export interface MessageRequest {
   maxTokens: number;
   signal?: AbortSignal;
   onText?: (delta: string) => void;
+  /** Modell nur für diese Anfrage (sonst das Hauptmodell aus den Einstellungen). */
+  model?: string;
 }
 export interface MessageResult {
   content: ContentBlock[];
@@ -169,7 +171,7 @@ export async function streamMessage(req: MessageRequest): Promise<MessageResult>
   const key = getApiKey();
   if (!key) throw new AiError('Kein API-Key hinterlegt. Trage deinen Anthropic-Key in den KI-Einstellungen ein.');
   const body: Record<string, unknown> = {
-    model: getModel(),
+    model: req.model || getModel(),
     max_tokens: req.maxTokens,
     stream: true,
     ...withPromptCache(req),

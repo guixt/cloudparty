@@ -105,13 +105,13 @@ export function AssistantPanel({ api, store, controller, canBuild, onOpenSetting
     });
   };
 
-  const submit = (prompt: string) => {
+  const submit = (prompt: string, mode?: 'plan') => {
     if (!prompt.trim() && attachments.length === 0) return;
     const images = attachments;
     setText('');
     setAttachments([]);
     setAttachError('');
-    void controller.send(prompt, images);
+    void controller.send(prompt, images, mode ? { mode } : undefined);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     e.stopPropagation();
@@ -276,6 +276,9 @@ export function AssistantPanel({ api, store, controller, canBuild, onOpenSetting
           />
           <button type="button" className="cp-button" data-testid="ai-attach" title="Bild anhängen (auch per Einfügen oder Ablegen). Das Bild geht an Anthropic." aria-label="Bild anhängen" disabled={attachments.length >= MAX_USER_IMAGES} onClick={() => fileRef.current?.click()}>
             📎
+          </button>
+          <button type="button" className="cp-button" data-testid="ai-plan-send" title="Plant nur (Planungsmodell, ausführliche Bauanleitungen je Knoten) und baut nichts. Ausgeführt wird danach im Plan-Fenster mit dem Ausführungsmodell." disabled={(!text.trim() && attachments.length === 0) || busyImages > 0} onClick={() => submit(text, 'plan')}>
+            Planen
           </button>
           <button type="button" className="cp-button cp-button-primary" data-testid="ai-send" disabled={(!text.trim() && attachments.length === 0) || busyImages > 0} onClick={() => submit(text)}>
             {view.running || view.queue.length > 0 ? 'Einreihen' : 'Senden'}

@@ -100,7 +100,8 @@ export interface GameEvents {
   /** Öffnet das Plan-Fenster (optional mit gewähltem Plan). */
   'ui.openPlan': { planId?: string };
   /** Der Nutzer möchte einen Knoten (oder alle offenen Knoten) ausführen lassen. */
-  'plan.run.request': { planId: string; nodeId?: string };
+  /** `review: true` = den Plan mit dem Prüfmodell kontrollieren (statt Knoten auszuführen). */
+  'plan.run.request': { planId: string; nodeId?: string; review?: boolean };
 
   // --- Undo-Gruppierung (Build-Paket hört zu; z. B. für KI-Aufträge) ---
   /** Alle folgenden lokalen Änderungen bis `history.group.end` werden ein Undo-Schritt. */

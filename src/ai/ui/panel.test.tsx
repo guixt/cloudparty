@@ -149,6 +149,33 @@ describe('SettingsDialog', () => {
     act(() => q('ai-tab-log')!.click());
     expect(q('ai-log-level')).not.toBeNull();
   });
+  it('Tab Modelle: Rollenmodelle wählen, Sparmodus einrichten und zurücksetzen', async () => {
+    const { getRoleModel, getReviewAfterRun } = await import('../core/settings');
+    const api = makeApi();
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+    act(() => root!.render(<SettingsDialog api={api} explain onClose={() => {}} />));
+    act(() => q('ai-tab-models')!.click());
+    expect(q('ai-models-intro')!.textContent).toContain('Sparen mit zwei Modellen');
+    expect(q<HTMLInputElement>('ai-review-after')!.disabled).toBe(true);
+    const sel = q<HTMLSelectElement>('ai-role-plan')!;
+    act(() => {
+      sel.value = 'claude-opus-5-5';
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(getRoleModel('plan')).toBe('claude-opus-5-5');
+    act(() => q('ai-roles-preset')!.click());
+    expect(getRoleModel('plan')).toBe('claude-sonnet-5-5');
+    expect(getRoleModel('exec')).toBe('claude-haiku-5-5');
+    expect(getRoleModel('review')).toBe('claude-sonnet-5-5');
+    expect(q<HTMLInputElement>('ai-review-after')!.disabled).toBe(false);
+    act(() => q('ai-review-after')!.click());
+    expect(getReviewAfterRun()).toBe(true);
+    act(() => q('ai-roles-reset')!.click());
+    expect(getRoleModel('exec')).toBe('');
+    expect(getReviewAfterRun()).toBe(false);
+  });
   it('Lange Pläne (temporär) und eigene Werte wirken auf getRunLimits', async () => {
     const { getRunLimits, setLongRunMode } = await import('../core/runLimits');
     setLongRunMode(false);

@@ -116,3 +116,39 @@ export function setTokenLimits(limits: { maxInputTokens?: number; maxOutputToken
     /* ignorieren */
   }
 }
+
+// ---------------------------------------------------------------- Modelle je Rolle
+
+export type ModelRole = 'plan' | 'exec' | 'review';
+const ROLE_KEYS: Record<ModelRole, string> = { plan: AI_STORAGE_KEYS.planModel, exec: AI_STORAGE_KEYS.execModel, review: AI_STORAGE_KEYS.reviewModel };
+
+/** Gespeichertes Modell einer Rolle ('' = nicht gesetzt, es gilt das Hauptmodell). */
+export function getRoleModel(role: ModelRole): string {
+  const stored = read(ROLE_KEYS[role]);
+  return AI_MODELS.some((m) => m.id === stored) ? stored : '';
+}
+export function setRoleModel(role: ModelRole, model: string): void {
+  try {
+    const s = storage();
+    if (!s) return;
+    if (model && AI_MODELS.some((m) => m.id === model)) s.setItem(ROLE_KEYS[role], model);
+    else s.removeItem(ROLE_KEYS[role]);
+  } catch {
+    /* ignorieren */
+  }
+}
+/** Wirksames Modell einer Rolle: gesetztes Rollenmodell, sonst das Hauptmodell. */
+export function getEffectiveModel(role: ModelRole): string {
+  return getRoleModel(role) || getModel();
+}
+/** Soll nach „Alle ausführen“ automatisch geprüft werden (nur mit gesetztem Prüfmodell)? */
+export function getReviewAfterRun(): boolean {
+  return read(AI_STORAGE_KEYS.reviewAfterRun) === '1';
+}
+export function setReviewAfterRun(on: boolean): void {
+  try {
+    storage()?.setItem(AI_STORAGE_KEYS.reviewAfterRun, on ? '1' : '0');
+  } catch {
+    /* ignorieren */
+  }
+}

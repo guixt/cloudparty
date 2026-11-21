@@ -231,6 +231,7 @@ export default function PlanWindow({ ctx }: { ctx: GameContext }) {
             <button type="button" className="cp-button" data-testid="plan-add-node" disabled={!canBuild || plan.nodes.length >= PLAN_LIMITS.nodes} onClick={addStep}>+ Knoten</button>
             <button type="button" className="cp-button cp-button-primary" data-testid="plan-run-all" disabled={runAllReason !== null} title={runAllReason ?? 'Alle offenen Knoten der Reihe nach ausführen'}
               onClick={() => ctx.bus.emit('plan.run.request', { planId: plan.id })}>Alle ausführen</button>
+            <button type="button" className="cp-button" data-testid="plan-review" title="Prüft das Ergebnis mit dem Prüfmodell (KI-Einstellungen › Modelle) und ergänzt bei Mängeln Knoten" disabled={!canBuild} onClick={() => ctx.bus.emit('plan.run.request', { planId: plan.id, review: true })}>Prüfen</button>
           </>
         )}
       </div>

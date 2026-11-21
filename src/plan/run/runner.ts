@@ -9,7 +9,7 @@
 import { isQueueable, isRunnable, queueableOrder, runOrder } from '../../../shared/plan';
 import { AI_TOKEN_LIMITS } from '../../../shared/aiTools';
 import { outputBudget } from '../../ai/core/prompt';
-import { getTokenLimits } from '../../ai/core/settings';
+import { getRoleModel, getTokenLimits } from '../../ai/core/settings';
 import { getRunLimits } from '../../ai/core/runLimits';
 import { PlanError, getPlan, updateNode, type PlanCtx } from '../core/api';
 
@@ -34,7 +34,7 @@ export interface RunDeps {
    * Reiht einen Auftrag ein und meldet, wie er endete: ok = regulär beendet, failed = Fehler/Abbruch,
    * skipped = nie gestartet (kein Key, aus der Warteschlange entfernt). `beforeRun` läuft direkt vor dem Start.
    */
-  runPrompt(prompt: string, hooks: { label: string; beforeRun: () => void; maxOutputTokens?: number }): Promise<PromptResult>;
+  runPrompt(prompt: string, hooks: { label: string; beforeRun: () => void; maxOutputTokens?: number; model?: string; mode?: 'plan' | 'review' }): Promise<PromptResult>;
   /** Setzt den Gesprächsverlauf des Modells zurück (frischer Kontext je Knoten). */
   resetContext(): void;
   /** Tokens (Ein- plus Ausgabe) des zuletzt beendeten Auftrags. */
@@ -55,10 +55,42 @@ export function buildNodePrompt(planId: string, nodeId: string, maxOutputTokens 
   return [
     `Führe jetzt genau einen Knoten des Bauplans aus (plan="${planId}", node="${nodeId}").`,
     'Lies ihn zuerst mit EINEM plan_get-Aufruf (plan und node): du siehst Titel, Notizen und die Ergebnisse der Vorgänger. Den ganzen Plan musst du nicht zusätzlich lesen.',
-    'Baue nur diesen Knoten, passend zu den Maßen und Positionen der Vorgänger. Gruppiere zusammengehörige Teile mit group_entities, wenn es sinnvoll ist.',
+    'Die Notizen enthalten meist eine Bauanleitung: Führe sie Schritt für Schritt aus, mit genau den genannten Werkzeugen und Parametern; rechne nichts um und erfinde keine Maße. Weiche nur ab, wenn ein Werkzeug einen Fehler meldet (dann die kleinste Korrektur) und führe am Ende die genannte Prüfung aus. Fehlt eine Anleitung, baue passend zu den Maßen und Positionen der Vorgänger.',
+    'Baue nur diesen Knoten. Gruppiere zusammengehörige Teile mit group_entities, wenn es sinnvoll ist.',
     'Melde ihn am Ende mit plan_complete_node (ids der gebauten Objekte, Gruppe, kurze Zusammenfassung mit den wichtigen Maßen). Ändere andere Knoten nicht.',
     `Deine Antwort darf höchstens ${b.tokens} Tokens lang sein (etwa ${b.toolCalls} Werkzeugaufrufe). Arbeite in mehreren kleinen Schritten mit Werkzeugen, die viele Teile auf einmal erzeugen (add_wall, array, fill_bricks, clone_group), und schreibe keinen langen Text. Ist der Knoten dafür zu groß, teile ihn mit plan_add_node in kleinere Knoten (Vorgänger-Beziehung beachten), baue nur den ersten Teil und melde ihn mit plan_complete_node.`,
   ].join('\n');
+}
+
+/** Auftragstext für die Prüfung eines Plans durch das Prüfmodell. */
+export function buildReviewPrompt(planId: string): string {
+  return [
+    `Prüfe jetzt das Ergebnis des Bauplans (plan="${planId}") im Prüfmodus.`,
+    'Lies den Plan mit plan_get und kontrolliere die gebauten Teile (what_changed, get_world mit group oder name_contains, get_bounds, check_overlaps, verify, wenn erlaubt look).',
+    'Behebe kleine Fehler selbst. Größere Mängel trägst du mit plan_add_node als neue Knoten mit vollständiger Bauanleitung ein (Maße, Koordinaten, nummerierte Werkzeugaufrufe, Prüfung), baust sie aber nicht selbst.',
+    'Antworte am Ende kurz: in Ordnung, korrigiert, offen.',
+  ].join('\n');
+}
+
+/** Prüfung eines Plans mit dem Prüfmodell (falls gesetzt, sonst Hauptmodell): ein Auftrag in der Warteschlange. */
+export async function runReview(ctx: PlanCtx, planId: string, deps: RunDeps): Promise<PromptResult> {
+  const plan = getPlan(ctx, planId);
+  if (!plan) {
+    deps.notify('Diesen Plan gibt es nicht mehr.', 'error');
+    return 'skipped';
+  }
+  if (!ctx.store.getState().canBuild) {
+    deps.notify('Du hast hier kein Baurecht.', 'error');
+    return 'skipped';
+  }
+  const model = getRoleModel('review');
+  return deps.runPrompt(buildReviewPrompt(planId), {
+    label: `Plan prüfen: ${plan.title}`.slice(0, 70),
+    maxOutputTokens: nodeOutputTokens(),
+    mode: 'review',
+    ...(model ? { model } : {}),
+    beforeRun: () => deps.resetContext(),
+  });
 }
 
 /** Warum ein Knoten gerade nicht eingereiht werden kann (null = geht). Einreihen geht auch, während die KI arbeitet. */
@@ -144,9 +176,11 @@ export async function runPlan(ctx: PlanCtx, planId: string, nodeId: string | und
       markQueued(ctx, planId, [id]);
       const label = `Plan: ${node.title}`.slice(0, 70);
       const outTokens = nodeOutputTokens();
+      const execModel = getRoleModel('exec');
       result = await deps.runPrompt(buildNodePrompt(planId, id, outTokens), {
         label,
         maxOutputTokens: outTokens,
+        ...(execModel ? { model: execModel } : {}),
         beforeRun: () => {
           // Direkt vor dem eigentlichen Start: Knoten läuft jetzt, frischer Gesprächsverlauf.
           try {

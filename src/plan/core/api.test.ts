@@ -93,7 +93,7 @@ describe('Plan-Kern', () => {
         id: 'p',
         title: 'x'.repeat(500),
         nodes: [
-          { id: 'a', title: 'A', status: 'running', notes: 'n'.repeat(5000), x: 'kaputt' },
+          { id: 'a', title: 'A', status: 'running', notes: 'n'.repeat(PLAN_LIMITS.notes + 1000), x: 'kaputt' },
           { id: 'a', title: 'doppelt' },
           { id: 'b', title: 'B', status: 'unsinn' },
           null,

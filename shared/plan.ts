@@ -20,10 +20,13 @@ export const PLAN_LIMITS = {
   nodes: 120,
   edges: 400,
   title: 80,
-  notes: 2000,
+  notes: 6000,
   summary: 400,
   resultEntities: 300,
 } as const;
+
+/** Länge der Notizen in Plan-Übersichten und bei Vorgängern (Zeichen). */
+const NOTES_PREVIEW = 400;
 
 export const PLAN_STATUSES = ['open', 'queued', 'running', 'done', 'failed', 'disabled'] as const;
 export type PlanStatus = (typeof PLAN_STATUSES)[number];
@@ -189,7 +192,8 @@ export function compactPlan(plan: PlanSpec, only?: string): Record<string, unkno
       id: n.id,
       titel: n.title,
       status: n.status,
-      ...(n.notes ? { notizen: n.notes } : {}),
+      // Ausführliche Bauanleitungen nur für den Knoten selbst voll; Übersichten und Vorgänger gekürzt (spart Tokens).
+      ...(n.notes ? { notizen: n.id === only ? n.notes : clipText(n.notes, NOTES_PREVIEW) } : {}),
       ...(n.result ? { ergebnis: { objekte: n.result.entityIds.length, gruppe: n.result.group, text: n.result.summary, ids: n.result.entityIds.slice(0, 40) } } : {}),
       nach: plan.edges.filter((e) => e.to === n.id).map((e) => e.from),
     })),

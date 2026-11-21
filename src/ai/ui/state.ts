@@ -3,7 +3,9 @@
  * Reine Logik (Reducer) + Controller, der `AssistantApi.run` anspricht. Kein React.
  */
 import { createStore, type StoreApi } from 'zustand/vanilla';
+import { AI_TOKEN_LIMITS } from '../../../shared/aiTools';
 import type { AssistantApi, AssistantEvent } from '../api';
+import { getRoleModel, getTokenLimits } from '../core/settings';
 
 export type Message =
   | { id: number; kind: 'user'; text: string; images?: string[] }
@@ -33,6 +35,9 @@ export interface QueuedPrompt {
   beforeRun?: () => void;
   /** Ausgabegrenze nur für diesen Auftrag (z. B. größer für Plan-Knoten). */
   maxOutputTokens?: number;
+  /** Modell nur für diesen Auftrag (Planen/Ausführen/Prüfen) und Modus. */
+  model?: string;
+  mode?: 'plan' | 'review';
   /** Meldet, wie der Auftrag endete. */
   onResult?: (result: PromptResult) => void;
 }
@@ -134,7 +139,7 @@ export interface ControllerDeps {
 
 export interface AiController {
   /** Startet die Nachricht sofort oder reiht sie in die Warteschlange ein, wenn gerade ein Auftrag läuft. */
-  send(prompt: string, images?: string[]): Promise<void>;
+  send(prompt: string, images?: string[], opts?: { mode?: 'plan' }): Promise<void>;
   /** Hält den laufenden Auftrag an; wartende Nachrichten bleiben erhalten, die Schlange pausiert. */
   stop(): void;
   /** Setzt eine pausierte Warteschlange fort. */
@@ -143,12 +148,20 @@ export interface AiController {
    * Reiht einen Auftrag in dieselbe Warteschlange wie normale Nachrichten ein (läuft gerade etwas, wartet er) und
    * liefert, wie er endete. Für Plan-Knoten: `label` erscheint in der Liste, `beforeRun` läuft direkt vor dem Start.
    */
-  enqueuePrompt(prompt: string, hooks?: { label?: string; beforeRun?: () => void; maxOutputTokens?: number }): Promise<PromptResult>;
+  enqueuePrompt(prompt: string, hooks?: { label?: string; beforeRun?: () => void; maxOutputTokens?: number; model?: string; mode?: 'plan' | 'review' }): Promise<PromptResult>;
   removeQueued(id: number): void;
   clearQueue(): void;
   answer(id: number, ok: boolean): void;
   reset(): void;
   undo(): void;
+}
+
+/** Felder eines Planungsauftrags: Planungsmodell, Planungsmodus und mehr Ausgabe für ausführliche Bauanleitungen. */
+export const PLAN_MIN_OUTPUT = 8000;
+function planFields(mode?: 'plan'): Partial<QueuedPrompt> {
+  if (mode !== 'plan') return {};
+  const model = getRoleModel('plan');
+  return { mode: 'plan', ...(model ? { model } : {}), maxOutputTokens: Math.min(AI_TOKEN_LIMITS.output.max, Math.max(getTokenLimits().maxOutputTokens, PLAN_MIN_OUTPUT)) };
 }
 
 export function createController(deps: ControllerDeps): AiController {
@@ -169,7 +182,7 @@ export function createController(deps: ControllerDeps): AiController {
   }
 
   /** Führt einen Auftrag aus. Gibt true zurück, wenn er regulär und ohne Fehler zu Ende ging. */
-  async function execute(text: string, api: AssistantApi, display?: string, maxOutputTokens?: number, images?: string[]): Promise<boolean> {
+  async function execute(text: string, api: AssistantApi, display?: string, maxOutputTokens?: number, images?: string[], model?: string, mode?: 'plan' | 'review'): Promise<boolean> {
     const ac = new AbortController();
     abort = ac;
     let failed = false;
@@ -178,6 +191,8 @@ export function createController(deps: ControllerDeps): AiController {
       await api.run(text, {
         signal: ac.signal,
         ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+        ...(model ? { model } : {}),
+        ...(mode ? { mode } : {}),
         ...(images && images.length > 0 ? { images } : {}),
         onEvent: (ev) => {
           if (ev.type === 'error' || (ev.type === 'done' && ev.stopped)) failed = true;
@@ -223,7 +238,7 @@ export function createController(deps: ControllerDeps): AiController {
         if (!next) return;
         update((v) => ({ ...v, queue: v.queue.slice(1) }));
         next.beforeRun?.();
-        const ok = await execute(next.text, api, next.label, next.maxOutputTokens, next.images);
+        const ok = await execute(next.text, api, next.label, next.maxOutputTokens, next.images, next.model, next.mode);
         next.onResult?.(ok ? 'ok' : 'failed');
         if (!ok) {
           if (store.getState().queue.length > 0) update((v) => ({ ...v, paused: true }));
@@ -236,7 +251,7 @@ export function createController(deps: ControllerDeps): AiController {
   }
 
   return {
-    async send(prompt, images) {
+    async send(prompt, images, opts) {
       const text = prompt.trim();
       const api = getApi();
       if ((!text && !(images && images.length > 0)) || !api) return;
@@ -248,7 +263,7 @@ export function createController(deps: ControllerDeps): AiController {
         notify(`Die Warteschlange ist voll (höchstens ${MAX_QUEUE} Nachrichten).`, 'error');
         return;
       }
-      update((s) => ({ ...s, queue: [...s.queue, { id: s.nextId, text: text || 'Siehe Bild.', ...(images && images.length > 0 ? { images } : {}) }], nextId: s.nextId + 1 }));
+      update((s) => ({ ...s, queue: [...s.queue, { id: s.nextId, text: text || 'Siehe Bild.', ...(images && images.length > 0 ? { images } : {}), ...planFields(opts?.mode) }], nextId: s.nextId + 1 }));
       await pump();
     },
     enqueuePrompt(prompt, hooks = {}) {
@@ -264,7 +279,7 @@ export function createController(deps: ControllerDeps): AiController {
         return Promise.resolve('skipped');
       }
       return new Promise<PromptResult>((resolve) => {
-        update((s) => ({ ...s, queue: [...s.queue, { id: s.nextId, text, label: hooks.label, beforeRun: hooks.beforeRun, maxOutputTokens: hooks.maxOutputTokens, onResult: resolve }], nextId: s.nextId + 1 }));
+        update((s) => ({ ...s, queue: [...s.queue, { id: s.nextId, text, label: hooks.label, beforeRun: hooks.beforeRun, maxOutputTokens: hooks.maxOutputTokens, ...(hooks.model ? { model: hooks.model } : {}), ...(hooks.mode ? { mode: hooks.mode } : {}), onResult: resolve }], nextId: s.nextId + 1 }));
         void pump();
       });
     },

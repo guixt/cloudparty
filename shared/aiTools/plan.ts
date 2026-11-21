@@ -5,7 +5,7 @@ export const planToolDefs: AiToolDefinition[] = [
   {
     name: 'plan_create',
     description:
-      'Legt einen Bauplan an (sichtbar für den Nutzer als Knoten-Brett). Nutze das für größere Vorhaben („ein Haus mit Garten“): zerlege sie in Knoten wie Fundament, Wände, Dach, Räume, Einrichtung. `nodes` = Liste {id, title, notes?, after?}; `id` ist nur eine Kurzkennung, um Abhängigkeiten zu benennen; `after` = Kennungen der Knoten, die zuerst fertig sein müssen. Schreibe Maße, Farben und Referenzpunkte (z. B. „Mitte (10,0,5), 8 × 6 m, Wandstärke 0,3 m“) in `notes`, damit spätere Schritte sie lesen können. Es wird noch nichts gebaut.',
+      'Legt einen Bauplan an (sichtbar für den Nutzer als Knoten-Brett). Nutze das für größere Vorhaben („ein Haus mit Garten“): zerlege sie in Knoten wie Fundament, Wände, Dach, Räume, Einrichtung. `nodes` = Liste {id, title, notes?, after?}; `id` ist nur eine Kurzkennung, um Abhängigkeiten zu benennen; `after` = Kennungen der Knoten, die zuerst fertig sein müssen. Schreibe Maße, Farben und Referenzpunkte (z. B. „Mitte (10,0,5), 8 × 6 m, Wandstärke 0,3 m“) und – wenn du planst – eine vollständige Bauanleitung (nummerierte Werkzeugaufrufe mit Parametern, Prüfung) in `notes`, damit spätere Schritte sie lesen können. Es wird noch nichts gebaut.',
     input_schema: {
       type: 'object',
       properties: {
@@ -19,7 +19,7 @@ export const planToolDefs: AiToolDefinition[] = [
             properties: {
               id: { type: 'string', maxLength: 40 },
               title: { type: 'string', maxLength: 80 },
-              notes: { type: 'string', maxLength: 2000 },
+              notes: { type: 'string', maxLength: 6000 },
               after: { type: 'array', items: { type: 'string' }, maxItems: 20 },
             },
             required: ['title'],
@@ -46,7 +46,7 @@ export const planToolDefs: AiToolDefinition[] = [
         plan: { type: 'string' },
         node: { type: 'string' },
         title: { type: 'string', maxLength: 80 },
-        notes: { type: 'string', maxLength: 2000 },
+        notes: { type: 'string', maxLength: 6000 },
         status: { enum: ['open', 'failed', 'disabled'] },
       },
       required: ['plan', 'node'],
@@ -55,14 +55,14 @@ export const planToolDefs: AiToolDefinition[] = [
   },
   {
     name: 'plan_add_node',
-    description: 'Fügt einem Plan einen Knoten hinzu; `after` = Vorgänger, `before` = Nachfolger (zum Einfügen); `after` = ids oder `key`-Kennungen bestehender Knoten, von denen er abhängt. `key` = eigene Kurzkennung (z. B. "n08"), auf die sich spätere Knoten in `after` beziehen können, auch im selben Schritt. Lege lange Pläne in Blöcken von höchstens etwa 8 Knoten an und halte Notizen kurz (unter 300 Zeichen).',
+    description: 'Fügt einem Plan einen Knoten hinzu; `after` = Vorgänger, `before` = Nachfolger (zum Einfügen); `after` = ids oder `key`-Kennungen bestehender Knoten, von denen er abhängt. `key` = eigene Kurzkennung (z. B. "n08"), auf die sich spätere Knoten in `after` beziehen können, auch im selben Schritt. Lege lange Pläne in Blöcken von höchstens etwa 8 Knoten an und halte Notizen kurz (unter 300 Zeichen; im Planungsmodus stattdessen eine vollständige Bauanleitung).',
     input_schema: {
       type: 'object',
       properties: {
         plan: { type: 'string' },
         title: { type: 'string', maxLength: 80 },
         key: { type: 'string', maxLength: 40 },
-        notes: { type: 'string', maxLength: 2000 },
+        notes: { type: 'string', maxLength: 6000 },
         after: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'Vorgänger: Knoten, von denen dieser abhängt' },
         before: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'Nachfolger: bestehende Knoten, die künftig von diesem abhängen (zum Einfügen in eine Kette)' },
       },
