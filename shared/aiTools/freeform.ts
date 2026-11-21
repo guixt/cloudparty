@@ -3,7 +3,27 @@ import type { AiToolDefinition } from './types';
 import { vec3 } from './schemaParts';
 import { FREEFORM_LIMITS } from '../freeform/types';
 
-const material = { type: 'object', description: 'wie bei add_entity: color (#RRGGBB), preset, alpha, metallic, roughness …' };
+const material = {
+  type: 'object',
+  description: 'Material wie bei add_entity, z. B. {"preset":"holz"} oder {"color":"#b98a56","alpha":0.6}',
+  properties: {
+    color: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' },
+    preset: { enum: ['standard', 'metall', 'chrom', 'gold', 'glas', 'spiegel', 'lack', 'holz', 'stein', 'gummi', 'neon', 'hologramm'] },
+    alpha: { type: 'number', minimum: 0, maximum: 1 },
+    uv_scale: { type: 'number', description: 'Wiederholung von Textur/Muster' },
+  },
+};
+/** Ein boolescher Schnitt (Subtraktion) in lokalen Koordinaten der Freiform. */
+const cutSchema = {
+  type: 'object',
+  properties: {
+    shape: { enum: ['box', 'cylinder', 'sphere'] },
+    pos: { ...vec3, description: 'Mitte [x,y,z] in m' },
+    size: { ...vec3, description: '[Breite, Höhe, Tiefe] in m' },
+    rotY: { type: 'number', description: 'Grad' },
+  },
+  required: ['shape', 'pos', 'size'],
+};
 const xz = { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 };
 
 export const freeformToolDefs: AiToolDefinition[] = [
@@ -97,11 +117,36 @@ export const freeformToolDefs: AiToolDefinition[] = [
   },
   {
     name: 'update_freeform',
-    description: 'Ändert eine Freiform nachträglich. `id` = Objekt- oder Gruppen-id (wirkt nur auf Freiformen), `changes` = Teil-Änderungen am Formzustand, zusammengeführt: path, height, heightEnd, thickness, y0, closedPath, wave {amplitude,length}, profile, sweepDeg, startDeg, ellipse, grid, degree, cuts. Beispiel: changes {height: 4}. Lage/Farbe/Name: update_entity.',
+    description:
+      'Ändert eine Freiform nachträglich (aus add_curved_wall/add_lathe/add_surface/add_wavy_wall). `id` = Objekt- oder Gruppen-id. `changes` = nur die Felder, die sich ändern. Schnitte (Türen, Fenster): `add_cuts` HÄNGT an die vorhandenen an (empfohlen), `changes.cuts` ERSETZT alle. Schnitt = {"shape":"box","pos":[x,y,z],"size":[Breite,Höhe,Tiefe],"rotY":0}; shape box|cylinder|sphere, pos = Mitte in m relativ zum Fußpunkt der Freiform (mit `cuts_in_world: true` in Weltkoordinaten), size in m (Zylinder: [Durchmesser, Höhe, Durchmesser]). Beispiele: add_cuts [{"shape":"box","pos":[1,1.5,0],"size":[1.2,1.2,1]}]; changes {"height":4}. Lage/Farbe/Name: update_entity.',
     input_schema: {
       type: 'object',
-      properties: { id: { type: 'string' }, changes: { type: 'object' } },
-      required: ['id', 'changes'],
+      properties: {
+        id: { type: 'string' },
+        changes: {
+          type: 'object',
+          description: 'Nur geänderte Felder. Wand: path, height, heightEnd, thickness, y0, closedPath, wave. Drehkörper: profile, sweepDeg, startDeg, ellipse. Fläche: grid, degree, thickness. Alle: cuts.',
+          properties: {
+            path: { type: 'array', maxItems: FREEFORM_LIMITS.maxPoints, items: { type: 'object', properties: { p: xz, bulge: { type: 'number' } }, required: ['p'] }, description: '{p:[x,z], bulge?}' },
+            height: { type: 'number' },
+            heightEnd: { type: 'number' },
+            thickness: { type: 'number' },
+            y0: { type: 'number' },
+            closedPath: { type: 'boolean' },
+            wave: { type: 'object', properties: { amplitude: { type: 'number' }, length: { type: 'number' } }, required: ['amplitude', 'length'] },
+            profile: { type: 'array', maxItems: FREEFORM_LIMITS.maxPoints, items: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 }, description: '[radius, y]' },
+            sweepDeg: { type: 'number' },
+            startDeg: { type: 'number' },
+            ellipse: { type: 'number' },
+            grid: { type: 'array', maxItems: FREEFORM_LIMITS.maxGrid, items: { type: 'array', items: vec3 }, description: 'Zeilen × Spalten aus [x,y,z]' },
+            degree: { type: 'integer', minimum: 1, maximum: 3 },
+            cuts: { type: 'array', maxItems: FREEFORM_LIMITS.maxCuts, items: cutSchema, description: 'ERSETZT alle; hinzufügen: add_cuts' },
+          },
+        },
+        add_cuts: { type: 'array', minItems: 1, maxItems: FREEFORM_LIMITS.maxCuts, items: cutSchema, description: 'kommen zu den vorhandenen hinzu' },
+        cuts_in_world: { type: 'boolean', description: 'true = pos in Weltkoordinaten' },
+      },
+      required: ['id'],
     },
     mutates: true,
   },

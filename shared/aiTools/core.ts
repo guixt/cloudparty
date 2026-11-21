@@ -42,7 +42,7 @@ export const coreToolDefs: AiToolDefinition[] = [
         material,
         physics,
         particles,
-        state: { type: 'object' },
+        state: { type: 'object', description: 'Freier Zustand, wird mit dem vorhandenen zusammengeführt, z. B. {"text": "Willkommen"}' },
       },
       required: ['id'],
     },

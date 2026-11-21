@@ -122,18 +122,46 @@ function sanitizePatch(r: Rec): PatchParams {
   return { kind: 'patch', grid, degree, thickness: num(r.thickness, 'thickness', 0, 0, L.maxSize), subdivisions: [su, sv] };
 }
 
+const CUT_EXAMPLE = '{"shape":"box","pos":[3,1,0],"size":[1.2,2.1,1],"rotY":0}';
+const SHAPE_ALIASES: Record<string, CutOp['shape']> = {
+  box: 'box', quader: 'box', rechteck: 'box', rect: 'box', cube: 'box', würfel: 'box', wuerfel: 'box', tür: 'box', fenster: 'box',
+  cylinder: 'cylinder', zylinder: 'cylinder', rund: 'cylinder', rohr: 'cylinder',
+  sphere: 'sphere', kugel: 'sphere',
+};
+
+/** Drei Zahlen aus einer Liste [x, y, z] oder einem Objekt ({x,y,z} / {width,height,depth} / {breite,hoehe,tiefe}); sonst undefined. */
+function triple(v: unknown, keys: string[][]): Vec3 | undefined {
+  if (Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === 'number' && Number.isFinite(n))) return [v[0], v[1], v[2]];
+  if (isRec(v)) {
+    for (const set of keys) {
+      const t = set.map((k) => v[k]);
+      if (t.every((n) => typeof n === 'number' && Number.isFinite(n))) return t as Vec3;
+    }
+  }
+  return undefined;
+}
+
 function sanitizeCut(raw: unknown, i: number): CutOp {
-  if (!isRec(raw)) throw new Error(`Freiform: cuts[${i}] muss ein Objekt sein.`);
-  const shape = raw.shape;
-  if (shape !== 'box' && shape !== 'cylinder' && shape !== 'sphere') throw new Error(`Freiform: cuts[${i}].shape muss box, cylinder oder sphere sein.`);
-  const size = vec3(raw.size, `cuts[${i}].size`, -Infinity, L.maxSize);
-  if (size.some((s) => s <= 0)) throw new Error(`Freiform: cuts[${i}].size muss in jeder Richtung größer als 0 sein.`);
-  return {
-    shape,
-    pos: vec3(raw.pos, `cuts[${i}].pos`, -L.maxSize, L.maxSize),
-    size,
-    rotY: num(raw.rotY, `cuts[${i}].rotY`, 0, -360, 360),
-  };
+  const where = `Freiform: cuts[${i}]`;
+  if (!isRec(raw)) throw new Error(`${where} muss ein Objekt sein. Richtig ist z. B. ${CUT_EXAMPLE}`);
+  const problems: string[] = [];
+  const rawShape = typeof raw.shape === 'string' ? raw.shape.trim().toLowerCase() : '';
+  const shape = SHAPE_ALIASES[rawShape];
+  if (!shape) problems.push(`shape ${raw.shape === undefined ? 'fehlt' : `„${String(raw.shape).slice(0, 30)}“ ist unbekannt`} (erlaubt: box, cylinder, sphere)`);
+  const size = triple(raw.size ?? raw.groesse ?? raw.größe ?? raw.dimensions, [['x', 'y', 'z'], ['width', 'height', 'depth'], ['breite', 'hoehe', 'tiefe'], ['breite', 'höhe', 'tiefe']]) ?? (typeof raw.width === 'number' && typeof raw.height === 'number' && typeof raw.depth === 'number' ? ([raw.width, raw.height, raw.depth] as Vec3) : undefined);
+  if (!size) problems.push('size fehlt oder ist keine Liste aus 3 Zahlen [Breite, Höhe, Tiefe] in m');
+  else if (size.some((s) => s <= 0 || s > L.maxSize)) problems.push(`size muss in jeder Richtung zwischen 0 und ${L.maxSize} m liegen (angegeben: ${size.join(', ')})`);
+  const pos = triple(raw.pos ?? raw.position ?? raw.center ?? raw.mitte, [['x', 'y', 'z']]);
+  if (!pos) problems.push('pos fehlt oder ist keine Liste aus 3 Zahlen [x, y, z] (Mitte des Schnitts in m, relativ zum Fußpunkt der Freiform)');
+  else if (pos.some((p) => Math.abs(p) > L.maxSize)) problems.push(`pos liegt außerhalb von ±${L.maxSize} m`);
+  const rotRaw = raw.rotY ?? raw.rot_y ?? raw.rotation ?? raw.rotY_degrees ?? raw.rotation_degrees;
+  let rotY = 0;
+  if (rotRaw !== undefined && rotRaw !== null) {
+    if (typeof rotRaw !== 'number' || !Number.isFinite(rotRaw) || Math.abs(rotRaw) > 360) problems.push('rotY muss eine Zahl zwischen −360 und 360 (Grad um die Senkrechte) sein');
+    else rotY = rotRaw;
+  }
+  if (problems.length > 0) throw new Error(`${where} ist ungültig: ${problems.join('; ')}. Erhalten: ${JSON.stringify(raw).slice(0, 140)}. Richtig ist z. B. ${CUT_EXAMPLE} (pos = Mitte, size = [Breite, Höhe, Tiefe]).`);
+  return { shape: shape as CutOp['shape'], pos: pos as Vec3, size: size as Vec3, rotY };
 }
 
 /** Prüft und klemmt einen Freiform-State (Zahlen endlich, Punktzahlen und Maße begrenzt); wirft einen verständlichen Fehler bei Unbrauchbarem. Gibt eine bereinigte Kopie zurück. */

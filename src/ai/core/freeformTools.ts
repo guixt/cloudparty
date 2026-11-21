@@ -6,7 +6,8 @@ import { AI_LIMITS } from '../../../shared/aiTools';
 import { FREEFORM_LIMITS, FREEFORM_REF, freeformBounds, sanitizeFreeformState, type CutOp, type FreeformState, type PathPoint, type Vec2, type Vec3 as FVec3 } from '../../../shared/freeform';
 import { newEntityId, type EntitySpec, type Vec3 } from '../../../shared/types';
 import { describeOpening, nameOpenings, openingsOfGroup, saveOpenings, type OpeningInfo } from './anchors';
-import { applyCommon, coord, fail, int, num, obj, ok, opts, reserveEntities, resolveTargets, str, type Handler, type RunCounters, type ToolContext } from './tools';
+import { rotateVec } from './buildGeometry';
+import { applyCommon, coord, fail, int, isObj, num, obj, ok, opts, reserveEntities, resolveTargets, str, type Handler, type RunCounters, type ToolContext } from './tools';
 import { registerHandlers } from './registry';
 
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -126,6 +127,18 @@ function parsePath(raw: unknown, label: string): PathPoint[] {
 }
 
 // ---------------------------------------------------------------- Handler
+
+/** Schnitt aus Weltkoordinaten in lokale Koordinaten der Freiform umrechnen (Verschiebung, Drehung und Skalierung der Entity). */
+function cutToLocal(cut: unknown, e: EntitySpec): unknown {
+  if (!isObj(cut) || !Array.isArray(cut.pos) || cut.pos.length !== 3 || cut.pos.some((n) => typeof n !== 'number')) return cut;
+  const [x, y, z] = e.transform.pos;
+  const [qx, qy, qz, qw] = e.transform.rot;
+  const [sx, sy, sz] = e.transform.scale;
+  const d: Vec3 = [(cut.pos[0] as number) - x, (cut.pos[1] as number) - y, (cut.pos[2] as number) - z];
+  const inv = rotateVec([-qx, -qy, -qz, qw], d);
+  const local = [inv[0] / (sx || 1), inv[1] / (sy || 1), inv[2] / (sz || 1)].map((n) => Math.round(n * 1000) / 1000);
+  return { ...cut, pos: local };
+}
 
 export const freeformHandlers: Record<string, Handler> = registerHandlers({
   async add_curved_wall(input, ctx: ToolContext, counters: RunCounters) {
@@ -277,8 +290,10 @@ export const freeformHandlers: Record<string, Handler> = registerHandlers({
 
   update_freeform(input, ctx) {
     const { targets, isGroup } = resolveTargets(ctx, input.id);
-    const changes = obj(input.changes, 'changes');
-    if (Object.keys(changes).length === 0) fail('update_freeform: changes ist leer.');
+    const changes = input.changes === undefined ? {} : obj(input.changes, 'changes');
+    const addCuts = input.add_cuts === undefined ? [] : Array.isArray(input.add_cuts) ? (input.add_cuts as unknown[]) : fail('add_cuts muss eine Liste von Schnitten sein, z. B. [{"shape":"box","pos":[1,1.5,0],"size":[1.2,1.2,1]}].');
+    if (Object.keys(changes).length === 0 && addCuts.length === 0) fail('update_freeform: nichts zu ändern. Gib changes (Felder wie height, path …) oder add_cuts (neue Schnitte) an.');
+    const inWorld = input.cuts_in_world === true;
     const forms = targets.filter((e) => e.ref === FREEFORM_REF && e.state);
     if (forms.length === 0) fail(isGroup ? 'Die Gruppe enthält keine Freiform (nur Objekte aus add_curved_wall, add_lathe, add_surface, add_wavy_wall).' : 'Das Objekt ist keine Freiform. Nutze update_entity.');
     if (changes.kind !== undefined) {
@@ -303,10 +318,16 @@ export const freeformHandlers: Record<string, Handler> = registerHandlers({
     };
     for (const [key, [lo, hi]] of Object.entries(ranges)) if (changes[key] !== undefined) num(changes[key], `changes.${key}`, lo, hi);
     // Erst alle prüfen, dann schreiben: bei einem Fehler bleibt die Welt unverändert.
-    const next = forms.map((e) => ({ e, state: checked({ ...(e.state as Record<string, unknown>), ...changes }) }));
+    const next = forms.map((e) => {
+      const merged: Record<string, unknown> = { ...(e.state as Record<string, unknown>), ...changes };
+      const toLocal = (c: unknown): unknown => (inWorld ? cutToLocal(c, e) : c);
+      if (Array.isArray(changes.cuts)) merged.cuts = (changes.cuts as unknown[]).map(toLocal);
+      if (addCuts.length > 0) merged.cuts = [...(Array.isArray(merged.cuts) ? (merged.cuts as unknown[]) : []), ...addCuts.map(toLocal)];
+      return { e, state: checked(merged) };
+    });
     for (const { e, state } of next) ctx.store.getState().updateEntity(e.id, { state: state as unknown as Record<string, unknown> }, opts);
     // Gespeicherte Öffnungen (add_curved_wall) passen nach einer Formänderung nicht mehr: verwerfen, damit fit_to_opening nicht mit alten Maßen arbeitet.
-    const stale = ['path', 'cuts', 'y0', 'thickness', 'height', 'heightEnd', 'closedPath'].some((k) => changes[k] !== undefined);
+    const stale = addCuts.length > 0 || ['path', 'cuts', 'y0', 'thickness', 'height', 'heightEnd', 'closedPath'].some((k) => changes[k] !== undefined);
     const groups = new Set(next.map((n) => n.e.group).filter((g): g is string => !!g && openingsOfGroup(ctx, g).length > 0));
     for (const g of groups) if (stale) saveOpenings(ctx, g, []);
     const note = stale && groups.size > 0 ? ' Die gespeicherten Öffnungen sind verworfen (die Form hat sich geändert); passe Tafeln mit update_entity an.' : '';

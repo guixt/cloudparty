@@ -94,7 +94,7 @@ export type AiRunLimits = Record<AiRunLimitKey, number>;
  */
 export const AI_TOKEN_LIMITS = {
   output: { min: 1024, max: 16000, step: 256, default: 4096 },
-  input: { min: 8000, max: 150000, step: 1000, default: 40000 },
+  input: { min: 8000, max: 150000, step: 1000, default: 60000 },
 } as const;
 
 /**

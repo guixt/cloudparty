@@ -201,3 +201,50 @@ describe('update_freeform', () => {
     expect((await run('update_freeform', { id: freeforms()[0].id, changes: { height: 4 } })).ok).toBe(false);
   });
 });
+
+describe('update_freeform: Schnitte verständlich', () => {
+  const wallInput = { path: [{ p: [0, 0] }, { p: [6, 0] }], height: 3, name: 'Wand' };
+  const idOf = (t: string) => /id="([^"]+)"/.exec(t)![1];
+
+  it('ein Fehler nennt ALLE Probleme, die Eingabe und ein richtiges Beispiel', async () => {
+    const { run } = setup();
+    const id = idOf((await run('add_curved_wall', wallInput)).content);
+    const r = await run('update_freeform', { id, changes: { cuts: [{ shape: 'kreis', position: 'mitte' }] } });
+    expect(r.ok).toBe(false);
+    expect(r.content).toContain('shape');
+    expect(r.content).toContain('size');
+    expect(r.content).toContain('pos');
+    expect(r.content).toContain('Erhalten:');
+    expect(r.content).toContain('"shape":"box"');
+  });
+
+  it('akzeptiert gängige Varianten (deutsche Formnamen, position, width/height/depth)', async () => {
+    const { run, freeforms } = setup();
+    const id = idOf((await run('add_curved_wall', wallInput)).content);
+    const r = await run('update_freeform', { id, add_cuts: [{ shape: 'Quader', position: [1, 1, 0], size: { width: 1, height: 2, depth: 1 } }, { shape: 'zylinder', pos: [3, 1, 0], groesse: [0.5, 2, 0.5] }] });
+    expect(r.ok).toBe(true);
+    const cuts = (freeforms()[0].state as { cuts: { shape: string; size: number[] }[] }).cuts;
+    expect(cuts.map((c) => c.shape)).toEqual(['box', 'cylinder']);
+    expect(cuts[0].size).toEqual([1, 2, 1]);
+  });
+
+  it('add_cuts hängt an, changes.cuts ersetzt, Welt-Koordinaten werden umgerechnet', async () => {
+    const { run, freeforms, store } = setup();
+    const id = idOf((await run('add_curved_wall', { ...wallInput, openings: [{ at: 1, width: 1, height: 2 }] })).content);
+    const before = (freeforms()[0].state as { cuts: unknown[] }).cuts.length;
+    expect(before).toBe(1);
+    await run('update_freeform', { id, add_cuts: [{ shape: 'box', pos: [3, 1, 0], size: [1, 1, 1] }] });
+    expect((freeforms()[0].state as { cuts: unknown[] }).cuts).toHaveLength(2);
+    // Weltkoordinaten: Fußpunkt der Wand liegt bei x = 3 (Mitte des Pfades), z = 0
+    const pos = freeforms()[0].transform.pos;
+    await run('update_freeform', { id, add_cuts: [{ shape: 'box', pos: [pos[0] + 1, 1.5, pos[2]], size: [1, 1, 1] }], cuts_in_world: true });
+    const cuts = (freeforms()[0].state as { cuts: { pos: number[] }[] }).cuts;
+    expect(cuts).toHaveLength(3);
+    expect(cuts[2].pos[0]).toBeCloseTo(1, 2);
+    expect(cuts[2].pos[2]).toBeCloseTo(0, 2);
+    await run('update_freeform', { id, changes: { cuts: [{ shape: 'sphere', pos: [0, 1, 0], size: [1, 1, 1] }] } });
+    expect((freeforms()[0].state as { cuts: unknown[] }).cuts).toHaveLength(1);
+    expect((await run('update_freeform', { id })).content).toContain('nichts zu ändern');
+    void store;
+  });
+});

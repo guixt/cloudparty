@@ -294,7 +294,7 @@ describe('sanitizeFreeformState', () => {
     expect(ok.cuts?.[0].rotY).toBe(0);
     expect(() => sanitizeFreeformState({ ...base, cuts: Array(FREEFORM_LIMITS.maxCuts + 1).fill(cut) })).toThrow(/Schnitte/);
     expect(() => sanitizeFreeformState({ ...base, cuts: [{ ...cut, shape: 'kegel' }] })).toThrow(/shape/);
-    expect(() => sanitizeFreeformState({ ...base, cuts: [{ ...cut, size: [1, 0, 1] }] })).toThrow(/größer als 0/);
+    expect(() => sanitizeFreeformState({ ...base, cuts: [{ ...cut, size: [1, 0, 1] }] })).toThrow(/zwischen 0 und/);
     expect(() => sanitizeFreeformState({ ...base, cuts: 'x' })).toThrow(/Liste/);
   });
   it('bereinigter State lässt sich bauen', () => {
