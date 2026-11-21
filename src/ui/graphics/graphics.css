@@ -1,0 +1,22 @@
+/* Grafik-Dialog und FPS-Anzeige (Paket 26) */
+.gfx-modal { max-height: calc(100vh - 32px); overflow-y: auto; width: min(620px, calc(100vw - 32px)); }
+.gfx-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.gfx-head h2 { margin: 0; font-size: 20px; }
+.gfx-tier { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+.gfx-tier:hover { background: rgba(255, 255, 255, 0.06); }
+.gfx-tier input { margin-top: 3px; }
+.gfx-tier-on { background: rgba(77, 163, 255, 0.14); }
+.gfx-tier-name { font-weight: 600; }
+.gfx-tier-desc { font-size: 12.5px; color: var(--cp-muted); }
+.gfx-note { margin: 10px 0; font-size: 12.5px; }
+.gfx-adv { margin-top: 8px; border-top: 1px solid var(--cp-border); padding-top: 8px; }
+.gfx-adv > summary { cursor: pointer; font-weight: 600; }
+.gfx-grid { display: grid; grid-template-columns: 1fr 150px; gap: 6px 12px; align-items: center; margin-top: 8px; }
+.gfx-field-label { font-size: 13px; }
+.gfx-field-label.gfx-changed { color: var(--cp-accent); font-weight: 600; }
+.gfx-grid .cp-input, .gfx-grid .cp-select { width: 100%; box-sizing: border-box; }
+.gfx-check { justify-self: start; width: 18px; height: 18px; }
+.gfx-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+.gfx-fps-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; cursor: pointer; }
+.gfx-foot { margin-top: 12px; font-size: 12px; overflow-wrap: anywhere; }
+.gfx-fps { font-size: 12px; font-variant-numeric: tabular-nums; padding: 3px 8px; border-radius: 8px; background: var(--cp-bg); border: 1px solid var(--cp-border); color: var(--cp-text); }

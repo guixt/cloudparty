@@ -1,0 +1,63 @@
+/* Plan-Editor (Paket 28) */
+.cp-panel.pe-window { position: absolute; display: flex; flex-direction: column; padding: 0; overflow: hidden; background: var(--cp-bg-solid);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45); min-width: 420px; min-height: 340px; max-width: 100vw; }
+.pe-titlebar { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; cursor: move; user-select: none; touch-action: none;
+  border-bottom: 1px solid var(--cp-border); background: rgba(255, 255, 255, 0.04); }
+.pe-spacer { flex: 1; }
+.pe-select { font: inherit; color: var(--cp-text); background: rgba(0, 0, 0, 0.4); border: 1px solid var(--cp-border); border-radius: 6px; padding: 3px 6px; max-width: 220px; }
+.pe-progress { font-size: 12.5px; color: var(--cp-muted); white-space: nowrap; }
+.pe-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--cp-border); }
+.pe-actions .cp-button { padding: 4px 8px; font-size: 12.5px; }
+.pe-sep { width: 1px; align-self: stretch; background: var(--cp-border); margin: 0 2px; }
+.pe-note { padding: 6px 12px; font-size: 12.5px; background: rgba(255, 207, 92, 0.14); border-bottom: 1px solid var(--cp-border); }
+.pe-confirm { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(255, 207, 92, 0.14); border-bottom: 1px solid var(--cp-border); }
+.pe-confirm span, .pe-confirm .pe-input { flex: 1; }
+.pe-body { flex: 1; min-height: 0; display: flex; position: relative; }
+.pe-canvas { position: relative; flex: 1; min-width: 0; overflow: hidden; outline: none; touch-action: none; user-select: none; cursor: grab;
+  background-color: #11151d; background-image: radial-gradient(circle, rgba(255, 255, 255, 0.16) 1px, transparent 1.2px); background-size: 20px 20px; }
+.pe-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.pe-wires { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.pe-wire { fill: none; stroke: #8fa3c4; stroke-width: 2.5; stroke-linecap: round; opacity: 0.85; pointer-events: none; }
+.pe-wire-sel { stroke: #fff; stroke-dasharray: 8 4; }
+.pe-wire-pending { stroke: var(--cp-accent); stroke-dasharray: 6 4; }
+.pe-wire-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
+.pe-node { position: absolute; box-sizing: border-box; background: rgba(32, 38, 52, 0.96); border-radius: 8px; padding: 8px 10px; cursor: grab; overflow: visible;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; gap: 4px; }
+.pe-node-selected { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 2px #fff; }
+.pe-node-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.pe-node-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pe-node-notes { font-size: 12px; color: #c4cddc; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.pe-node-count { font-size: 11.5px; color: #7fe0a0; margin-top: auto; }
+.pe-s-disabled { opacity: 0.5; }
+.pe-s-disabled .pe-node-title { text-decoration: line-through; }
+.pe-s-running { animation: pe-pulse 1.2s ease-in-out infinite; }
+@keyframes pe-pulse { 0%, 100% { box-shadow: 0 0 0 1px #4da3ff, 0 0 4px #4da3ff; } 50% { box-shadow: 0 0 0 2px #4da3ff, 0 0 14px #4da3ff; } }
+.pe-badge { font-size: 11px; font-weight: 700; border-radius: 10px; padding: 1px 8px; color: #08101c; white-space: nowrap; }
+.pe-badge-open { background: #aab4c4; }
+.pe-badge-queued { background: #e0b341; }
+.pe-badge-running { background: #4da3ff; animation: pe-blink 1.2s ease-in-out infinite; }
+.pe-badge-done { background: #58c26f; }
+.pe-badge-failed { background: #ff6b6b; }
+.pe-badge-disabled { background: #6b7487; text-decoration: line-through; }
+@keyframes pe-blink { 50% { opacity: 0.55; } }
+.pe-port { position: absolute; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; background: #aab4c4; border: 2px solid #11151d; box-sizing: border-box; cursor: crosshair; }
+.pe-port::after { content: ''; position: absolute; inset: -6px; }
+.pe-port-in { left: -6px; }
+.pe-port-out { right: -6px; }
+.pe-port:hover { background: var(--cp-accent); }
+.pe-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 20px; pointer-events: none; }
+.pe-empty strong { font-size: 18px; }
+.pe-zoombar { position: absolute; left: 10px; bottom: 10px; display: flex; align-items: center; gap: 6px; background: rgba(20, 26, 38, 0.85); border: 1px solid var(--cp-border); border-radius: 8px; padding: 4px; }
+.pe-zoombar .cp-button { padding: 2px 8px; font-size: 12px; }
+.pe-zoomval { min-width: 44px; text-align: center; font-size: 12px; }
+.pe-side { width: 250px; flex: none; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 10px; border-left: 1px solid var(--cp-border); background: rgba(255, 255, 255, 0.03); }
+.pe-field { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.pe-field > span { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--cp-muted); }
+.pe-input { font: inherit; font-size: 13px; color: var(--cp-text); background: rgba(0, 0, 0, 0.4); border: 1px solid var(--cp-border); border-radius: 6px; padding: 4px 6px; box-sizing: border-box; width: 100%; }
+.pe-input:focus { outline: 1px solid var(--cp-accent); }
+.pe-notes { resize: vertical; }
+.pe-btnrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.pe-result { margin: 0; font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pe-close { padding: 4px 10px; }
+.pe-resize { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.45) 50%, rgba(255, 255, 255, 0.45) 58%, transparent 58%); }
