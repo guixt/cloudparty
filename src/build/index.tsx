@@ -9,6 +9,7 @@ import { entityIdOf } from '../core/context';
 import { getCatalogItem } from './catalog';
 import { BuildCamera } from './camera';
 import { GizmoController } from './gizmos';
+import { FreeformHandles } from './freeform/handles';
 import { History } from './history';
 import { Inspector } from './inspector';
 import { Palette } from './palette';
@@ -38,6 +39,8 @@ const build: GameModule = {
     const cam = new BuildCamera(ctx);
     const highlight = new SelectionHighlight(scene);
     const gizmos = new GizmoController(ctx, history);
+    const ffHandles = new FreeformHandles(ctx, history);
+    ffHandles.attach();
     runtime.history = history;
     runtime.camera = cam;
 
@@ -101,6 +104,7 @@ const build: GameModule = {
       const event = info.event as PointerEvent;
       if (event.button !== 0 || event.altKey || cam.suppressTap) return;
       if (gizmos.dragging || performance.now() - gizmos.lastDragEnd < 300) return;
+      if (ffHandles.dragging || performance.now() - ffHandles.lastDragEnd < 300) return; // Klick auf Freiform-Griff
       const pick = info.pickInfo;
       const armed = buildState.getState().armed;
       const item = armed ? getCatalogItem(armed) : undefined;
@@ -139,8 +143,9 @@ const build: GameModule = {
     const canvasEl = ctx.canvas;
     const onPointerDown = (e: PointerEvent) => {
       if (store.getState().mode !== 'build' || e.button !== 0 || e.altKey || buildState.getState().armed) return;
-      if (gizmos.dragging || gizmos.hovering()) return;
+      if (gizmos.dragging || gizmos.hovering() || ffHandles.dragging) return;
       const r = canvasEl.getBoundingClientRect();
+      if (ffHandles.isOver(e.clientX - r.left, e.clientY - r.top)) return; // Griff statt Marquee
       const pick = scene.pick(e.clientX - r.left, e.clientY - r.top);
       if (pick?.hit && entityIdOf(pick.pickedMesh)) return; // Klick auf Objekt: normale Auswahl
       marquee.begin(e);
@@ -237,6 +242,7 @@ const build: GameModule = {
 
     cleanups.push(() => {
       history.dispose();
+      ffHandles.dispose();
       gizmos.dispose();
       highlight.dispose();
       cam.dispose();
