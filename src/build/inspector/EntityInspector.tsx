@@ -10,6 +10,7 @@ import { ParticlesSection } from './sections/ParticlesSection';
 import { StateSection } from './sections/StateSection';
 import { MediaSection } from './sections/MediaSection';
 import { ModelSection } from './sections/ModelSection';
+import { FreeformSection } from './sections/FreeformSection';
 import { ScriptSection } from './sections/ScriptSection';
 
 export function EntityInspector({ ctx, id }: { ctx: GameContext; id: string }) {
@@ -47,6 +48,7 @@ export function EntityInspector({ ctx, id }: { ctx: GameContext; id: string }) {
       </div>
       <TransformSection entity={entity} patch={patch} />
       <MaterialSection entity={entity} patch={patch} />
+      <FreeformSection entity={entity} patch={patch} />
       <PhysicsSection entity={entity} patch={patch} />
       <ParticlesSection entity={entity} patch={patch} />
       <StateSection entity={entity} patch={patch} />
